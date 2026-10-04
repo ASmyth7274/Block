@@ -175,6 +175,38 @@ const SOUND_DEFS = (() => {
   S.deer_say = voice(380, 340, 0.4, [[900, 4], [2200, 5]], 4, 0.4);
   S.wraith_say = () => { const bp = new Biquad('bp', 900, 4); return render(1.6, (t) => { bp.set(500 + Math.sin(t * 3) * 400, 4); return (bp.p(noise()) * 0.8 + Math.sin(2 * Math.PI * (620 + Math.sin(t * 6) * 30) * t) * 0.2) * Math.sin(Math.PI * t / 1.6); }); };
   S.wraith_hurt = S.wraith_say;
+  // ----- the Underworld's creatures -----
+  // the charred: a dry, smoky rasp; an angry, coughing snarl
+  S.charred_say = voice(78, 66, 1.0, [[300, 2.5], [750, 3]], 1.5, 0.9);
+  S.charred_angry = voice(120, 95, 0.6, [[420, 3], [1100, 3]], 7, 1.1);
+  S.charred_hurt = voice(130, 100, 0.3, [[450, 3], [1200, 4]], 0, 1.0);
+  S.charred_death = voice(95, 45, 1.1, [[320, 3], [800, 4]], 2, 1.0);
+  // the wailer: a high, sobbing cry that carries a long way
+  const cry = (f0, f1, dur, sob, shriek) => () => {
+    const bp = new Biquad('bp', 1400, 3), lp = new Biquad('lp', 3200, 0.8);
+    const dl = new Float32Array(Math.floor(DSP.SR * 0.19)); let di = 0, ph = 0;
+    return render(dur, (t) => {
+      const u = t / dur;
+      const f = f0 + (f1 - f0) * u + Math.sin(t * 2 * Math.PI * 6.5) * f0 * 0.035 + (sob ? Math.max(0, Math.sin(t * 2 * Math.PI * sob)) * f0 * 0.12 : 0);
+      ph += 2 * Math.PI * f / DSP.SR;
+      const src = Math.sin(ph) * 0.7 + Math.sin(ph * 2) * 0.2 + (shriek ? bp.p(noise()) * shriek : 0);
+      const g = Math.sin(Math.PI * Math.min(1, u * 1.15)) * (sob ? 0.7 + 0.3 * Math.sin(t * 2 * Math.PI * sob) : 1);
+      const out = lp.p(src) * g + dl[di] * 0.45; dl[di] = out; di = (di + 1) % dl.length;
+      return out;
+    });
+  };
+  S.wailer_say = cry(520, 430, 2.4, 2.2, 0.15);
+  S.wailer_charge = cry(380, 880, 1.0, 0, 0.35);
+  S.wailer_hurt = cry(900, 760, 0.45, 0, 0.5);
+  S.wailer_death = cry(700, 180, 2.6, 1.5, 0.3);
+  S.wailer_shoot = () => { const lp = new Biquad('lp', 700, 0.9); return render(0.9, (t) => { lp.set(1400 - t * 1100, 0.9); return lp.p(noise()) * env(t, 0.02, 0.25) + Math.sin(2 * Math.PI * (120 - t * 80) * t) * env(t, 0.005, 0.15) * 0.5; }); };
+  // magma slimes slap down with a hiss
+  S.magma_slime = () => { const lp = new Biquad('lp', 260, 2), hp = new Biquad('hp', 3000, 0.7); return render(0.45, (t) => { lp.set(140 + t * 700, 3); return lp.p(noise()) * env(t, 0.01, 0.08) * 1.2 + hp.p(noise()) * env(t, 0.03, 0.15) * 0.25; }); };
+  // the flare: a roaring breath, crackling, a ringing clang when struck
+  S.flare_say = () => { const bp = new Biquad('bp', 500, 1.2), hp = new Biquad('hp', 2500, 0.7); return render(1.4, (t) => { bp.set(380 + Math.sin(t * 4) * 120, 1.2); return bp.p(noise()) * Math.sin(Math.PI * t / 1.4) + hp.p(noise()) * (rnd() < 0.006 ? 4 : 0.05); }); };
+  S.flare_shoot = () => { const lp = new Biquad('lp', 1600, 0.8); return render(0.5, (t) => { lp.set(2200 - t * 2600, 0.8); return lp.p(noise()) * env(t, 0.005, 0.12); }); };
+  S.flare_hurt = () => render(0.6, (t) => { let s = 0; [523, 1187, 1873].forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t) * Math.exp(-t / (0.25 - i * 0.06)) * 0.4; }); return s + noise() * env(t, 0.002, 0.03) * 0.5; });
+  S.flare_death = () => { const lp = new Biquad('lp', 900, 0.8); return render(1.6, (t) => { lp.set(900 - t * 450, 0.8); let s = lp.p(noise()) * env(t, 0.01, 0.6); [440, 990].forEach((f) => { s += Math.sin(2 * Math.PI * f * (1 - t * 0.25) * t) * Math.exp(-t / 0.5) * 0.3; }); return s; }); };
   S.bat_say = () => render(0.1, (t) => Math.sin(2 * Math.PI * (5000 - t * 20000) * t) * env(t, 0.002, 0.02));
   // wolves: barks, growls, whines, panting, a yelp, a fur shake and a howl for moonlit nights
   const bark = (f0, n, gap) => () => {

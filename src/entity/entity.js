@@ -114,11 +114,12 @@ class Entity {
     this.pyaw = this.yaw; this.ppitch = this.pitch;
     this.age++;
     this.updateFluids();
+    if (this.fireImmune) this.fire = 0;
     if (this.fire > 0) {
       if (this.inWater || this.world.isRainingAt(Math.floor(this.x), Math.floor(this.y + this.h), Math.floor(this.z))) this.fire = 0;
       else { if (this.fire % 20 === 0 && this.hurt) this.hurt(1, { type: 'fire' }); this.fire--; }
     }
-    if (this.inLava) { if (this.hurt) this.hurt(4, { type: 'lava' }); this.fire = Math.max(this.fire, 300); this.fallDistance *= 0.5; }
+    if (this.inLava && !this.fireImmune) { if (this.hurt) this.hurt(4, { type: 'lava' }); this.fire = Math.max(this.fire, 300); this.fallDistance *= 0.5; }
     if (this.y < -64 && this.hurt) this.hurt(4, { type: 'void' });
   }
   updateFluids() {
@@ -282,7 +283,7 @@ class Living extends Entity {
   hurt(amount, src) {
     if (this.dead || this.removed) return false;
     if (this.invulnerable && src.type !== 'void') return false;
-    if (src.type === 'fire' && this.fireImmune) return false;
+    if ((src.type === 'fire' || src.type === 'lava') && this.fireImmune) return false;
     if (this.hurtResist > 10) {
       if (amount <= this.lastDamage) return false;
       this.applyDamage(amount - this.lastDamage, src);

@@ -136,6 +136,24 @@ const MODELS = (() => {
       }
       return m;
     })(),
+    // the wailer's great body (its tentacles are a second model sharing the pose)
+    wailer: { body: { pivot: [0, 0, 0], boxes: [bx([-8, 0, -8], [16, 16, 16], [0, 0])] } },
+    wailerTentacles: (() => {
+      const m = {};
+      [[-5, -4, 10], [0, -5, 8], [5, -4, 11], [-5, 4, 9], [0, 5, 12], [5, 4, 8]].forEach(([x, z, len], i) => { m['t' + i] = { pivot: [x, 0.5, z], boxes: [bx([-1, -len, -1], [2, len, 2], [0, 0])] }; });
+      return m;
+    })(),
+    // a magma slime splits into two halves around its core as it bounds
+    magmaSlime: {
+      core: { pivot: [0, 0, 0], boxes: [bx([-3, 1, -3], [6, 6, 6], [0, 16])] },
+      top: { pivot: [0, 4, 0], boxes: [bx([-4, 0, -4], [8, 4, 8], [0, 0])] },
+      bottom: { pivot: [0, 0, 0], boxes: [bx([-4, 0, -4], [8, 4, 8], [32, 0])] },
+    },
+    flare: (() => {
+      const m = { head: { pivot: [0, 22, 0], boxes: [bx([-4, -4, -4], [8, 8, 8], [0, 0])] } };
+      for (let i = 0; i < 8; i++) m['rod' + i] = { pivot: [0, 0, 0], boxes: [bx([-1, -3, -1], [2, 6, 2], [0, 16])] };
+      return m;
+    })(),
     bat: {
       head: { pivot: [0, 8, 0], boxes: [bx([-3, 0, -3], [6, 6, 6], [0, 0])] },
       body: { pivot: [0, 8, 0], boxes: [bx([-3, -6, -2], [6, 6, 4], [0, 16])] },

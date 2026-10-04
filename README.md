@@ -124,6 +124,14 @@ splash text and a slowly turning live panorama.
   three runic offers paid for in levels and lapis, and the familiar purple
   shimmer — Sharpness, Efficiency, Fortune, Silk Touch, Protection, Infinity,
   Luck of the Sea and the rest, each with its classic effect.
+- The Underworld: build an obsidian portal, light it, and cross into a
+  cavern world of lava seas under a brimstone roof, where every block counts
+  for eight up above. Four regions (the Brimstone Depths, the Bone Shoals with
+  the ribs of giant skeletons, the ash-and-basalt Cinder Hollows and the rare
+  Glimmering Grottos), sunstone, smoky quartz and bone sand; charred miners
+  who swarm if you strike one, wailers that spit fireballs you can hit back,
+  magma slimes, and sprawling brick fortresses with flare spawners, treasure
+  rooms and bloodcap gardens. Water boils, beds explode and compasses spin.
 - Generative music: calm piano pieces composed on the fly, different by day,
   by night and underground.
 

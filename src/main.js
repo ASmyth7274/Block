@@ -10,7 +10,7 @@ const MENU_SEEDS = [1337, 20111118, 404, 8675309, 31415, 777, 2468, 99, 12345, 4
 // blocks that receive random ticks
 const RANDOM_TICK = new Uint8Array(256);
 for (const id of [B.GRASS, B.MYCELIUM, B.SAPLING, B.WHEAT, B.CARROTS, B.POTATOES, B.FARMLAND, B.SUGAR_CANE, B.CACTUS, B.LEAVES, B.ICE, B.SNOW_LAYER,
-  B.EMBER_ORE_LIT, B.BRAMBLE, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.GLOWSHROOM, B.FIRE, B.WATER, B.BLOODCAP]) if (id !== undefined) RANDOM_TICK[id] = 1;
+  B.EMBER_ORE_LIT, B.BRAMBLE, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.GLOWSHROOM, B.FIRE, B.WATER, B.BLOODCAP, B.PORTAL]) if (id !== undefined) RANDOM_TICK[id] = 1;
 
 // ore values for the prospector's rod
 const PROSPECT = (() => {
@@ -682,7 +682,7 @@ class Game {
     this.renderer.atlas.tickAnimations();
     DynamicItems.update(this);
     this.tickWaterways();
-    if (w.time % 40 === 9 && !w.dim) this.checkVillages();
+    if (w.time % 40 === 9) { if (!w.dim) this.checkVillages(); else this.checkFortress(); }
     Circuits.tickPlates(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
@@ -946,12 +946,12 @@ class Game {
     if (w.difficulty === 0) { te.delay = 200; return; }
     const near = w.entitiesInBox(te.x - 4, te.y - 4, te.z - 4, te.x + 5, te.y + 5, te.z + 5, (e) => e.type === te.mob).length;
     if (near < 6) {
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0, n = 0; i < 8 && n < 4; i++) {
         const x = te.x + Math.floor((Math.random() - Math.random()) * 4) , y = te.y + Math.floor(Math.random() * 3) - 1, z = te.z + Math.floor((Math.random() - Math.random()) * 4);
         if (!this.spawner.canStand(x, y, z, te.mob === 'spider' ? 1 : 2)) continue;
         if ((w.getLightRaw(x, y, z) & 15) > 11) continue;
         const m = this.spawnMob(te.mob, x + 0.5, y, z + 0.5);
-        if (m) this.particles.smoke(x + 0.5, y + 0.5, z + 0.5, 6, true);
+        if (m) { n++; this.particles.smoke(x + 0.5, y + 0.5, z + 0.5, 6, true); }
       }
     }
     te.delay = 200 + Math.floor(Math.random() * 600);
@@ -1117,6 +1117,7 @@ class Game {
     if (st.id === I.lumite_shard) this.achieve('lumite');
     if (st.id === B.COBALT_ORE) this.achieve('cobalt');
     if (st.id === B.STARMETAL_ORE) this.achieve('star');
+    if (st.id === I.flare_rod) this.achieve('flare');
   }
   onPlayerDeath(src) {
     const p = this.player, w = this.world;
@@ -1151,6 +1152,7 @@ class Game {
       case 'starve': return n + ' starved to death';
       case 'void': return n + ' fell out of the world';
       case 'explosion': return n + ' blew up';
+      case 'fireball': return n + ' was fireballed' + (by && by !== 'themselves' ? ' by a ' + by : '');
       case 'lightning': return n + ' was struck by lightning';
       case 'magic': return n + ' was killed by magic';
       case 'cactus': return n + ' was pricked to death';
@@ -1516,6 +1518,18 @@ class Game {
     return true;
   }
   // walking into a village for the first time puts it on the map
+  // walking into the walls of an Underworld fortress
+  checkFortress() {
+    const p = this.player, w = this.world;
+    const L = w.localGen.fortressNear && w.localGen.fortressNear(p.x, p.z);
+    if (!L || p.y < L.F - 4 || p.y > L.F + 8) return;
+    const list = w.info.fortresses || (w.info.fortresses = []);
+    if (list.some((f) => f[0] === L.sx && f[1] === L.sz)) return;
+    list.push([L.sx, L.sz]);
+    this.hud.toast('Fortress discovered!', 'Brimstone Fortress', new ItemStack(B.BRIMSTONE_BRICKS, 1, 0), '#ff8855');
+    this.audio.play('discover', 0.7, 0.8);
+    this.achieve('fortress');
+  }
   checkVillages() {
     const w = this.world, p = this.player;
     if (!w || !p || w.menu || !w.localGen || !w.localGen.villageAt || w.genOpts && w.genOpts.structures === false || (w.genOpts && w.genOpts.type === 'flat')) return;

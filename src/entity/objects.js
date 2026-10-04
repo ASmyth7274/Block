@@ -252,7 +252,7 @@ class Thrown extends Entity {
       if (h && h.t < tb) { tb = h.t; target = e; }
     }
     if (target || hit) {
-      if (target) target.hurt(this.kind === 'snowball' && target.type === 'wraith' ? 4 : 0, { type: 'thrown', entity: this.shooter || this, knockback: 0.25 });
+      if (target) target.hurt(this.kind === 'snowball' && (target.type === 'wraith' || target.type === 'flare') ? (target.type === 'flare' ? 3 : 4) : 0, { type: 'thrown', entity: this.shooter || this, knockback: 0.25 });
       game.particles.burst(this.x, this.y, this.z, this.kind === 'snowball' ? 'snowball' : 'egg', 8);
       if (this.kind === 'egg' && Math.random() < 0.125 && game.spawnMob) game.spawnMob('chicken', this.x, this.y, this.z, { baby: true });
       this.removed = true;

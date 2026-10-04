@@ -424,6 +424,104 @@ const Skins = (() => {
     return s;
   })();
 
+  // ------------------------------------------------------------ the Underworld
+  // the wailer: a vast pale weeper. Eyes shut and streaming until it sees you.
+  function wailerSkin(open) {
+    const s = new Skin(); const r = rng('wailer');
+    const base = C('#e4dfe8'), shade = C('#c4bccc'), deep = C('#a49cb0'), tear = C('#8cb8e6');
+    s.box(0, 0, 16, 16, 16, (f, x, y) => {
+      let c = vary(r, (x * 7 + y * 5) % 13 === 0 ? shade : base, 0.05);
+      if (f === 'bottom') return vary(r, (x + y) % 3 === 0 ? deep : shade, 0.06);
+      if (f !== 'front') { if (y > 11 && (x * 3 + y) % 5 === 0) c = vary(r, shade, 0.05); return c; }
+      // the face
+      const eye = (cx) => Math.abs(x - cx) <= 2;
+      if (!open) {
+        // shut, downturned eyes with tears running from them
+        if (y === 5 && (eye(4) || eye(11)) && !(x === 4 || x === 11)) return C('#4a4054');
+        if (y === 4 && (x === 4 || x === 11)) return C('#4a4054');
+        if (y >= 6 && y <= 13 && (x === 3 || x === 12) && (y % 3 !== 0)) return vary(r, tear, 0.08);
+        if (y >= 7 && y <= 10 && (x === 5 || x === 10) && y % 2 === 0) return vary(r, tear, 0.08);
+        // a small sorrowful mouth, turned down at the corners
+        if (y === 11 && x >= 6 && x <= 9) return C('#5a4e60');
+        if (y === 12 && (x === 5 || x === 10)) return C('#5a4e60');
+        return c;
+      }
+      // eyes and mouth flung open, burning red
+      if (y >= 4 && y <= 6 && (eye(4) || eye(11))) return (y === 5 && (x === 4 || x === 11)) ? C('#ffd27a') : C('#c81e10');
+      if (y >= 7 && y <= 13 && (x === 3 || x === 12) && (y % 3 !== 0)) return vary(r, tear, 0.08);
+      if (y >= 9 && y <= 13 && x >= 5 && x <= 10) {
+        if (y === 9 || y === 13 || x === 5 || x === 10) return C('#3a1018');
+        return (y === 12) ? C('#ff6a1a') : C('#8a1410');
+      }
+      return c;
+    });
+    return s;
+  }
+  S.wailer = wailerSkin(false);
+  S.wailer_open = wailerSkin(true);
+  S.wailer_tentacle = (() => {
+    const s = new Skin(); const r = rng('wailer_t');
+    s.box(0, 0, 2, 12, 2, (f, x, y) => vary(r, y > 8 ? C('#a49cb0') : y > 4 ? C('#c4bccc') : C('#e0dae4'), 0.06));
+    return s;
+  })();
+  // the charred: miners lost below long ago, burnt black, embers glowing in the cracks
+  S.charred = humanoid('charred', {
+    skin: '#2c2622', shirt: '#4a3626', pants: '#2e2824', shoes: '#181412', sleeve: 5, armSkin: '#2c2622',
+    face: (x, y) => {
+      if (y === 3 && (x === 1 || x === 2 || x === 5 || x === 6)) return [24, 18, 16];
+      if (y === 4 && (x === 2 || x === 5)) return [255, 176, 64];
+      if (y === 4 && (x === 1 || x === 6)) return [200, 90, 30];
+      if (y === 6 && x >= 2 && x <= 5) return x === 3 || x === 4 ? [120, 40, 16] : [20, 16, 14];
+      if ((x * 5 + y * 3) % 11 === 0) return [230, 110, 30];
+      return null;
+    },
+    bodyFn: (f, x, y) => {
+      if ((x * 7 + y * 5) % 9 === 0 && y > 1 && y < 10) return [44, 38, 34];         // holes burnt through the shirt
+      if ((x * 3 + y * 7) % 13 === 0) return [255, 130, 40];                           // embers
+      return null;
+    },
+    armFn: (f, x, y) => ((x * 5 + y * 3) % 7 === 0 && y > 5) ? [240, 120, 34] : null,
+    legFn: (f, x, y) => ((x * 3 + y * 5) % 11 === 0 && y < 9) ? [220, 100, 30] : null,
+    // a battered miner's helmet with a dead lamp
+    hat: (f, x, y) => {
+      if (f === 'bottom') return null;
+      if (f === 'top') return [86, 76, 64];
+      if (y > 2) return null;
+      if (f === 'front' && y >= 0 && y <= 2 && x >= 3 && x <= 4) return y === 1 ? [255, 200, 90] : [60, 54, 46];
+      return [96, 84, 70];
+    },
+  });
+  // magma slime: two halves of cooled crust around a molten core
+  S.magma_slime = (() => {
+    const s = new Skin(); const r = rng('magma');
+    const crust = C('#2a1a16'), crust2 = C('#3a221a'), seam = C('#c8501a'), hot = C('#ff9a2a');
+    const shell = (f, x, y, top) => {
+      if (f === 'front' && top && y === 1 && (x === 2 || x === 5)) return C('#ffd84a');
+      if (f === 'front' && top && y === 2 && (x === 2 || x === 5)) return C('#ff8a20');
+      if ((f === 'top' || f === 'bottom') && (x * 5 + y * 3) % 7 === 0) return vary(r, seam, 0.1);
+      if (f !== 'top' && f !== 'bottom' && (top ? y === 3 : y === 0)) return vary(r, seam, 0.1);
+      if ((x * 3 + y * 7) % 9 === 0) return vary(r, hot, 0.1);
+      return vary(r, (x + y) % 3 === 0 ? crust2 : crust, 0.12);
+    };
+    s.box(0, 0, 8, 4, 8, (f, x, y) => shell(f, x, y, true));
+    s.box(32, 0, 8, 4, 8, (f, x, y) => shell(f, x, y, false));
+    s.box(0, 16, 6, 6, 6, (f, x, y) => vary(r, (x + y) % 2 ? C('#ffb02a') : C('#ff7a1a'), 0.1));
+    return s;
+  })();
+  // the flare: a caged fire with burning rods wheeling round it
+  S.flare = (() => {
+    const s = new Skin(); const r = rng('flare');
+    const iron = C('#3a302c'), fire = C('#ffb83a'), deep = C('#e0601a');
+    s.box(0, 0, 8, 8, 8, (f, x, y) => {
+      if (f === 'front' && y === 3 && (x === 2 || x === 5)) return [255, 255, 220];
+      if (f === 'front' && y === 5 && x >= 3 && x <= 4) return [255, 240, 160];
+      const bar = x === 0 || x === 7 || y === 0 || y === 7 || (f !== 'top' && f !== 'bottom' && (x === 3 || x === 4) && y < 2);
+      if (bar) return vary(r, iron, 0.12);
+      return vary(r, (x * 3 + y * 5) % 4 === 0 ? deep : fire, 0.12);
+    });
+    s.box(0, 16, 2, 8, 2, (f, x, y) => vary(r, y % 3 === 0 ? C('#a8481a') : C('#ffc04a'), 0.1));
+    return s;
+  })();
   // ------------------------------------------------------------ armour layers
   function armorSkin(mat, colors) {
     const s = new Skin(); const r = rng('armor' + mat);

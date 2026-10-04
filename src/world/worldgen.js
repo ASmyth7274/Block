@@ -1324,6 +1324,8 @@ function WorldGenFactory(Noise, TAB) {
         ruins: [[I.gold_nugget, 3, 10, 10], [I.fish, 1, 4, 8], [I.jade, 1, 3, 5], [I.diamond, 1, 1, 2], [I.iron_ingot, 1, 3, 6], [I.lumite_shard, 1, 4, 6]],
         smithy: [[I.diamond, 1, 3, 3], [I.iron_ingot, 1, 5, 10], [I.gold_ingot, 1, 3, 5], [I.bread, 1, 3, 15], [I.apple, 1, 3, 15], [I.iron_pickaxe, 1, 1, 5], [I.iron_sword, 1, 1, 5],
           [I.iron_chestplate, 1, 1, 5], [I.iron_helmet, 1, 1, 5], [I.iron_leggings, 1, 1, 5], [I.iron_boots, 1, 1, 5], [B.OBSIDIAN, 3, 7, 5], [B.SAPLING, 3, 7, 5], [I.jade, 1, 3, 4]],
+        fortress: [[I.gold_ingot, 1, 3, 15], [I.iron_ingot, 1, 5, 6], [I.diamond, 1, 3, 5], [I.gold_sword, 1, 1, 5], [I.gold_chestplate, 1, 1, 5], [I.gold_pickaxe, 1, 1, 3], [I.flint_and_steel, 1, 1, 5],
+          [I.bloodcap, 3, 7, 5], [B.OBSIDIAN, 2, 4, 2], [I.sunstone_dust, 2, 6, 6], [I.smoky_quartz, 2, 8, 6], [I.fire_charge, 1, 3, 4], [I.gold_nugget, 3, 9, 8]],
         mineshaft: [[I.iron_ingot, 1, 5, 10], [I.gold_ingot, 1, 3, 5], [I.ember_dust, 4, 9, 5], [I.dye, 4, 9, 5, 11], [I.diamond, 1, 2, 3], [I.coal, 3, 8, 10], [I.bread, 1, 3, 15],
           [I.iron_pickaxe, 1, 1, 1], [B.RAIL, 4, 8, 1], [I.seeds, 2, 4, 10], [I.cobalt_ingot, 1, 2, 3], [I.lumite_shard, 2, 5, 4], [B.TORCH, 4, 10, 6], [I.prospector_rod, 1, 1, 1]],
       }[table] || [];
@@ -1910,6 +1912,7 @@ function WorldGenFactory(Noise, TAB) {
       this.uSurface(out);
       this.uOres(out);
       this.uFeatures(out);
+      if (this.structuresOn) this.fortresses(out);
       return out;
     }
     // floors and ceilings take on their region's look
@@ -2051,6 +2054,162 @@ function WorldGenFactory(Noise, TAB) {
           if (!solid(get(x, y, z))) continue;
           for (let j = 1; j <= 1 + rng.nextInt(4) && get(x, y - j, z) === 0; j++) set(x, y - j, z, B.QUARTZ_BLOCK, 2);
         }
+      }
+    }
+    // ---- fortresses: brimstone-brick bridges and halls laid out on a 7-block grid ----
+    fortressAt(rx, rz) {
+      const key = (rx + 32768) * 65536 + (rz + 32768);
+      if (!this.fortCache) this.fortCache = new Map();
+      if (this.fortCache.has(key)) return this.fortCache.get(key);
+      const r = new Random(seedHash(this.seed, rx, rz, 0xF047));
+      let L = null;
+      if (this.structuresOn && r.nextFloat() < 0.55) {
+        const sx = (rx * 16 + 4 + r.nextInt(8)) * 16 + 8, sz = (rz * 16 + 4 + r.nextInt(8)) * 16 + 8;
+        L = this.fortressLayout(sx, sz, 56 + r.nextInt(18), new Random(seedHash(this.seed, rx, rz, 0xF048)));
+      }
+      this.fortCache.set(key, L);
+      if (this.fortCache.size > 256) this.fortCache.delete(this.fortCache.keys().next().value);
+      return L;
+    }
+    // the fortress (if any) whose bounds hold this point
+    fortressNear(x, z) {
+      const rx = Math.floor(x / 256), rz = Math.floor(z / 256);
+      for (let i = rx - 1; i <= rx + 1; i++) for (let j = rz - 1; j <= rz + 1; j++) {
+        const L = this.fortressAt(i, j);
+        if (L && x >= L.box[0] && x <= L.box[3] && z >= L.box[2] && z <= L.box[5]) return L;
+      }
+      return null;
+    }
+    fortressLayout(sx, sz, F, rng) {
+      const DIR = [[0, -1], [0, 1], [-1, 0], [1, 0]], OPP = [1, 0, 3, 2];
+      const cells = new Map(), K = (i, j) => i + ',' + j;
+      const put = (i, j, kind) => { const c = { i, j, kind, l: [0, 0, 0, 0], seed: rng.nextInt(0x7fffffff) }; cells.set(K(i, j), c); return c; };
+      const link = (a, b, d) => { a.l[d] = 1; b.l[OPP[d]] = 1; };
+      const free = (i, j) => Math.abs(i) <= 7 && Math.abs(j) <= 7 && !cells.has(K(i, j));
+      const start = put(0, 0, 'plaza');
+      const open = [];
+      for (let d = 0; d < 4; d++) if (d === 0 || rng.nextInt(10) < 8) open.push({ c: start, d, depth: 0 });
+      let rooms = 0;
+      while (open.length && cells.size < 70) {
+        const { c, d, depth } = open.splice(rng.nextInt(open.length), 1)[0];
+        const style = depth === 0 || rng.nextBool() ? 'bridge' : 'hall';
+        let prev = c, n = 2 + rng.nextInt(4);
+        for (let k = 0; k < n; k++) {
+          const i = prev.i + DIR[d][0], j = prev.j + DIR[d][1];
+          if (!free(i, j)) break;
+          const nc = put(i, j, style); link(prev, nc, d); prev = nc;
+        }
+        if (prev === c) continue;
+        // what lies at the end of the run
+        const i = prev.i + DIR[d][0], j = prev.j + DIR[d][1];
+        if (!free(i, j)) continue;
+        if (depth < 3 && rng.nextInt(10) < 6) {
+          const jc = put(i, j, style === 'bridge' ? 'plaza' : 'hallx'); link(prev, jc, d);
+          for (let nd = 0; nd < 4; nd++) if (nd !== OPP[d] && rng.nextInt(10) < 6) open.push({ c: jc, d: nd, depth: depth + 1 });
+        } else {
+          const roll = rng.nextInt(10);
+          const spawners = [...cells.values()].filter((q) => q.kind === 'spawner').length;
+          const kind = rooms === 0 ? 'spawner' : rooms === 1 ? 'treasury' : roll < 3 ? 'garden' : roll < 6 ? 'treasury' : (roll < 8 && spawners < 2) ? 'spawner' : 'end';
+          rooms++;
+          const rc = put(i, j, kind); link(prev, rc, d);
+        }
+      }
+      // one Flare spawner at least
+      if (![...cells.values()].some((c) => c.kind === 'spawner')) { const ends = [...cells.values()].filter((c) => c.kind === 'end'); if (ends.length) ends[0].kind = 'spawner'; }
+      const list = [...cells.values()];
+      let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+      for (const c of list) { x0 = Math.min(x0, sx + c.i * 7 - 3); x1 = Math.max(x1, sx + c.i * 7 + 3); z0 = Math.min(z0, sz + c.j * 7 - 3); z1 = Math.max(z1, sz + c.j * 7 + 3); }
+      return { sx, sz, F, cells: list, box: [x0 - 1, 1, z0 - 1, x1 + 1, F + 7, z1 + 1] };
+    }
+    fortresses(out) {
+      const x0 = out.cx * 16, z0 = out.cz * 16;
+      const rx = Math.floor(x0 / 256), rz = Math.floor(z0 / 256);
+      for (let i = rx - 1; i <= rx + 1; i++) for (let j = rz - 1; j <= rz + 1; j++) {
+        const L = this.fortressAt(i, j);
+        if (!L || L.box[3] < x0 || L.box[0] > x0 + 15 || L.box[5] < z0 || L.box[2] > z0 + 15) continue;
+        for (const c of L.cells) {
+          const cx0 = L.sx + c.i * 7 - 3, cz0 = L.sz + c.j * 7 - 3;
+          if (cx0 + 7 < x0 || cx0 - 1 > x0 + 15 || cz0 + 7 < z0 || cz0 - 1 > z0 + 15) continue;
+          this.fortressCell(out, L, c, cx0, cz0);
+        }
+      }
+    }
+    fortressCell(out, L, c, ox, oz) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16, F = L.F;
+      const inC = (x, z) => x >= X0 && x < X0 + 16 && z >= Z0 && z < Z0 + 16;
+      const get = (x, y, z) => (!inC(x, z) || y < 0 || y >= H) ? -1 : blocks[IDX(x - X0, y, z - Z0)];
+      const set = (x, y, z, id, m) => { if (!inC(x, z) || y < 1 || y >= H - 1) return; const i = IDX(x - X0, y, z - Z0); blocks[i] = id; meta[i] = m || 0; };
+      const BR = B.BRIMSTONE_BRICKS, FE = B.BRIMSTONE_FENCE;
+      const rng = new Random(c.seed);
+      const enclosed = c.kind === 'hall' || c.kind === 'hallx' || c.kind === 'garden' || c.kind === 'treasury';
+      const floor = (u, v) => {
+        if (u < 0 || v < 0 || u > 6 || v > 6) return false;
+        if (u >= 1 && u <= 5 && v >= 1 && v <= 5) return true;
+        if (v >= 1 && v <= 5) return (u === 0 && c.l[2]) || (u === 6 && c.l[3]);
+        if (u >= 1 && u <= 5) return (v === 0 && c.l[0]) || (v === 6 && c.l[1]);
+        return false;
+      };
+      const edge = (u, v) => floor(u, v) && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([du, dv]) => { const nu = u + du, nv = v + dv; return nu >= 0 && nv >= 0 && nu <= 6 && nv <= 6 && !floor(nu, nv); });
+      const top = enclosed ? F + 5 : F + 3;
+      for (let u = 0; u <= 6; u++) for (let v = 0; v <= 6; v++) {
+        if (!floor(u, v)) continue;
+        const x = ox + u, z = oz + v;
+        if (!inC(x, z)) continue;
+        set(x, F, z, BR);
+        set(x, F - 1, z, BR);
+        for (let y = F + 1; y <= top; y++) set(x, y, z, 0);
+        if (edge(u, v)) {
+          if (enclosed) {
+            const corner = [[1, 0], [-1, 0]].every(([du]) => floor(u + du, v)) === false && [[0, 1], [0, -1]].every(([, dv]) => floor(u, v + dv)) === false;
+            for (let y = F + 1; y <= F + 4; y++) {
+              const win = !corner && (y === F + 2 || y === F + 3) && ((u + v) & 1) === 0;
+              set(x, y, z, win ? FE : BR);
+            }
+          } else { set(x, F + 1, z, BR); set(x, F + 2, z, FE); }
+        }
+        if (enclosed) set(x, F + 5, z, BR);
+      }
+      // the central pier, down to solid ground (or into the lava)
+      const px = ox + 3, pz = oz + 3;
+      if (inC(px, pz)) {
+        for (let y = F - 2; y >= 1; y--) {
+          const id = get(px, y, pz);
+          if (id !== 0 && id !== B.LAVA && id !== B.FIRE && SOLID[id] && y < F - 3) break;
+          set(px, y, pz, BR);
+        }
+        // a buttress either side of the pier, flaring out under the floor like an arch
+        for (const [du, dv] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const ax = px + du, az = pz + dv;
+          if (get(ax, F - 2, az) === 0 || get(ax, F - 2, az) === B.LAVA) set(ax, F - 2, az, BR);
+          const bx = px + du * 2, bz = pz + dv * 2;
+          if (get(bx, F - 2, bz) === 0) set(bx, F - 2, bz, B.STAIRS, (17 << 3) | [1, 0, 3, 2][[[0, -1], [0, 1], [-1, 0], [1, 0]].findIndex(([a, b]) => a === du && b === dv)] | 4);
+        }
+      }
+      // ---- what the cell holds ----
+      if (c.kind === 'spawner') {
+        // the flare spawner on a brick plinth, fence posts at its corners
+        set(ox + 3, F + 1, oz + 3, B.MOB_SPAWNER);
+        if (inC(ox + 3, oz + 3)) out.tiles.push({ type: 'spawner', x: ox + 3, y: F + 1, z: oz + 3, mob: 'flare' });
+        for (const [u, v] of [[2, 2], [4, 2], [2, 4], [4, 4]]) { set(ox + u, F + 1, oz + v, BR); set(ox + u, F + 2, oz + v, FE); }
+      } else if (c.kind === 'garden') {
+        // bloodcap beds in bone sand, lit by sunstone in the ceiling
+        const alongX = c.l[2] || c.l[3];
+        for (let u = 2; u <= 4; u++) for (const v of [2, 4]) {
+          const x = ox + (alongX ? u : v), z = oz + (alongX ? v : u);
+          set(x, F, z, B.BONESAND); set(x, F + 1, z, B.BLOODCAP, 1 + rng.nextInt(3));
+        }
+        set(ox + 3, F + 5, oz + 3, B.SUNSTONE);
+      } else if (c.kind === 'treasury') {
+        const alongX = c.l[2] || c.l[3];
+        const x = ox + (alongX ? 3 : 2), z = oz + (alongX ? 2 : 3);
+        set(x, F + 1, z, B.CHEST, alongX ? 1 : 3);
+        if (inC(x, z)) out.tiles.push({ type: 'chest', x, y: F + 1, z, items: this.loot(rng, 'fortress') });
+        set(ox + 3, F + 5, oz + 3, B.SUNSTONE);
+      } else if (c.kind === 'plaza' && rng.nextInt(3) === 0) {
+        // a fire pit at the crossing
+        set(ox + 3, F, oz + 3, B.BRIMSTONE); set(ox + 3, F + 1, oz + 3, B.FIRE);
+      } else if (c.kind === 'hall' && rng.nextInt(4) === 0) {
+        set(ox + 3, F + 5, oz + 3, B.SUNSTONE);
       }
     }
     // a giant rib cage: a spine with curved ribs arching down to the floor

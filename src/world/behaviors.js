@@ -721,6 +721,13 @@ const Behaviors = (() => {
         return;
       }
       case B.BLOODCAP: if (m < 3 && w.rng.nextInt(10) === 0) w.setMeta(x, y, z, m + 1, 4); return;
+      case B.PORTAL:
+        // now and then something wanders up out of the swirl
+        if (!w.dim && w.game && w.difficulty > 0 && w.gameRules.doMobSpawning && w.getBlock(x, y - 1, z) === B.OBSIDIAN && w.rng.nextInt(2000) < w.difficulty) {
+          const n = w.entitiesInBox(x - 8, y - 4, z - 8, x + 9, y + 6, z + 9, (e) => e.type === 'charred').length;
+          if (n < 3) { const c = w.game.spawnMob('charred', x + 0.5, y, z + 0.5); if (c) c.portalCooldown = 300; }
+        }
+        return;
       case B.FARMLAND: {
         let water = false;
         for (let dx = -4; dx <= 4 && !water; dx++) for (let dz = -4; dz <= 4 && !water; dz++) for (let dy = 0; dy <= 1; dy++) if (w.getBlock(x + dx, y + dy, z + dz) === B.WATER) { water = true; break; }
