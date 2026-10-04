@@ -277,6 +277,7 @@ class EntityRenderer {
 
   drawEntity(e, rx, ry, rz, partial) {
     const g = this.game;
+    if (e.effects && e.effects.invisible) return;     // only the swirl gives it away
     switch (e.type) {
       case 'item': return this.drawItemEntity(e, rx, ry, rz, partial);
       case 'xp': return this.drawXP(e, rx, ry, rz, partial);

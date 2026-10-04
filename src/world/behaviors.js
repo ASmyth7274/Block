@@ -419,6 +419,7 @@ const Behaviors = (() => {
       }
       case B.RUNESTONE: game.useRunestone(x, y, z); return true;
       case B.ENCHANTING_TABLE: game.openScreen(new EnchantScreen(game, x, y, z)); return true;
+      case B.BREWING_STAND: { const te = w.getTile(x, y, z); if (te) game.openScreen(new BrewingScreen(game, te)); return true; }
       case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: case B.RELAY: case B.RELAY_ON: case B.NOTE_BLOCK:
         return Circuits.use(game, x, y, z, id);
       case B.BRAMBLE: {

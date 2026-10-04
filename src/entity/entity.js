@@ -283,7 +283,7 @@ class Living extends Entity {
   hurt(amount, src) {
     if (this.dead || this.removed) return false;
     if (this.invulnerable && src.type !== 'void') return false;
-    if ((src.type === 'fire' || src.type === 'lava') && this.fireImmune) return false;
+    if ((src.type === 'fire' || src.type === 'lava') && (this.fireImmune || this.effects.fireRes)) return false;
     if (this.hurtResist > 10) {
       if (amount <= this.lastDamage) return false;
       this.applyDamage(amount - this.lastDamage, src);
@@ -400,7 +400,7 @@ class Living extends Entity {
     this.vy *= 0.98;
     this.vx *= f4; this.vz *= f4;
   }
-  moveSpeed() { let s = this.landSpeed; if (this.sprinting) s *= 1.3; if (this.effects.slow) s *= 0.7; if (this.effects.speed) s *= 1.2; return s; }
+  moveSpeed() { let s = this.landSpeed; if (this.sprinting) s *= 1.3; if (this.effects.slow) s *= 1 - 0.15 * Brewing.level(this, 'slow') - 0.15; if (this.effects.speed) s *= 1 + 0.2 * Brewing.level(this, 'speed'); return s; }
   isFreeOffset(dx, dy, dz) {
     const b = this.box.copy().offset(dx, dy, dz);
     collectBoxes(this.world, b, _boxes);
@@ -413,7 +413,7 @@ class Living extends Entity {
   }
   jump() {
     this.vy = 0.42;
-    if (this.effects.jump) this.vy += 0.1;
+    if (this.effects.jump) this.vy += 0.1 * Brewing.level(this, 'jump');
     if (this.sprinting) { this.vx -= Math.sin(this.yaw) * 0.2; this.vz -= Math.cos(this.yaw) * 0.2; }
     if (this.onJump) this.onJump();
   }
@@ -457,6 +457,9 @@ class Living extends Entity {
     if (diff > 1.3) this.bodyYaw += diff - 1.3; else if (diff < -1.3) this.bodyYaw += diff + 1.3;
     this.headYaw = this.yaw;
     this.updateSwing();
-    for (const k in this.effects) { if (--this.effects[k] <= 0) delete this.effects[k]; }
+    const ef = this.effects;
+    if (ef.poison && !this.undead && !this.dead && this.age % Math.max(1, 25 >> Brewing.amp(this, 'poison')) === 0 && this.health > 1) this.hurt(1, { type: 'magic' });
+    if (ef.regen && !this.undead && !this.dead && this.age % Math.max(1, 50 >> Brewing.amp(this, 'regen')) === 0) this.heal(1);
+    for (const k in ef) { if (--ef[k] <= 0) { delete ef[k]; if (this.effectAmp) delete this.effectAmp[k]; } }
   }
 }

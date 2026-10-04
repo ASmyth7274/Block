@@ -132,6 +132,12 @@ splash text and a slowly turning live panorama.
   who swarm if you strike one, wailers that spit fireballs you can hit back,
   magma slimes, and sprawling brick fortresses with flare spawners, treasure
   rooms and bloodcap gardens. Water boils, beds explode and compasses spin.
+- Brewing the classic way: a brewing stand, water bottles, bloodcap for an
+  awkward base and seventeen brews from Swiftness to Invisibility (with
+  glimmerfin for night vision and slimeballs for leaping), made longer with
+  ember dust, stronger with sunstone, twisted with a fermented spider eye or
+  turned into splash potions with gunpowder. Effects show beside your
+  inventory and swirl around whoever is under them.
 - Generative music: calm piano pieces composed on the fly, different by day,
   by night and underground.
 

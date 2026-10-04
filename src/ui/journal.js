@@ -39,6 +39,7 @@ const MILESTONES = [
   { id: 'bottle', name: 'Message Received', desc: 'Read a message in a bottle', icon: () => [ITEM_IDS.message_bottle, 0] },
   { id: 'enchant', name: 'Enchanter', desc: 'Enchant an item at an enchanting table', icon: () => [B.ENCHANTING_TABLE, 0] },
   { id: 'lamp', name: 'Bright Idea', desc: 'Light an ember lamp with a circuit', icon: () => [B.EMBER_LAMP_ON, 0] },
+  { id: 'brew', name: 'Local Brewery', desc: 'Brew a potion', icon: () => [ITEM_IDS.potion, 10] },
   { id: 'portal', name: 'Gateway', desc: 'Build and light an Underworld portal', icon: () => [B.OBSIDIAN, 0] },
   { id: 'underworld', name: 'Hot Under the Collar', desc: 'Step into the Underworld', icon: () => [B.BRIMSTONE, 0] },
   { id: 'fortress', name: 'Brimstone Bastion', desc: 'Find an Underworld fortress', icon: () => [B.BRIMSTONE_BRICKS, 0] },

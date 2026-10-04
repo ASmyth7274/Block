@@ -195,6 +195,51 @@ defItem('flare_powder', { name: 'Flare Powder' });
 defItem('magma_cream', { name: 'Magma Cream' });
 defItem('bloodcap', { name: 'Bloodcap', tex: 'item_bloodcap', plant: { block: 144, on: [138] } });
 defItem('fire_charge', { name: 'Fire Charge' });
+// ---- brewing ----
+// potion damage: bits 0-5 the brew, 64 = stronger (II), 128 = longer
+const POTIONS = [
+  { key: 'water', name: 'Water Bottle', color: '#385dc6' },
+  { key: 'awkward', name: 'Awkward Potion', color: '#385dc6' },
+  { key: 'mundane', name: 'Mundane Potion', color: '#385dc6' },
+  { key: 'thick', name: 'Thick Potion', color: '#385dc6' },
+  { key: 'swiftness', name: 'Swiftness', effect: 'speed', dur: 3600, color: '#7cafc6', strong: true },
+  { key: 'slowness', name: 'Slowness', effect: 'slow', dur: 1800, color: '#5a6c81', bad: true },
+  { key: 'strength', name: 'Strength', effect: 'strength', dur: 3600, color: '#932423', strong: true },
+  { key: 'weakness', name: 'Weakness', effect: 'weakness', dur: 1800, color: '#484d48', bad: true },
+  { key: 'healing', name: 'Healing', effect: 'heal', instant: true, color: '#f82423', strong: true },
+  { key: 'harming', name: 'Harming', effect: 'harm', instant: true, color: '#430a09', bad: true, strong: true },
+  { key: 'regeneration', name: 'Regeneration', effect: 'regen', dur: 900, color: '#cd5cab', strong: true },
+  { key: 'poison', name: 'Poison', effect: 'poison', dur: 900, color: '#4e9331', bad: true, strong: true },
+  { key: 'fire_resistance', name: 'Fire Resistance', effect: 'fireRes', dur: 3600, color: '#e49a3a' },
+  { key: 'night_vision', name: 'Night Vision', effect: 'nightVision', dur: 3600, color: '#1f1fa1' },
+  { key: 'invisibility', name: 'Invisibility', effect: 'invisible', dur: 3600, color: '#7f8392' },
+  { key: 'water_breathing', name: 'Water Breathing', effect: 'waterBreathing', dur: 3600, color: '#2e5299' },
+  { key: 'leaping', name: 'Leaping', effect: 'jump', dur: 3600, color: '#22ff4c', strong: true },
+];
+const EFFECTS = {
+  speed: { name: 'Speed', color: '#7cafc6' }, slow: { name: 'Slowness', color: '#5a6c81', bad: true }, strength: { name: 'Strength', color: '#932423' },
+  weakness: { name: 'Weakness', color: '#484d48', bad: true }, regen: { name: 'Regeneration', color: '#cd5cab' }, poison: { name: 'Poison', color: '#4e9331', bad: true },
+  fireRes: { name: 'Fire Resistance', color: '#e49a3a' }, nightVision: { name: 'Night Vision', color: '#1f1fa1' }, invisible: { name: 'Invisibility', color: '#7f8392' },
+  waterBreathing: { name: 'Water Breathing', color: '#2e5299' }, jump: { name: 'Jump Boost', color: '#22ff4c' }, hunger: { name: 'Hunger', color: '#587653', bad: true },
+  haste: { name: 'Haste', color: '#d9c043' },
+};
+function potionOf(d) { return POTIONS[d & 63] || POTIONS[0]; }
+function potionName(d, splash) {
+  const p = potionOf(d);
+  if (!p.effect) return (splash ? 'Splash ' : '') + p.name;
+  return (splash ? 'Splash ' : '') + 'Potion of ' + p.name + ((d & 64) ? ' II' : '');
+}
+function potionDuration(d) { const p = potionOf(d); if (!p.dur) return 0; let t = p.dur; if (d & 128) t = Math.round(t * 8 / 3); if (d & 64) t = Math.round(t / 2); return t; }
+const POTION_VARIANTS = (() => {
+  const out = [];
+  POTIONS.forEach((p, i) => { out.push(i); if (p.effect && p.strong) out.push(i | 64); if (p.effect && !p.instant) out.push(i | 128); });
+  return out;
+})();
+defItem('glass_bottle', { name: 'Glass Bottle' });
+defItem('potion', { name: (d) => potionName(d, false), tex: (d) => 'potion_' + potionOf(d).key, maxStack: 1, drink: true, potion: true, container: 'glass_bottle', variants: POTION_VARIANTS });
+defItem('splash_potion', { name: (d) => potionName(d, true), tex: (d) => 'splash_' + potionOf(d).key, maxStack: 1, potion: true, splash: true, variants: POTION_VARIANTS });
+defItem('fermented_spider_eye', { name: 'Fermented Spider Eye' });
+defItem('glistering_melon', { name: 'Glistering Melon' });
 
 // ---------------------------------------------------------------------------
 // Helpers

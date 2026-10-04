@@ -190,6 +190,11 @@ const Recipes = (() => {
   shapeless([I.flare_powder, 2], [I.flare_rod]);
   shapeless([I.fire_charge, 3], [I.gunpowder, I.flare_powder, [I.coal, ANY]]);
   shapeless([I.magma_cream], [I.slimeball, I.flare_powder]);
+  // ---------------- brewing ----------------
+  shaped([B.BREWING_STAND], [' F ', 'CCC'], { F: I.flare_rod, C: B.COBBLESTONE });
+  shaped([I.glass_bottle, 3], ['G G', ' G '], { G: B.GLASS });
+  shapeless([I.fermented_spider_eye], [I.spider_eye, B.MUSHROOM_BROWN, I.sugar]);
+  shaped([I.glistering_melon], ['NNN', 'NMN', 'NNN'], { N: I.gold_nugget, M: I.melon_slice });
 
   // ---------------- smelting ----------------
   smelt(B.COBBLESTONE, [B.STONE], 0.1);

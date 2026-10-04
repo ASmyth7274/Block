@@ -341,6 +341,7 @@ class Mob extends Living {
   }
   attackEntity(e, dmg, extra) {
     this.swing();
+    dmg = Math.max(0, dmg + 3 * Brewing.level(this, 'strength') - 2 * Brewing.level(this, 'weakness'));
     const d = e.type === 'player' ? scaleMobDamage(this.world, dmg) : dmg;
     if (d <= 0) return false;
     const ok = e.hurt(d, Object.assign({ type: 'mob', entity: this, knockback: 0.4 }, extra || {}));
@@ -375,6 +376,7 @@ class Mob extends Living {
     if (!p || p.dead || !p.survivalLike || this.world.difficulty === 0) return null;
     let r = range;
     if (p.sneaking) r *= 0.8;
+    if (p.effects.invisible) r *= 0.15;
     if (this.distSqTo(p) > r * r) return null;
     if (!this.canSee(p)) return null;
     return p;
@@ -1458,6 +1460,7 @@ const VILLAGER_TRADES = (() => {
       [t('rotten_flesh', [36, 40], J, [1, 1]), t('gold_ingot', [8, 10], J, [1, 1])],
       [t(J, [1, 1], 'ember_dust', [1, 4]), t(J, [1, 2], 'dye:11', [1, 2])],
       [t(J, [1, 1], 'lumite_shard', [1, 3]), t(J, [6, 9], 'wisp_essence', [1, 1])],
+      [t(J, [1, 1], 'glass_bottle', [3, 5]), t(J, [3, 5], 'sunstone_dust', [2, 4])],
       [t(J, [9, 12], 'golden_apple', [1, 1])],
     ],
     smith: [

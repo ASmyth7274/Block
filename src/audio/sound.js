@@ -129,6 +129,11 @@ const SOUND_DEFS = (() => {
   };
   S.fuse = () => { const hp = new Biquad('hp', 3500, 0.7); return render(1.4, (t) => hp.p(noise()) * (0.5 + 0.5 * Math.sin(t * 60)) * env(t, 0.05, 0.6)); };
   S.fizz = () => { const hp = new Biquad('hp', 2500, 0.7); return render(0.45, (t) => hp.p(noise()) * env(t, 0.01, 0.12)); };
+  // brewing: a soft bubbling, a bright 'done', glass bursting
+  S.brew = () => { const bp = new Biquad('bp', 700, 6); let g = 0, gt = 0; return render(1.2, (t) => { if (t > gt) { g = 1; gt = t + 0.08 + rnd() * 0.15; bp.set(500 + rnd() * 700, 8); } g *= 0.996; return bp.p(noise()) * g * Math.sin(Math.PI * t / 1.2); }); };
+  S.brew_done = () => render(0.8, (t) => { let s = 0; [784, 1047, 1319].forEach((f, i) => { const st = i * 0.06; if (t > st) s += Math.sin(2 * Math.PI * f * (t - st)) * Math.exp(-(t - st) / 0.25) * 0.4; }); return s; });
+  S.bottle_fill = () => { const bp = new Biquad('bp', 1400, 3); return render(0.4, (t) => { bp.set(800 + t * 2600, 3); return bp.p(noise()) * env(t, 0.01, 0.12); }); };
+  S.potion_splash = () => { const hp = new Biquad('hp', 2200, 0.8); return render(0.6, (t) => { let s = hp.p(noise()) * env(t, 0.002, 0.08); [2900, 3700, 4400].forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t) * Math.exp(-t / (0.12 + i * 0.03)) * 0.25; }); return s; }); };
   S.fire_charge = () => { const lp = new Biquad('lp', 900, 0.8); return render(0.6, (t) => lp.p(noise()) * env(t, 0.01, 0.15) + Math.sin(2 * Math.PI * (90 - t * 60) * t) * env(t, 0.005, 0.12) * 0.6); };
   S.ignite = () => { const hp = new Biquad('hp', 4000, 0.7); return render(0.25, (t) => hp.p(noise()) * env(t, 0.002, 0.05) + Math.sin(2 * Math.PI * 3000 * t) * env(t, 0.001, 0.01) * 0.3); };
   S.thunder = () => {

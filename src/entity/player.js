@@ -188,14 +188,12 @@ class Player extends Living {
       }
     } else this.foodTimer = 0;
     // air
-    if (this.headInWater) {
+    if (this.headInWater && !this.effects.waterBreathing) {
       const resp = Enchant.level(this.inventory.armor.items[0], 'respiration');
       if (!(resp > 0 && Math.random() < resp / (resp + 1))) this.air--;
       if (this.air <= -20) { this.air = 0; this.hurt(2, { type: 'drown' }); }
     } else this.air = 300;
-    if (this.effects.poison && this.age % 25 === 0 && this.health > 1) this.hurt(1, { type: 'magic' });
     if (this.effects.hunger) this.exhaust(0.025);
-    if (this.effects.regen && this.age % 50 === 0) this.heal(1);
   }
   addXP(n) {
     this.score += n; this.xpTotal += n;
@@ -308,7 +306,8 @@ class Player extends Living {
       this.game.audio.play('burp', 0.5, 0.9 + Math.random() * 0.1);
       this.game.onAte(s);
     }
-    if (def && def.drink && s.id === ITEM_IDS.milk_bucket) this.effects = {};
+    if (def && def.drink && s.id === ITEM_IDS.milk_bucket) { this.effects = {}; this.effectAmp = {}; }
+    if (def && def.potion && !def.splash) Brewing.applyPotion(this.game, this, s.dmg, 1, null);
     if (!this.creative) {
       if (def && def.container) {
         const cont = new ItemStack(ITEM_IDS[def.container], 1, 0);

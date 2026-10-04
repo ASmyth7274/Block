@@ -792,6 +792,16 @@ class Game {
         if ((b !== p || !p.creative) && !b.riding) { b.vx += kx; b.vz += kz; }
       }
     }
+    // potion swirls round anything under an effect
+    if (this.ticks % 2 === 0 && this.settings.particles !== 'minimal') {
+      const glint = this.particles.layer('particle_glint');
+      for (const e of list.concat(p && !p.dead ? [p] : [])) {
+        if (e.removed || e.dead || !e.effects || (e === p && !this.thirdPerson) || Math.random() < 0.5) continue;
+        const col = Brewing.swirlColor(e);
+        if (!col || (e.effects.invisible && Math.random() < 0.8)) continue;
+        this.particles.add({ x: e.x + (Math.random() - 0.5) * e.w, y: e.y + Math.random() * e.h, z: e.z + (Math.random() - 0.5) * e.w, vx: 0, vy: 0.03, vz: 0, size: 0.07, life: 14 + Math.floor(Math.random() * 8), layer: glint, r: col[0], g: col[1], b: col[2], fade: true, collide: false });
+      }
+    }
     if (list.some((e) => e.removed)) {
       const keep = [];
       for (const e of list) { if (e.removed) w.entityMap.delete(e.id); else keep.push(e); }
@@ -876,6 +886,7 @@ class Game {
       if (!c.tiles.size) continue;
       for (const te of c.tiles.values()) {
         if (te.type === 'furnace') this.tickFurnace(te, c);
+        else if (te.type === 'brewing') Brewing.tick(this, te, c);
         else if (te.type === 'enchanting') this.tickEnchantTable(te);
         else if (te.type === 'spawner') { const dx = te.x + 0.5 - p.x, dy = te.y + 0.5 - p.y, dz = te.z + 0.5 - p.z; if (dx * dx + dy * dy + dz * dz < 256) this.tickSpawner(te); }
       }

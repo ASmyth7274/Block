@@ -64,6 +64,11 @@ class ContainerScreen extends Screen {
     if (t && t.kind !== 'shears') lines.push('§9+' + t.attack + ' Attack Damage');
     if (a) lines.push('§9+' + a.points + ' Armor');
     if (f) lines.push('§7Restores ' + (f.hunger / 2) + ' hunger');
+    if (ITEMS[st.id] && ITEMS[st.id].potion) {
+      const pp = potionOf(st.dmg);
+      if (!pp.effect) lines.push('§7No Effects');
+      else lines.push((pp.bad ? '§c' : '§9') + pp.name + ((st.dmg & 64) ? ' II' : '') + (pp.instant ? '' : ' (' + fmtTicks(potionDuration(st.dmg) * (ITEMS[st.id].splash ? 0.75 : 1)) + ')'));
+    }
     const md = maxDamageOf(st.id);
     if (md > 0 && st.dmg > 0) lines.push('§7Durability: ' + (md - st.dmg) + ' / ' + md);
     const lore = ITEM_LORE[st.id < 256 ? 'b' + st.id : st.id];
@@ -272,6 +277,72 @@ function drawFlame(gui, x, y, f) {
   }
 }
 
+// ticks as m:ss
+function fmtTicks(t) { const s = Math.max(0, Math.floor(t / 20)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+// the effects you are under, in little panels left of the inventory
+function drawEffectList(gui, p, x, y) {
+  const ks = Object.keys(p.effects || {}).filter((k) => EFFECTS[k]);
+  if (!ks.length) return;
+  const step = ks.length > 5 ? Math.floor(132 / ks.length) : 33;
+  ks.forEach((k, i) => {
+    const ef = EFFECTS[k], yy = y + i * step;
+    gui.panel(x, yy, 120, 32);
+    const pi = POTIONS.findIndex((q) => q.effect === k);
+    if (pi >= 0) gui.item(new ItemStack(ITEM_IDS.potion, 1, pi), x + 7, yy + 7);
+    const lvl = (p.effectAmp && p.effectAmp[k]) ? ' II' : '';
+    gui.text(ef.name + lvl, x + 28, yy + 6, ef.bad ? '#ff8080' : '#ffffff');
+    gui.text(fmtTicks(p.effects[k]), x + 28, yy + 16, '#7f7f7f');
+  });
+}
+
+// ---------------------------------------------------------------- brewing stand
+class BrewingScreen extends ContainerScreen {
+  constructor(game, te) {
+    super(game, 176, 166);
+    this.te = te;
+    this.inv = new Inventory(4, te.items);
+    this.inv.listeners.push(() => this.game.world.markTileChanged(te.x, te.z));
+    const bottle = (s) => Brewing.isBottle(s) || s.id === ITEM_IDS.glass_bottle;
+    for (const [i, x, y] of [[0, 56, 51], [1, 79, 58], [2, 102, 51]]) this.slots.push(new Slot(this.inv, i, x, y, { group: 'bottle', maxStack: 1, filter: bottle }));
+    this.slots.push(new Slot(this.inv, 3, 79, 17, { group: 'ing', filter: (s) => Brewing.isIngredient(s) }));
+    this.addPlayerSlots(84);
+  }
+  quickTargets(s, st) {
+    if (s.group === 'main' || s.group === 'hotbar') {
+      if (Brewing.isIngredient(st)) return { slots: [this.slots[3]] };
+      if (Brewing.isBottle(st)) return { slots: this.slots.filter((x) => x.group === 'bottle') };
+      return super.quickTargets(s, st);
+    }
+    return { slots: this.slots.filter((x) => x.group === 'hotbar' || x.group === 'main'), reverse: true };
+  }
+  drawForeground(gui) {
+    const ctx = gui.ctx, L = this.left, T = this.top, te = this.te;
+    gui.textCentered('Brewing Stand', L + this.pw / 2, T + 6, '#404040', false);
+    this.label(gui, 'Inventory', 8, 72);
+    // the pipes from the ingredient down to the three bottles
+    ctx.fillStyle = '#8b8b8b';
+    ctx.fillRect(L + 63, T + 28, 50, 2); ctx.fillRect(L + 63, T + 28, 2, 20); ctx.fillRect(L + 111, T + 28, 2, 20); ctx.fillRect(L + 86, T + 36, 2, 19);
+    // progress: a falling arrow beside the ingredient, bubbles rising beside the pipe
+    const f = te.brewTime > 0 ? 1 - te.brewTime / Brewing.BREW_TIME : 0;
+    const ax = L + 98, ay = T + 16;
+    ctx.fillStyle = '#5a5a5a'; ctx.fillRect(ax + 3, ay, 3, 22); for (let i = 0; i < 5; i++) ctx.fillRect(ax + i, ay + 22 + i, 9 - i * 2, 1);
+    if (f > 0) {
+      ctx.fillStyle = '#ffffff';
+      const h = Math.floor(27 * f);
+      ctx.save(); ctx.beginPath(); ctx.rect(ax, ay, 9, h); ctx.clip();
+      ctx.fillRect(ax + 3, ay, 3, 22); for (let i = 0; i < 5; i++) ctx.fillRect(ax + i, ay + 22 + i, 9 - i * 2, 1);
+      ctx.restore();
+      const b = (this.game.ticks >> 1) % 8;
+      ctx.fillStyle = '#d8eaff';
+      for (let i = 0; i < 3; i++) { const by = T + 40 - ((b * 3 + i * 9) % 26); ctx.fillRect(L + 67 + (i % 2) * 3, by, 2, 2); }
+    }
+  }
+  tick() {
+    const te = this.te, w = this.game.world;
+    if (w.getTile(te.x, te.y, te.z) !== te || this.player.distanceSq(te.x + 0.5, te.y + 0.5, te.z + 0.5) > 64) this.game.closeScreen();
+  }
+}
+
 // ---------------------------------------------------------------- player inventory
 class InventoryScreen extends ContainerScreen {
   constructor(game) {
@@ -300,6 +371,7 @@ class InventoryScreen extends ContainerScreen {
     return super.quickTargets(s, st);
   }
   drawForeground(gui, mx, my) {
+    drawEffectList(gui, this.player, this.left - 124, this.top);
     this.label(gui, 'Crafting', 86, 6);
     drawArrow(gui, this.left + 132, this.top + 28, 0);
     // player preview window (cut out so the 3D view shows through)
@@ -505,6 +577,8 @@ const CREATIVE_TABS = (() => {
   T.push({ name: 'Ember Circuits', icon: [I.ember_dust, 0], list: [[I.ember_dust, 0], blk(B.EMBER_TORCH), blk(B.LEVER), blk(B.STONE_BUTTON), blk(B.WOOD_BUTTON), blk(B.STONE_PLATE), blk(B.WOOD_PLATE),
     [I.relay, 0], blk(B.PISTON), blk(B.STICKY_PISTON), blk(B.EMBER_LAMP), blk(B.NOTE_BLOCK), blk(B.EMBER_BLOCK), blk(B.TNT), [I.door_wood, 0], [I.door_iron, 0], blk(B.TRAPDOOR), blk(B.FENCE_GATE), blk(B.DETECTOR_RAIL)] });
   T.push({ name: 'Transportation', icon: [B.BOOSTER_RAIL, 0], list: [blk(B.RAIL), blk(B.BOOSTER_RAIL), blk(B.DETECTOR_RAIL), [I.minecart, 0], [I.chest_minecart, 0], ...WOOD.map((w, i) => [I.boat, i])] });
+  T.push({ name: 'Brewing', icon: [I.potion, 10], list: [blk(B.BREWING_STAND), [I.glass_bottle, 0], ...POTION_VARIANTS.map((d) => [I.potion, d]), ...POTION_VARIANTS.map((d) => [I.splash_potion, d]),
+    ...items(['bloodcap', 'sugar', 'glistering_melon', 'spider_eye', 'fermented_spider_eye', 'wailer_tear', 'flare_powder', 'magma_cream', 'glimmerfin', 'pufferfish', 'slimeball', 'ember_dust', 'sunstone_dust', 'gunpowder'])] });
   T.push({ name: 'Foodstuffs', icon: [I.apple, 0], list: items(['apple', 'golden_apple', 'bread', 'porkchop', 'cooked_porkchop', 'beef', 'steak', 'chicken', 'cooked_chicken', 'mutton', 'cooked_mutton', 'venison', 'cooked_venison', 'jerky',
     'fish', 'cooked_fish', 'salmon', 'cooked_salmon', 'sunfish', 'pufferfish', 'glimmerfin', 'carrot', 'potato', 'baked_potato', 'poison_potato', 'cookie', 'melon_slice', 'mushroom_stew', 'glow_berries', 'pumpkin_pie', 'berry_pie', 'berries', 'rotten_flesh', 'spider_eye']) });
   T.push({ name: 'Materials', icon: [I.stick, 0], list: [...items(['coal']), [I.coal, 1], ...items(['diamond', 'iron_ingot', 'gold_ingot', 'gold_nugget', 'cobalt_ingot', 'starmetal_ingot', 'jade', 'ember_dust', 'sulfur', 'lumite_shard', 'salt',

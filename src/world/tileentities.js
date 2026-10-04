@@ -42,6 +42,13 @@ class SpawnerTE extends TileEntity {
   load(d) { if (d.mob) this.mob = d.mob; this.delay = d.delay || 20; }
 }
 
+// a brewing stand: three bottles and an ingredient; brewTime counts down from 400
+class BrewTE extends TileEntity {
+  constructor(x, y, z) { super('brewing', x, y, z); this.items = [null, null, null, null]; this.brewTime = 0; this.lastIng = -1; }
+  save() { return Object.assign(super.save(), { items: this.items.map((s) => s ? s.toJSON() : null), brewTime: this.brewTime }); }
+  load(d) { if (d.items) this.items = d.items.map((o) => o ? ItemStack.fromJSON(o) : null); while (this.items.length < 4) this.items.push(null); this.brewTime = d.brewTime || 0; }
+}
+
 class SignTE extends TileEntity {
   constructor(x, y, z) { super('sign', x, y, z); this.lines = ['', '', '', '']; }
   save() { return Object.assign(super.save(), { lines: this.lines.slice() }); }
@@ -72,6 +79,7 @@ function makeTileEntity(type, x, y, z) {
     case 'chest': return new ChestTE(x, y, z);
     case 'furnace': return new FurnaceTE(x, y, z);
     case 'spawner': return new SpawnerTE(x, y, z);
+    case 'brewing': return new BrewTE(x, y, z);
   }
   return null;
 }

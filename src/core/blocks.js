@@ -674,6 +674,25 @@ defBlock(144, 'bloodcap', Object.assign({}, plantBase, {
   select: (m) => [0, 0, 0, 1, 0.25 + Math.min(3, m) * 0.125, 1],
   drops: (m, rng) => m >= 3 ? [[ITEM_IDS.bloodcap, 2 + rng.nextInt(3), 0]] : [[ITEM_IDS.bloodcap, 1, 0]],
 }));
+// brewing stand: meta bits 0-2 show which bottle holders are filled
+function brewingBoxes(m) {
+  const out = [
+    { b: [9, 0, 5, 15, 2, 11], tex: 'brewing_stand_base' }, { b: [2, 0, 1, 8, 2, 7], tex: 'brewing_stand_base' }, { b: [2, 0, 9, 8, 2, 15], tex: 'brewing_stand_base' },
+    { b: [7, 0, 7, 9, 14, 9], tex: 'brewing_stand' },
+    { b: [9, 10, 7, 12, 11, 9], tex: 'brewing_stand' }, { b: [5, 10, 5, 7, 11, 7], tex: 'brewing_stand' }, { b: [5, 10, 9, 7, 11, 11], tex: 'brewing_stand' },
+  ];
+  if (m & 1) out.push({ b: [10, 2, 6, 14, 9, 10], tex: 'brewing_bottle' });
+  if (m & 2) out.push({ b: [3, 2, 2, 7, 9, 6], tex: 'brewing_bottle' });
+  if (m & 4) out.push({ b: [3, 2, 10, 7, 9, 14], tex: 'brewing_bottle' });
+  return out;
+}
+defBlock(146, 'brewing_stand', {
+  name: 'Brewing Stand', render: R.MODEL, tex: 'brewing_stand', opaque: false, cutout: true, opacity: 0, light: 1,
+  hardness: 0.5, tool: 'pickaxe', sound: 'metal', itemSprite: 'item_brewing_stand', itemMetaMask: 0, tileEntity: 'brewing',
+  model: (m) => brewingBoxes(m), select: () => box16(1, 0, 1, 15, 14, 15),
+  collide: () => [box16(0, 0, 0, 16, 2, 16), box16(7, 0, 7, 9, 14, 9)],
+  drops: () => [[B.BREWING_STAND, 1, 0]],
+});
 defBlock(145, 'bone_block', {
   name: 'Bone Block',
   tex: (m, f) => { const axis = (m >> 2) & 3; const end = axis === 0 ? f <= 1 : axis === 1 ? f >= 4 : (f === 2 || f === 3); return end ? 'bone_block_top' : 'bone_block_side'; },

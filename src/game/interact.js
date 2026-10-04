@@ -182,6 +182,7 @@ class Interaction {
     if (crit) dmg *= 1.5;
     const bonus = Enchant.attackBonus(held, e);
     dmg += bonus;
+    dmg = Math.max(0, dmg + 3 * Brewing.level(p, 'strength') - 2 * Brewing.level(p, 'weakness'));
     let kb = 0.4 + Enchant.level(held, 'knockback') * 0.5;
     if (p.sprinting) { kb += 0.5; p.sprinting = false; p.vx *= 0.6; p.vz *= 0.6; }
     const ok = e.hurt(dmg, { type: 'player', entity: p, knockback: kb });
@@ -233,6 +234,27 @@ class Interaction {
         else { p.inventory.decrementHeld(1); g.giveItem(full); }
         p.swing();
       }
+      return;
+    }
+    if (held.id === I.glass_bottle) {
+      const eye = g.eyePos(1);
+      const [dx, dy, dz] = this.lookDir();
+      const h = raycastBlocks(w, eye[0], eye[1], eye[2], dx, dy, dz, this.reach(), { fluids: true });
+      if (h && h.id === B.WATER) {
+        g.audio.play('bottle_fill', 0.8, 1);
+        const full = new ItemStack(I.potion, 1, 0);
+        if (held.count <= 1) p.inventory.setHeld(full);
+        else { p.inventory.decrementHeld(1); g.giveItem(full); }
+        p.swing();
+      }
+      return;
+    }
+    if (held.id === I.splash_potion) {
+      g.spawnEntity(new ThrownPotion(w, p, held.dmg));
+      g.audio.play('bow', 0.5, 0.4 / (Math.random() * 0.4 + 0.8));
+      if (!p.creative) p.inventory.decrementHeld(1);
+      p.swing();
+      this.noRepeat = true;
       return;
     }
     if (held.id === I.snowball || held.id === I.egg) {
