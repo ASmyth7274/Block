@@ -32,6 +32,7 @@ const MILESTONES = [
   { id: 'tnt', name: 'Kaboom', desc: 'Craft TNT', icon: () => [B.TNT, 0] },
   { id: 'fish', name: 'Gone Fishing', desc: 'Catch a fish', icon: () => [ITEM_IDS.fish, 0] },
   { id: 'sail', name: 'Set Sail', desc: 'Row a boat 500 blocks', icon: () => [ITEM_IDS.boat, 0] },
+  { id: 'mineshaft', name: 'Down the Shaft', desc: 'Find a chest minecart in an abandoned mineshaft', icon: () => [ITEM_IDS.chest_minecart, 0] },
   { id: 'rails', name: 'On the Rails', desc: 'Ride a minecart 1000 blocks', icon: () => [ITEM_IDS.minecart, 0] },
   { id: 'bottle', name: 'Message Received', desc: 'Read a message in a bottle', icon: () => [ITEM_IDS.message_bottle, 0] },
   { id: 'enchant', name: 'Enchanter', desc: 'Enchant an item at an enchanting table', icon: () => [B.ENCHANTING_TABLE, 0] },

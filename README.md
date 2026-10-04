@@ -95,7 +95,9 @@ splash text and a slowly turning live panorama.
   uncharted lands, and the Explorer's Journal that records every biome,
   creature and milestone you discover.
 - Structures: ruined towers, camps, hermit huts, desert wells, sunken ruins,
-  dungeons with monster cages, quicksand pits and buried chests.
+  dungeons with monster cages, quicksand pits, buried chests and sprawling
+  abandoned mineshafts — timber-propped tunnels with rails, cobwebs, spider
+  nests and chest minecarts full of supplies.
 - The Explorer's Map (every survival world starts with one): it fills in as
   you travel, with your bed, the world spawn and treasure marked on it.
 - Waterways: boats in every wood (they splinter if you ram the shore at full

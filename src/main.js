@@ -374,7 +374,15 @@ class Game {
         for (const d of list) { const e = entityFromData(w, d); if (e) w.addEntity(e); }
       }).catch((e) => { this.pendingEntityLoads.delete(key); console.error(e); });
     } else if (!w.entityInit.has(key) && m.entities && m.entities.length) {
-      for (const d of m.entities) this.spawnMob(d.type, d.x, d.y, d.z, d.extra);
+      for (const d of m.entities) {
+        if (d.type === 'minecart') {
+          // chest minecarts left behind in old mineshafts
+          const c = new Minecart(w, d.x, d.y, d.z, d.kind || 0);
+          c.relic = true;
+          if (c.items && d.items) for (const it of d.items) { const s = ItemStack.fromJSON(it); if (s && it.slot >= 0 && it.slot < 27 && !c.items[it.slot]) c.items[it.slot] = s; }
+          w.addEntity(c);
+        } else this.spawnMob(d.type, d.x, d.y, d.z, d.extra);
+      }
     }
     if (!fromSave || m.entities) w.entityInit.add(key);
   }

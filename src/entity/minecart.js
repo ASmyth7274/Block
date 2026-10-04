@@ -168,7 +168,11 @@ class Minecart extends Entity {
     p.vx = p.vy = p.vz = 0;
   }
   interact(p) {
-    if (this.kind === 1) { p.game.openScreen(new CartChestScreen(p.game, this)); return true; }
+    if (this.kind === 1) {
+      p.game.openScreen(new CartChestScreen(p.game, this));
+      if (this.relic) { this.relic = false; p.game.achieve('mineshaft'); }
+      return true;
+    }
     if (p.riding === this || p.sneaking) return false;
     if (this.rider) return false;
     return this.mount(p);
@@ -199,12 +203,13 @@ class Minecart extends Entity {
   save() {
     const d = super.save();
     d.kind = this.kind;
+    if (this.relic) d.relic = true;
     if (this.items) d.items = this.items.map((s) => s ? s.toJSON() : null);
     return d;
   }
   load(d) {
     super.load(d);
-    this.kind = d.kind || 0; this.pyaw = this.yaw;
+    this.kind = d.kind || 0; this.pyaw = this.yaw; this.relic = !!d.relic;
     if (this.kind === 1) this.items = (d.items || []).concat(new Array(27).fill(null)).slice(0, 27).map((s) => s ? ItemStack.fromJSON(s) : null);
   }
 }

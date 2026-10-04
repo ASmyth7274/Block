@@ -485,6 +485,7 @@ function WorldGenFactory(Noise, TAB) {
       const out = { cx, cz, blocks, meta, biomes, entities: [], tiles: [], ticks: [] };
       if (this.type === 'flat') { this.spawnAnimals(out, t); return out; }
       this.ores(cx, cz, blocks, meta, biomes);
+      if (this.structuresOn) this.mineshafts(out);
       const plan = this.plan(cx, cz);
       // local structures (fully inside this chunk)
       for (const s of plan.local) this.buildLocal(out, s);
@@ -654,6 +655,204 @@ function WorldGenFactory(Noise, TAB) {
       return { features, local, occupied };
     }
 
+    // ---- abandoned mineshafts: laid out from a start chunk, built chunk by chunk ----
+    mineshaftAt(sx, sz) {
+      const key = (sx + 32768) * 65536 + (sz + 32768);
+      if (!this.shaftCache) this.shaftCache = new Map();
+      if (this.shaftCache.has(key)) return this.shaftCache.get(key);
+      const r = new Random(seedHash(this.seed, sx, sz, 0x3195));
+      let L = null;
+      if (r.nextFloat() < 0.005 && r.nextInt(24) < Math.max(Math.abs(sx), Math.abs(sz))) L = this.mineshaftLayout(sx, sz);
+      this.shaftCache.set(key, L);
+      if (this.shaftCache.size > 4096) this.shaftCache.delete(this.shaftCache.keys().next().value);
+      return L;
+    }
+    mineshaftLayout(sx, sz) {
+      const rng = new Random(seedHash(this.seed, sx, sz, 0x3196));
+      const ox = sx * 16 + 2, oz = sz * 16 + 2;
+      const room = { t: 'room', b: [ox, 50, oz, ox + 7 + rng.nextInt(6), 54 + rng.nextInt(6), oz + 7 + rng.nextInt(6)], links: [], depth: 0, seed: rng.nextInt(0x7fffffff) };
+      const pieces = [room], pending = [];
+      const hits = (b) => pieces.some((p) => b[0] <= p.b[3] && b[3] >= p.b[0] && b[1] <= p.b[4] && b[4] >= p.b[1] && b[2] <= p.b[5] && b[5] >= p.b[2]);
+      // f: 0 north (-z), 1 east (+x), 2 south (+z), 3 west (-x)
+      const next = (x, y, z, f, depth) => {
+        if (depth > 8 || Math.abs(x - ox) > 80 || Math.abs(z - oz) > 80) return null;
+        const roll = rng.nextInt(100);
+        let p = null;
+        if (roll >= 80) {
+          const b = [x, y, z, x, y + 2, z];
+          if (rng.nextInt(4) === 0) b[4] += 4;
+          if (f === 0) { b[0] = x - 1; b[3] = x + 3; b[2] = z - 4; }
+          else if (f === 2) { b[0] = x - 1; b[3] = x + 3; b[5] = z + 4; }
+          else if (f === 3) { b[0] = x - 4; b[2] = z - 1; b[5] = z + 3; }
+          else { b[3] = x + 4; b[2] = z - 1; b[5] = z + 3; }
+          if (!hits(b)) p = { t: 'cross', b, f, floors: b[4] - b[1] > 3 };
+        } else if (roll >= 70) {
+          const b = [x, y - 5, z, x, y + 2, z];
+          if (f === 0) { b[3] = x + 2; b[2] = z - 8; } else if (f === 2) { b[3] = x + 2; b[5] = z + 8; }
+          else if (f === 3) { b[0] = x - 8; b[5] = z + 2; } else { b[3] = x + 8; b[5] = z + 2; }
+          if (!hits(b)) p = { t: 'stairs', b, f };
+        } else {
+          for (let i = rng.nextInt(3) + 2; i > 0; i--) {
+            const j = i * 5, b = [x, y, z, x, y + 2, z];
+            if (f === 0) { b[3] = x + 2; b[2] = z - (j - 1); } else if (f === 2) { b[3] = x + 2; b[5] = z + (j - 1); }
+            else if (f === 3) { b[0] = x - (j - 1); b[5] = z + 2; } else { b[3] = x + (j - 1); b[5] = z + 2; }
+            if (!hits(b)) { p = { t: 'corridor', b, f, sections: i }; break; }
+          }
+          if (p) { p.rails = rng.nextInt(3) === 0; p.spiders = !p.rails && rng.nextInt(23) === 0; }
+        }
+        if (!p) return null;
+        p.depth = depth; p.seed = rng.nextInt(0x7fffffff);
+        pieces.push(p); pending.push(p);
+        return p;
+      };
+      // exits all round the room
+      const rb = room.b, yr = Math.max(1, rb[4] - rb[1] - 4), xs = rb[3] - rb[0] + 1, zs = rb[5] - rb[2] + 1;
+      for (let k = 0; k < xs; k += 4) { k += rng.nextInt(xs); if (k + 3 > xs) break; const p = next(rb[0] + k, rb[1] + rng.nextInt(yr) + 1, rb[2] - 1, 0, 1); if (p) room.links.push([p.b[0], p.b[1], rb[2], p.b[3], p.b[4], rb[2] + 1]); }
+      for (let k = 0; k < xs; k += 4) { k += rng.nextInt(xs); if (k + 3 > xs) break; const p = next(rb[0] + k, rb[1] + rng.nextInt(yr) + 1, rb[5] + 1, 2, 1); if (p) room.links.push([p.b[0], p.b[1], rb[5] - 1, p.b[3], p.b[4], rb[5]]); }
+      for (let k = 0; k < zs; k += 4) { k += rng.nextInt(zs); if (k + 3 > zs) break; const p = next(rb[0] - 1, rb[1] + rng.nextInt(yr) + 1, rb[2] + k, 3, 1); if (p) room.links.push([rb[0], p.b[1], p.b[2], rb[0] + 1, p.b[4], p.b[5]]); }
+      for (let k = 0; k < zs; k += 4) { k += rng.nextInt(zs); if (k + 3 > zs) break; const p = next(rb[3] + 1, rb[1] + rng.nextInt(yr) + 1, rb[2] + k, 1, 1); if (p) room.links.push([rb[3] - 1, p.b[1], p.b[2], rb[3], p.b[4], p.b[5]]); }
+      // grow the tunnels outward (in random order, like the classic generator)
+      while (pending.length) {
+        const p = pending.splice(rng.nextInt(pending.length), 1)[0], b = p.b, d = p.depth;
+        if (p.t === 'corridor') {
+          const j = rng.nextInt(4), yy = () => b[1] - 1 + rng.nextInt(3);
+          if (p.f === 0) { if (j <= 1) next(b[0], yy(), b[2] - 1, 0, d + 1); else if (j === 2) next(b[0] - 1, yy(), b[2], 3, d + 1); else next(b[3] + 1, yy(), b[2], 1, d + 1); }
+          else if (p.f === 2) { if (j <= 1) next(b[0], yy(), b[5] + 1, 2, d + 1); else if (j === 2) next(b[0] - 1, yy(), b[5] - 3, 3, d + 1); else next(b[3] + 1, yy(), b[5] - 3, 1, d + 1); }
+          else if (p.f === 3) { if (j <= 1) next(b[0] - 1, yy(), b[2], 3, d + 1); else if (j === 2) next(b[0], yy(), b[2] - 1, 0, d + 1); else next(b[0], yy(), b[5] + 1, 2, d + 1); }
+          else { if (j <= 1) next(b[3] + 1, yy(), b[2], 1, d + 1); else if (j === 2) next(b[3] - 3, yy(), b[2] - 1, 0, d + 1); else next(b[3] - 3, yy(), b[5] + 1, 2, d + 1); }
+          if (d < 8) {
+            if (p.f === 0 || p.f === 2) { for (let k = b[2] + 3; k + 3 <= b[5]; k += 5) { const l = rng.nextInt(5); if (l === 0) next(b[0] - 1, b[1], k, 3, d + 1); else if (l === 1) next(b[3] + 1, b[1], k, 1, d + 1); } }
+            else { for (let k = b[0] + 3; k + 3 <= b[3]; k += 5) { const l = rng.nextInt(5); if (l === 0) next(k, b[1], b[2] - 1, 0, d + 1); else if (l === 1) next(k, b[1], b[5] + 1, 2, d + 1); } }
+          }
+        } else if (p.t === 'cross') {
+          if (p.f === 0) { next(b[0] + 1, b[1], b[2] - 1, 0, d + 1); next(b[0] - 1, b[1], b[2] + 1, 3, d + 1); next(b[3] + 1, b[1], b[2] + 1, 1, d + 1); }
+          else if (p.f === 2) { next(b[0] + 1, b[1], b[5] + 1, 2, d + 1); next(b[0] - 1, b[1], b[2] + 1, 3, d + 1); next(b[3] + 1, b[1], b[2] + 1, 1, d + 1); }
+          else if (p.f === 3) { next(b[0] + 1, b[1], b[2] - 1, 0, d + 1); next(b[0] + 1, b[1], b[5] + 1, 2, d + 1); next(b[0] - 1, b[1], b[2] + 1, 3, d + 1); }
+          else { next(b[0] + 1, b[1], b[2] - 1, 0, d + 1); next(b[0] + 1, b[1], b[5] + 1, 2, d + 1); next(b[3] + 1, b[1], b[2] + 1, 1, d + 1); }
+          if (p.floors) {
+            if (rng.nextBool()) next(b[0] + 1, b[1] + 4, b[2] - 1, 0, d + 1);
+            if (rng.nextBool()) next(b[0] - 1, b[1] + 4, b[2] + 1, 3, d + 1);
+            if (rng.nextBool()) next(b[3] + 1, b[1] + 4, b[2] + 1, 1, d + 1);
+            if (rng.nextBool()) next(b[0] + 1, b[1] + 4, b[5] + 1, 2, d + 1);
+          }
+        } else if (p.t === 'stairs') {
+          if (p.f === 0) next(b[0], b[1], b[2] - 1, 0, d + 1); else if (p.f === 2) next(b[0], b[1], b[5] + 1, 2, d + 1);
+          else if (p.f === 3) next(b[0] - 1, b[1], b[2], 3, d + 1); else next(b[3] + 1, b[1], b[2], 1, d + 1);
+        }
+      }
+      // sink the whole thing below sea level
+      let ylo = 999, yhi = -999, xlo = 1e9, xhi = -1e9, zlo = 1e9, zhi = -1e9;
+      for (const p of pieces) { ylo = Math.min(ylo, p.b[1]); yhi = Math.max(yhi, p.b[4]); xlo = Math.min(xlo, p.b[0]); xhi = Math.max(xhi, p.b[3]); zlo = Math.min(zlo, p.b[2]); zhi = Math.max(zhi, p.b[5]); }
+      const top = SEA - 10;
+      let j = yhi - ylo + 2;
+      if (j < top) j += rng.nextInt(top - j);
+      let k = j - yhi;
+      if (ylo + k < 4) k = 4 - ylo;
+      for (const p of pieces) { p.b[1] += k; p.b[4] += k; }
+      for (const l of room.links) { l[1] += k; l[4] += k; }
+      return { pieces, box: [xlo - 1, ylo + k - 1, zlo - 1, xhi + 1, yhi + k + 1, zhi + 1] };
+    }
+    mineshafts(out) {
+      const cx = out.cx, cz = out.cz, x0 = cx * 16, z0 = cz * 16;
+      for (let sx = cx - 6; sx <= cx + 6; sx++) for (let sz = cz - 6; sz <= cz + 6; sz++) {
+        const L = this.mineshaftAt(sx, sz);
+        if (!L || L.box[3] < x0 || L.box[0] > x0 + 15 || L.box[5] < z0 || L.box[2] > z0 + 15) continue;
+        for (const p of L.pieces) {
+          const b = p.b;
+          if (b[3] + 1 < x0 || b[0] - 1 > x0 + 15 || b[5] + 1 < z0 || b[2] - 1 > z0 + 15) continue;
+          this.shaftPiece(out, p);
+        }
+      }
+    }
+    shaftPiece(out, p) {
+      const { blocks, meta } = out, x0 = out.cx * 16, z0 = out.cz * 16, b = p.b;
+      const inC = (x, z) => x >= x0 && x < x0 + 16 && z >= z0 && z < z0 + 16;
+      const get = (x, y, z) => (!inC(x, z) || y < 0 || y >= H) ? -1 : blocks[IDX(x - x0, y, z - z0)];
+      const set = (x, y, z, id, m) => { if (!inC(x, z) || y < 1 || y >= H) return; const i = IDX(x - x0, y, z - z0); blocks[i] = id; meta[i] = m || 0; };
+      // like the classic pieces: nothing is built where it would break into water or lava
+      for (let x = Math.max(b[0] - 1, x0); x <= Math.min(b[3] + 1, x0 + 15); x++) for (let z = Math.max(b[2] - 1, z0); z <= Math.min(b[5] + 1, z0 + 15); z++) {
+        for (let y = b[1] - 1; y <= b[4] + 1; y++) { const id = get(x, y, z); if (id === B.WATER || id === B.LAVA) return; }
+      }
+      const fill = (xa, ya, za, xb, yb, zb, id, m) => { for (let x = xa; x <= xb; x++) for (let y = ya; y <= yb; y++) for (let z = za; z <= zb; z++) set(x, y, z, id, m); };
+      const rng = new Random(p.seed);
+      const P = B.PLANKS, F = B.FENCE, AIR = 0;
+      if (p.t === 'room') {
+        fill(b[0], b[1], b[2], b[3], b[1], b[5], B.DIRT);
+        fill(b[0], b[1] + 1, b[2], b[3], Math.min(b[1] + 3, b[4]), b[5], AIR);
+        for (const l of p.links) fill(l[0], l[4] - 2, l[2], l[3], l[4], l[5], AIR);
+        // a domed roof
+        const ya = b[1] + 4, fx = b[3] - b[0] + 1, fy = b[4] - ya + 1, fz = b[5] - b[2] + 1, mx = b[0] + fx / 2, mz = b[2] + fz / 2;
+        for (let y = ya; y <= b[4]; y++) {
+          const ey = (y - ya) / fy;
+          for (let x = b[0]; x <= b[3]; x++) { const ex = (x - mx) / (fx * 0.5); for (let z = b[2]; z <= b[5]; z++) { const ez = (z - mz) / (fz * 0.5); if (ex * ex + ey * ey + ez * ez <= 1.05) set(x, y, z, AIR); } }
+        }
+        return;
+      }
+      if (p.t === 'cross') {
+        if (p.floors) {
+          fill(b[0] + 1, b[1], b[2], b[3] - 1, b[1] + 2, b[5], AIR);
+          fill(b[0], b[1], b[2] + 1, b[3], b[1] + 2, b[5] - 1, AIR);
+          fill(b[0] + 1, b[4] - 2, b[2], b[3] - 1, b[4], b[5], AIR);
+          fill(b[0], b[4] - 2, b[2] + 1, b[3], b[4], b[5] - 1, AIR);
+          fill(b[0] + 1, b[1] + 3, b[2] + 1, b[3] - 1, b[1] + 3, b[5] - 1, P);
+        } else {
+          fill(b[0] + 1, b[1], b[2], b[3] - 1, b[4], b[5], AIR);
+          fill(b[0], b[1], b[2] + 1, b[3], b[4], b[5] - 1, AIR);
+        }
+        fill(b[0] + 1, b[1], b[2] + 1, b[0] + 1, b[4], b[2] + 1, P);
+        fill(b[0] + 1, b[1], b[5] - 1, b[0] + 1, b[4], b[5] - 1, P);
+        fill(b[3] - 1, b[1], b[2] + 1, b[3] - 1, b[4], b[2] + 1, P);
+        fill(b[3] - 1, b[1], b[5] - 1, b[3] - 1, b[4], b[5] - 1, P);
+        for (let x = b[0]; x <= b[3]; x++) for (let z = b[2]; z <= b[5]; z++) if (get(x, b[1] - 1, z) === 0) set(x, b[1] - 1, z, P);
+        return;
+      }
+      // corridors and stairs use coordinates along the tunnel: rx across, rz along from the entrance
+      const f = p.f;
+      const wx = (rx, rz) => (f === 0 || f === 2) ? b[0] + rx : f === 3 ? b[3] - rz : b[0] + rz;
+      const wz = (rx, rz) => f === 0 ? b[5] - rz : f === 2 ? b[2] + rz : b[2] + rx;
+      const S = (rx, ry, rz, id, m) => set(wx(rx, rz), b[1] + ry, wz(rx, rz), id, m);
+      const G = (rx, ry, rz) => get(wx(rx, rz), b[1] + ry, wz(rx, rz));
+      if (p.t === 'stairs') {
+        for (let rx = 0; rx <= 2; rx++) {
+          for (let ry = 5; ry <= 7; ry++) for (let rz = 0; rz <= 1; rz++) S(rx, ry, rz, AIR);
+          for (let ry = 0; ry <= 2; ry++) for (let rz = 7; rz <= 8; rz++) S(rx, ry, rz, AIR);
+          for (let i = 0; i < 5; i++) for (let ry = 5 - i - (i < 4 ? 1 : 0); ry <= 7 - i; ry++) S(rx, ry, 2 + i, AIR);
+        }
+        return;
+      }
+      const L = p.sections * 5 - 1;
+      for (let rz = 0; rz <= L; rz++) for (let rx = 0; rx <= 2; rx++) { S(rx, 0, rz, AIR); S(rx, 1, rz, AIR); }
+      for (let rz = 0; rz <= L; rz++) for (let rx = 0; rx <= 2; rx++) if (rng.nextFloat() <= 0.8) S(rx, 2, rz, AIR);
+      if (p.spiders) for (let ry = 0; ry <= 1; ry++) for (let rx = 0; rx <= 2; rx++) for (let rz = 0; rz <= L; rz++) if (rng.nextFloat() <= 0.6) S(rx, ry, rz, B.COBWEB);
+      // torches hang off the middle of a beam (meta: which side the support is on)
+      const towardBeam = [3, 2, 4, 1][f], backToBeam = [4, 1, 3, 2][f];
+      let spawner = false;
+      for (let s = 0; s < p.sections; s++) {
+        const k = 2 + s * 5;
+        S(0, 0, k, F); S(0, 1, k, F); S(2, 0, k, F); S(2, 1, k, F);
+        if (rng.nextInt(4) === 0) { S(0, 2, k, P); S(2, 2, k, P); } else { S(0, 2, k, P); S(1, 2, k, P); S(2, 2, k, P); }
+        for (const [rx, rz, c] of [[0, k - 1, 0.1], [2, k - 1, 0.1], [0, k + 1, 0.1], [2, k + 1, 0.1], [0, k - 2, 0.05], [2, k - 2, 0.05], [0, k + 2, 0.05], [2, k + 2, 0.05]]) if (rng.nextFloat() < c) S(rx, 2, rz, B.COBWEB);
+        if (rng.nextFloat() < 0.05 && G(1, 2, k) === P) S(1, 2, k - 1, B.TORCH, towardBeam);
+        if (rng.nextFloat() < 0.05 && G(1, 2, k) === P) S(1, 2, k + 1, B.TORCH, backToBeam);
+        // chest minecarts on a scrap of rail
+        for (const [rx, rz] of [[2, k - 1], [0, k + 1]]) {
+          if (rng.nextInt(100) !== 0) continue;
+          const lr = new Random(seedHash(this.seed, wx(rx, rz), b[1], wz(rx, rz) + 0x5EED));
+          const x = wx(rx, rz), z = wz(rx, rz), y = b[1];
+          if (!inC(x, z) || get(x, y, z) !== 0 || !OPAQUE[get(x, y - 1, z)]) continue;
+          set(x, y, z, B.RAIL, (f === 0 || f === 2) ? 0 : 1);
+          out.entities.push({ type: 'minecart', x: x + 0.5, y: y + 0.0625, z: z + 0.5, kind: 1, items: this.loot(lr, 'mineshaft') });
+        }
+        if (p.spiders && !spawner) {
+          const rz = k - 1 + rng.nextInt(3), x = wx(1, rz), z = wz(1, rz);
+          if (inC(x, z)) { spawner = true; set(x, b[1], z, B.MOB_SPAWNER); out.tiles.push({ type: 'spawner', x, y: b[1], z, mob: 'spider' }); }
+        }
+      }
+      // bridges over gaps and the odd stretch of track
+      for (let rx = 0; rx <= 2; rx++) for (let rz = 0; rz <= L; rz++) if (G(rx, -1, rz) === 0) S(rx, -1, rz, P);
+      if (p.rails) for (let rz = 0; rz <= L; rz++) { const below = G(1, -1, rz); if (rng.nextFloat() < 0.7 && below > 0 && OPAQUE[below] && G(1, 0, rz) === 0) S(1, 0, rz, B.RAIL, (f === 0 || f === 2) ? 0 : 1); }
+    }
+
     dungeonValid(t, x, y, z) {
       let openings = 0;
       for (let dx = -3; dx <= 3; dx++) for (let dy = -1; dy <= 4; dy++) for (let dz = -3; dz <= 3; dz++) {
@@ -811,6 +1010,8 @@ function WorldGenFactory(Noise, TAB) {
         hut: [[I.book, 1, 3, 8], [I.paper, 2, 6, 8], [I.seeds, 2, 8, 10], [I.carrot, 1, 4, 8], [I.potato, 1, 4, 8], [B.SAPLING, 1, 3, 8], [I.dye, 2, 6, 6], [I.jerky, 1, 4, 8], [I.compass, 1, 1, 3], [I.clock, 1, 1, 3], [I.salt, 2, 6, 6], [I.berry_pie, 1, 2, 4]],
         treasure: [[I.gold_ingot, 2, 6, 10], [I.diamond, 1, 3, 6], [I.jade, 2, 5, 8], [I.golden_apple, 1, 1, 3], [I.cobalt_ingot, 1, 4, 6], [I.starmetal_ingot, 1, 1, 1], [I.gold_nugget, 4, 12, 8], [I.wisp_essence, 1, 2, 4], [I.iron_ingot, 2, 5, 8]],
         ruins: [[I.gold_nugget, 3, 10, 10], [I.fish, 1, 4, 8], [I.jade, 1, 3, 5], [I.diamond, 1, 1, 2], [I.iron_ingot, 1, 3, 6], [I.lumite_shard, 1, 4, 6]],
+        mineshaft: [[I.iron_ingot, 1, 5, 10], [I.gold_ingot, 1, 3, 5], [I.ember_dust, 4, 9, 5], [I.dye, 4, 9, 5, 11], [I.diamond, 1, 2, 3], [I.coal, 3, 8, 10], [I.bread, 1, 3, 15],
+          [I.iron_pickaxe, 1, 1, 1], [B.RAIL, 4, 8, 1], [I.seeds, 2, 4, 10], [I.cobalt_ingot, 1, 2, 3], [I.lumite_shard, 2, 5, 4], [B.TORCH, 4, 10, 6], [I.prospector_rod, 1, 1, 1]],
       }[table] || [];
       const items = [];
       const n = 3 + rng.nextInt(5);
@@ -821,7 +1022,8 @@ function WorldGenFactory(Noise, TAB) {
         if (!pick) continue;
         const count = pick[1] + rng.nextInt(pick[2] - pick[1] + 1);
         let dmg = 0;
-        if (pick[0] === I.dye) dmg = rng.nextInt(16);
+        if (pick[4] !== undefined) dmg = pick[4];
+        else if (pick[0] === I.dye) dmg = rng.nextInt(16);
         if (pick[0] === B.WOOL) dmg = rng.nextInt(16);
         if (pick[0] === B.SAPLING) dmg = rng.nextInt(7);
         items.push({ slot: rng.nextInt(27), id: pick[0], c: count, d: dmg });
