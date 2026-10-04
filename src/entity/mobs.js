@@ -22,6 +22,7 @@ const MOB_TYPES = [
   { key: 'wisp', name: 'Wisp', egg: ['#8affee', '#2a6a64'], cat: 'ambient', lore: 'A drifting light over swamp and shore after dark. Follow it and it may lead you to buried treasure.' },
   { key: 'stranger', name: 'The Stranger', egg: null, cat: 'special', lore: 'Watching. Always at the edge of sight. Gone when you look closer.' },
   { key: 'wolf', name: 'Wolf', egg: ['#d2ccc3', '#8a7c6c'], cat: 'creature', lore: 'Hunts in packs through forest and taiga - strike one and the whole pack answers. Offer bones and it may become a loyal companion.' },
+  { key: 'villager', name: 'Villager', egg: ['#5e3e2a', '#c08f72'], cat: 'creature', lore: 'Keeps a home in the villages of the plains, deserts and taiga. Bring jade and see what they will trade.' },
   { key: 'squid', name: 'Squid', egg: ['#2c3c5c', '#7a8aa8'], cat: 'water', lore: 'Pulses through rivers and seas. Startle it and it vanishes in a cloud of ink. Its ink sacs make black dye.' },
 ];
 const MOB_INDEX = {};
@@ -64,6 +65,7 @@ function lineOfSight(w, x0, y0, z0, x1, y1, z1) {
 const PathFinder = (() => {
   const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   // 0 open, 1 solid, 2 water, 3 dangerous, 4 tall solid (fences)
+  let throughDoors = false;
   function kind(w, x, y, z) {
     if (y < 0) return 1;
     if (y >= CH_H) return 0;
@@ -73,7 +75,8 @@ const PathFinder = (() => {
       case B.WATER: return 2;
       case B.LAVA: case B.FIRE: case B.CACTUS: case B.COBWEB: case B.QUICKSAND: case B.BRAMBLE: return 3;
       case B.FENCE: case B.FENCE_GATE: return 4;
-      case B.DOOR_WOOD: case B.DOOR_IRON: return (w.getMeta(x, y, z) & 4) ? 0 : 1;
+      case B.DOOR_WOOD: return (throughDoors || (w.getMeta(x, y, z) & 4)) ? 0 : 1;
+      case B.DOOR_IRON: return (w.getMeta(x, y, z) & 4) ? 0 : 1;
       case B.LADDER: case B.VINE: case B.ROPE: return 0;
     }
     return BT.solid[id] ? 1 : 0;
@@ -93,6 +96,10 @@ const PathFinder = (() => {
     return true;
   }
   function find(w, mob, tx, ty, tz, range, maxNodes) {
+    throughDoors = !!mob.opensDoors;
+    try { return search(w, mob, tx, ty, tz, range, maxNodes); } finally { throughDoors = false; }
+  }
+  function search(w, mob, tx, ty, tz, range, maxNodes) {
     const hb = Math.max(1, Math.ceil(mob.h - 0.05));
     let sx = Math.floor(mob.x), sy = Math.floor(mob.y + 0.01), sz = Math.floor(mob.z);
     if (!valid(w, sx, sy, sz, hb)) {
@@ -1419,6 +1426,213 @@ class Wolf extends Animal {
   save() { const d = super.save(); d.tamed = this.tamed; d.sitting = this.sitting; d.collar = this.collar; return d; }
   load(d) { super.load(d); this.setTamed(!!d.tamed); if (d.health !== undefined) this.health = Math.min(d.health, this.maxHealth); this.sitting = !!d.sitting; if (d.collar !== undefined) this.collar = d.collar; }
 }
+// ---------------------------------------------------------------------------
+// Villagers: they live in villages, open their doors, flee the undead and
+// trade for jade. Each new trade unlocks more of what they have to offer.
+// ---------------------------------------------------------------------------
+const VILLAGER_PROFS = { farmer: 'Farmer', fisher: 'Fisherman', librarian: 'Librarian', cleric: 'Cleric', smith: 'Smith', butcher: 'Butcher' };
+// [buy item, count range, (second buy), sell item, count range] - J = jade
+const VILLAGER_TRADES = (() => {
+  const J = 'jade';
+  const t = (buy, bn, sell, sn, buy2, b2n, ench) => ({ buy, bn, sell, sn, buy2, b2n, ench });
+  return {
+    farmer: [
+      [t('wheat', [18, 22], J, [1, 1]), t(J, [1, 1], 'bread', [2, 4])],
+      [t('potato', [15, 19], J, [1, 1]), t('carrot', [15, 19], J, [1, 1])],
+      [t('block:pumpkin', [8, 13], J, [1, 1]), t(J, [1, 1], 'pumpkin_pie', [2, 3])],
+      [t('melon_slice', [7, 12], J, [1, 1]), t(J, [1, 1], 'apple', [5, 7])],
+      [t(J, [1, 1], 'cookie', [6, 10]), t(J, [1, 2], 'berry_pie', [1, 2])],
+    ],
+    fisher: [
+      [t('string', [15, 20], J, [1, 1]), t('coal', [16, 24], J, [1, 1])],
+      [t('fish', [6, 6], 'cooked_fish', [6, 6], J, [1, 1]), t(J, [1, 1], 'cooked_salmon', [3, 5])],
+      [t(J, [7, 8], 'fishing_rod', [1, 1], null, null, true), t(J, [2, 3], 'message_bottle', [1, 1])],
+    ],
+    librarian: [
+      [t('paper', [24, 36], J, [1, 1]), t(J, [3, 4], 'block:bookshelf', [1, 1])],
+      [t('book', [8, 10], J, [1, 1]), t(J, [10, 12], 'compass', [1, 1])],
+      [t(J, [1, 1], 'block:glass', [3, 5]), t(J, [10, 12], 'clock', [1, 1])],
+      [t(J, [2, 4], 'message_bottle', [1, 1]), t(J, [8, 11], 'wayfinder', [1, 1])],
+    ],
+    cleric: [
+      [t('rotten_flesh', [36, 40], J, [1, 1]), t('gold_ingot', [8, 10], J, [1, 1])],
+      [t(J, [1, 1], 'ember_dust', [1, 4]), t(J, [1, 2], 'dye:11', [1, 2])],
+      [t(J, [1, 1], 'lumite_shard', [1, 3]), t(J, [6, 9], 'wisp_essence', [1, 1])],
+      [t(J, [9, 12], 'golden_apple', [1, 1])],
+    ],
+    smith: [
+      [t('coal', [16, 24], J, [1, 1]), t('iron_ingot', [7, 9], J, [1, 1])],
+      [t(J, [2, 3], 'iron_sword', [1, 1]), t(J, [2, 4], 'iron_helmet', [1, 1]), t(J, [4, 6], 'iron_chestplate', [1, 1])],
+      [t('diamond', [3, 4], J, [1, 1]), t(J, [7, 8], 'iron_pickaxe', [1, 1], null, null, true)],
+      [t(J, [12, 15], 'diamond_sword', [1, 1], null, null, true), t(J, [16, 19], 'diamond_chestplate', [1, 1], null, null, true)],
+    ],
+    butcher: [
+      [t('porkchop', [14, 18], J, [1, 1]), t('chicken', [14, 18], J, [1, 1])],
+      [t('coal', [16, 24], J, [1, 1]), t(J, [1, 1], 'cooked_porkchop', [5, 7]), t(J, [1, 1], 'cooked_chicken', [6, 8])],
+      [t('leather', [9, 12], J, [1, 1]), t(J, [1, 1], 'jerky', [3, 5])],
+    ],
+  };
+})();
+function tradeStack(name, n) {
+  if (name.startsWith('block:')) return new ItemStack(B[name.slice(6).toUpperCase()], n, 0);
+  if (name.startsWith('dye:')) return new ItemStack(ITEM_IDS.dye, n, +name.slice(4));
+  return new ItemStack(ITEM_IDS[name], n, 0);
+}
+class Villager extends Mob {
+  constructor(world) {
+    super(world, 'villager');
+    this.category = 'creature'; this.persistent = true;
+    this.maxHealth = this.health = 20;
+    this.baseSpeed = 0.22;
+    this.w = 0.6; this.h = 1.95; this.eye = 1.62;
+    this.prof = 'farmer'; this.home = null;
+    this.offers = null; this.tier = 0; this.unlockIn = 0;
+    this.customer = null; this.flee = 0;
+    this.opensDoors = true; this.doors = [];
+    this.xpValue = 0; this.talkInterval = 80;
+  }
+  onSpawn(fresh, extra) {
+    if (!fresh) return;
+    const profs = Object.keys(VILLAGER_PROFS);
+    this.prof = (extra && extra.prof && VILLAGER_PROFS[extra.prof]) ? extra.prof : profs[this.rnd(profs.length)];
+    if (extra && extra.home) this.home = extra.home.slice();
+  }
+  get title() { return VILLAGER_PROFS[this.prof] || 'Villager'; }
+  // ------------------------------------------------ trading
+  ensureOffers() { if (!this.offers) { this.offers = []; this.unlockTier(); } }
+  unlockTier() {
+    const tiers = VILLAGER_TRADES[this.prof] || VILLAGER_TRADES.farmer;
+    if (this.tier >= tiers.length) return false;
+    const r = (a) => a[0] + this.rnd(a[1] - a[0] + 1);
+    for (const d of tiers[this.tier]) {
+      const o = { buy: tradeStack(d.buy, r(d.bn)), buy2: d.buy2 ? tradeStack(d.buy2, r(d.b2n)) : null, sell: tradeStack(d.sell, r(d.sn)), uses: 0, max: 7 };
+      if (d.ench) Enchant.apply(o.sell, Enchant.roll(new Noise.Random((Math.random() * 2147483647) | 0), o.sell, 5 + this.rnd(15)));
+      if (!Enchant.list(o.sell).length) delete o.sell.tag;
+      this.offers.push(o);
+    }
+    this.tier++;
+    return true;
+  }
+  // a finished trade: sometimes the villager has learned something new
+  traded(game, o) {
+    o.uses++;
+    this.ambientTimer = -this.talkInterval;
+    game.audio.play('villager_yes', 0.8, this.soundPitch(), this.x, this.y + this.eye, this.z);
+    game.spawnXP(this.x, this.y + 0.5, this.z, 3 + this.rnd(4));
+    if (o === this.offers[this.offers.length - 1] && o.uses === 1 && !this.unlockIn) this.unlockIn = 40;
+    else if (o.uses === 1 && Math.random() < 0.2 && !this.unlockIn) this.unlockIn = 40;
+  }
+  interact(player, held) {
+    const g = this.game;
+    if (held && held.id === ITEM_IDS.spawn_egg) return false;
+    if (this.dead || this.baby) return false;
+    this.ensureOffers();
+    this.customer = player;
+    this.clearPath();
+    g.audio.play('villager_say', 0.9, this.soundPitch(), this.x, this.y + this.eye, this.z);
+    g.openScreen(new MerchantScreen(g, this));
+    return true;
+  }
+  // ------------------------------------------------ behaviour
+  aiTick(game) {
+    const p = game.player, w = this.world;
+    if (this.customer && (game.screen === null || !(game.screen instanceof MerchantScreen) || game.screen.v !== this)) this.customer = null;
+    if (this.customer) { this.lookAtEntity(this.customer, 2); this.clearPath(); return; }
+    // keep away from the undead
+    if (this.flee > 0) { this.flee--; if (this.pathDone) this.wander(8, 3, 1.25); return; }
+    if (this.age % 10 === 0) {
+      for (const e of w.entitiesInBox(this.x - 8, this.y - 3, this.z - 8, this.x + 8, this.y + 3, this.z + 8)) {
+        if (!e.dead && (e.type === 'zombie' || e.type === 'mummy' || e.type === 'wraith')) {
+          const dx = this.x - e.x, dz = this.z - e.z, d = Math.sqrt(dx * dx + dz * dz) || 1;
+          this.navigateTo(this.x + dx / d * 10, this.y, this.z + dz / d * 10, 1.25, 14);
+          this.flee = 40;
+          return;
+        }
+      }
+    }
+    // home before dark
+    const night = w.skyDarken() >= 6;
+    if (this.home) {
+      const hx = this.home[0] + 0.5, hz = this.home[1] + 0.5, d2 = (this.x - hx) ** 2 + (this.z - hz) ** 2;
+      if ((d2 > 40 * 40 || (night && d2 > 10 * 10)) && this.pathDone && Math.random() < 0.05) {
+        const ty = this.world.topSolidY ? this.world.topSolidY(Math.floor(hx), Math.floor(hz)) + 1 : this.y;
+        this.navigateTo(hx, ty, hz, 0.9, 48);
+        return;
+      }
+      if (night && d2 <= 10 * 10) { this.idleLook(game); this.keepWatching(); return; }
+    }
+    if (this.pathDone && Math.random() < 1 / 100) this.wander(10, 4, 0.8, (x, y, z) => (this.home ? -Math.hypot(x - this.home[0], z - this.home[1]) / 8 : 0));
+    // gossip: two villagers stop and look at each other
+    if (this.pathDone && Math.random() < 0.01) {
+      const o = w.entitiesInBox(this.x - 4, this.y - 2, this.z - 4, this.x + 4, this.y + 2, this.z + 4).find((e) => e !== this && e.type === 'villager');
+      if (o) { this.lookAtEntity(o, 40); return; }
+    }
+    this.idleLook(game); this.keepWatching();
+  }
+  onRevenge(e) { this.flee = 60; this.clearPath(); if (e) { const dx = this.x - e.x, dz = this.z - e.z, d = Math.sqrt(dx * dx + dz * dz) || 1; this.navigateTo(this.x + dx / d * 8, this.y, this.z + dz / d * 8, 1.25, 12); } }
+  mobTick(game) {
+    const w = this.world;
+    // new trades arrive with a sparkle
+    if (this.unlockIn > 0 && --this.unlockIn === 0) {
+      if (this.unlockTier()) game.particles.happy(this.x, this.y + this.h, this.z);
+      for (const o of this.offers) if (o.uses >= o.max) o.max += 2 + this.rnd(6);
+    }
+    // open wooden doors in the way, close them behind
+    if (this.path || this.flee > 0) {
+      const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+      for (const d of [0.3, 0.9]) {
+        const bx = Math.floor(this.x + fx * d), by = Math.floor(this.y + 0.1), bz = Math.floor(this.z + fz * d);
+        if (w.getBlock(bx, by, bz) !== B.DOOR_WOOD) continue;
+        const lower = (w.getMeta(bx, by, bz) & 8) ? by - 1 : by;
+        const lm = w.getMeta(bx, lower, bz);
+        if (!(lm & 4)) {
+          w.setBlock(bx, lower, bz, B.DOOR_WOOD, lm | 4, 4); w.setBlock(bx, lower + 1, bz, B.DOOR_WOOD, (lm | 4) | 8, 4);
+          game.audio.play('door_open', 0.6, 0.9 + Math.random() * 0.1, bx + 0.5, lower + 0.5, bz + 0.5);
+          this.doors.push({ x: bx, y: lower, z: bz, t: 20 });
+        }
+      }
+    }
+    for (let i = this.doors.length - 1; i >= 0; i--) {
+      const d = this.doors[i];
+      if (--d.t > 0 || this.distanceSq(d.x + 0.5, d.y, d.z + 0.5) < 2.5) continue;
+      this.doors.splice(i, 1);
+      if (w.getBlock(d.x, d.y, d.z) !== B.DOOR_WOOD) continue;
+      const lm = w.getMeta(d.x, d.y, d.z);
+      if (lm & 4) {
+        w.setBlock(d.x, d.y, d.z, B.DOOR_WOOD, lm & ~4, 4); w.setBlock(d.x, d.y + 1, d.z, B.DOOR_WOOD, (lm & ~4) | 8, 4);
+        game.audio.play('door_close', 0.6, 0.9 + Math.random() * 0.1, d.x + 0.5, d.y + 0.5, d.z + 0.5);
+      }
+    }
+  }
+  saySound() { return this.customer ? null : 'villager_say'; }
+  hurtSound() { return 'villager_hurt'; }
+  deathSound() { return 'villager_death'; }
+  dropLoot() {}
+  render(er, rx, ry, rz, partial) {
+    const [sky, blk] = er.lightAt(this.x, this.y + 1, this.z);
+    const pose = this.quadPose(partial);
+    const head = this.baby ? pose.head.rot : pose.head;
+    const swing = this.limbSwing - this.limbAmount * (1 - partial);
+    const amt = clamp(this.prevLimbAmount + (this.limbAmount - this.prevLimbAmount) * partial, 0, 1);
+    const sway = Math.cos(swing * 0.6662) * 0.06 * amt;
+    const p = { head, body: [0, 0, sway], arms: [0, 0, sway] };
+    er.drawModel(MODELS.villager, 'villager_' + this.prof, er.baseMatrix(this, rx, ry, rz, partial, this.baby ? 0.5 : 1), p, er.entColor(this), sky, blk);
+  }
+  save() {
+    const d = super.save();
+    d.prof = this.prof; d.home = this.home; d.tier = this.tier;
+    if (this.unlockIn) d.unlockIn = this.unlockIn;
+    if (this.offers) d.offers = this.offers.map((o) => ({ buy: o.buy.toJSON(), buy2: o.buy2 ? o.buy2.toJSON() : null, sell: o.sell.toJSON(), uses: o.uses, max: o.max }));
+    return d;
+  }
+  load(d) {
+    super.load(d);
+    if (d.prof && VILLAGER_PROFS[d.prof]) this.prof = d.prof;
+    this.home = d.home || null; this.tier = d.tier || 0; this.unlockIn = d.unlockIn || 0;
+    if (d.offers) this.offers = d.offers.map((o) => ({ buy: ItemStack.fromJSON(o.buy), buy2: o.buy2 ? ItemStack.fromJSON(o.buy2) : null, sell: ItemStack.fromJSON(o.sell), uses: o.uses || 0, max: o.max || 7 })).filter((o) => o.buy && o.sell);
+  }
+}
+
 // tamed wolves defend their owner and join in when the owner attacks
 function rallyWolves(game, foe) {
   const p = game.player, w = game.world;
@@ -1693,7 +1907,7 @@ class Stranger extends Mob {
 // ---------------------------------------------------------------------------
 // Registry, creation & persistence
 // ---------------------------------------------------------------------------
-const MOB_CLASSES = { zombie: Zombie, skeleton: Skeleton, spider: Spider, boomcap: Boomcap, slime: Slime, mummy: Mummy, wraith: Wraith, pig: Pig, cow: Cow, sheep: Sheep, chicken: Chicken, deer: Deer, bat: Bat, wisp: Wisp, stranger: Stranger, wolf: Wolf, squid: Squid };
+const MOB_CLASSES = { zombie: Zombie, skeleton: Skeleton, spider: Spider, boomcap: Boomcap, slime: Slime, mummy: Mummy, wraith: Wraith, pig: Pig, cow: Cow, sheep: Sheep, chicken: Chicken, deer: Deer, bat: Bat, wisp: Wisp, stranger: Stranger, wolf: Wolf, squid: Squid, villager: Villager };
 function createMob(type, world, extra) {
   const C = MOB_CLASSES[type];
   if (!C) return null;

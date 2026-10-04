@@ -104,6 +104,13 @@ const MODELS = (() => {
       leg2: { pivot: [2.5, 11, -5], boxes: [bx([-1, -11, -1], [2, 11, 2], [0, 16])] },
       leg3: { pivot: [-2.5, 11, -5], boxes: [bx([-1, -11, -1], [2, 11, 2], [0, 16], { mirror: true })] },
     },
+    // a villager: tall head and big nose, a robe to the ground, arms folded in the sleeves
+    villager: {
+      body: { pivot: [0, 0, 0], boxes: [bx([-4, 0, -3], [8, 22, 6], [36, 4])] },
+      head: { pivot: [0, 22, 0], boxes: [bx([-4, 0, -4], [8, 10, 8], [0, 0])] },
+      nose: { pivot: [0, 22, 0], follow: 'head', boxes: [bx([-1, 1, -6], [2, 4, 2], [28, 26])] },
+      arms: { pivot: [0, 20, -1], rot0: [0.75, 0, 0], boxes: [bx([-8, -6, -2], [4, 8, 4], [0, 18]), bx([4, -6, -2], [4, 8, 4], [0, 18], { mirror: true }), bx([-3, -6, -2], [6, 4, 4], [16, 18])] },
+    },
     wolf: {
       head: { pivot: [0, 10.5, -5], boxes: [bx([-3, -3, -4], [6, 6, 4], [0, 0]), bx([-1.5, -3, -7], [3, 3, 4], [0, 10]), bx([-3, 3, -2.5], [2, 2, 1], [48, 0]), bx([1, 3, -2.5], [2, 2, 1], [48, 0], { mirror: true })] },
       mane: { pivot: [0, 10.5, -3], boxes: [bx([-4, -3.5, -3], [8, 7, 6], [20, 0])] },

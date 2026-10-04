@@ -600,6 +600,7 @@ class Game {
     this.renderer.atlas.tickAnimations();
     DynamicItems.update(this);
     this.tickWaterways();
+    if (w.time % 40 === 9) this.checkVillages();
     Circuits.tickPlates(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
@@ -1407,6 +1408,22 @@ class Game {
     }
     mark.placed = true; mark.x = best.x; mark.y = cy; mark.z = best.z;
     return true;
+  }
+  // walking into a village for the first time puts it on the map
+  checkVillages() {
+    const w = this.world, p = this.player;
+    if (!w || !p || w.menu || !w.localGen || !w.localGen.villageAt || w.genOpts && w.genOpts.structures === false || (w.genOpts && w.genOpts.type === 'flat')) return;
+    const cx = Math.floor(p.x) >> 4, cz = Math.floor(p.z) >> 4;
+    const list = w.info.villages || (w.info.villages = []);
+    for (let rx = Math.floor((cx - 4) / 20); rx <= Math.floor((cx + 4) / 20); rx++) for (let rz = Math.floor((cz - 4) / 20); rz <= Math.floor((cz + 4) / 20); rz++) {
+      const V = w.localGen.villageAt(rx, rz);
+      if (!V || (V.x - p.x) ** 2 + (V.z - p.z) ** 2 > 48 * 48) continue;
+      if (list.some((v) => v.x === V.x && v.z === V.z)) continue;
+      list.push({ x: V.x, z: V.z, style: V.style });
+      this.hud.toast('Village discovered!', { plains: 'A village on the plains', desert: 'A desert village', taiga: 'A taiga village' }[V.style] || 'A village', new ItemStack(B.HAY_BALE, 1, 0), '#ffd060');
+      this.audio.play('discover', 0.8, 1.05);
+      this.achieve('village');
+    }
   }
   tickWaterways() {
     const p = this.player, w = this.world;

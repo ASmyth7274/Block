@@ -84,6 +84,14 @@ class MapScreen extends Screen {
     if (w0 && w0.spawn) mark(w0.spawn.x + 0.5, w0.spawn.z + 0.5, (sx, sy) => { ctx.fillStyle = '#202020'; ctx.fillRect(sx - 3, sy - 1, 7, 3); ctx.fillRect(sx - 1, sy - 3, 3, 7); ctx.fillStyle = '#f0e8d0'; ctx.fillRect(sx - 2, sy, 5, 1); ctx.fillRect(sx, sy - 2, 1, 5); });
     const sp = p && p.spawnPoint && !Array.isArray(p.spawnPoint) && !p.spawnPoint.forced ? p.spawnPoint : null;
     if (sp) mark(sp.x + 0.5, sp.z + 0.5, (sx, sy) => { ctx.fillStyle = '#202020'; ctx.fillRect(sx - 3, sy - 2, 7, 5); ctx.fillStyle = '#c02020'; ctx.fillRect(sx - 2, sy - 1, 5, 3); ctx.fillStyle = '#ffffff'; ctx.fillRect(sx - 2, sy - 1, 2, 1); });
+    // villages you have found: a little house
+    const vill = w0 && w0.info && w0.info.villages;
+    if (vill) for (const v of vill) mark(v.x + 0.5, v.z + 0.5, (sx, sy) => {
+      ctx.fillStyle = '#2a1a0a'; ctx.fillRect(sx - 4, sy - 1, 9, 6); ctx.fillRect(sx - 3, sy - 3, 7, 2); ctx.fillRect(sx - 1, sy - 4, 3, 1);
+      ctx.fillStyle = '#e8d8a8'; ctx.fillRect(sx - 3, sy, 7, 4);
+      ctx.fillStyle = '#b04020'; ctx.fillRect(sx - 2, sy - 2, 5, 2); ctx.fillRect(sx, sy - 3, 1, 1);
+      ctx.fillStyle = '#5a3a1a'; ctx.fillRect(sx, sy + 1, 1, 3);
+    });
     // treasure from messages in bottles: a red X
     const marks = w0 && w0.info && w0.info.treasureMarks;
     if (marks) for (const t of marks) mark(t.x + 0.5, t.z + 0.5, (sx, sy) => {

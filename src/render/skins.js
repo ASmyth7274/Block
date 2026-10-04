@@ -287,6 +287,46 @@ const Skins = (() => {
     s.box(16, 12, 2, 3, 1, () => vary(r, belly, 0.05));                     // tail
     return s;
   })();
+  // villagers: a big nose, a long robe and arms folded in their sleeves; the robe tells the trade
+  function villagerSkin(name, o) {
+    const s = new Skin(); const r = rng('villager_' + name);
+    const skin = C('#c08f72'), brow = C('#4a3020'), robe = C(o.robe), dark = C(o.trim || '#3a2a1a');
+    // head (8x10x8)
+    s.box(0, 0, 8, 10, 8, (f, x, y) => {
+      if (f === 'top') return o.hat ? vary(r, C(o.hat), 0.08) : vary(r, C('#5a3a22'), 0.08);
+      if (o.hat && y <= 1) return vary(r, C(o.hat), 0.08);
+      if (f === 'front') {
+        if (y === 3 && x >= 1 && x <= 6) return brow;
+        if (y === 4 && (x === 1 || x === 6)) return [240, 240, 240];
+        if (y === 4 && (x === 2 || x === 5)) return C(o.eyes || '#2e6a2a');
+        if (y >= 8 && x >= 2 && x <= 5) return vary(r, C('#a87a60'), 0.05);
+      }
+      if (f === 'back' && y < 6 && !o.hat) return vary(r, C('#5a3a22'), 0.08);
+      return vary(r, skin, 0.05);
+    });
+    // nose (2x4x2)
+    s.box(28, 26, 2, 4, 2, (f, x, y) => vary(r, C('#b07e64'), 0.06));
+    // robe (8x22x6)
+    s.box(36, 4, 8, 22, 6, (f, x, y, fw, fh) => {
+      if (f === 'top') return vary(r, robe, 0.06);
+      if (f === 'bottom') return dark;
+      if (y === 9 && o.belt) return C(o.belt);
+      if (o.apron && f === 'front' && y >= 3 && y <= 17 && x >= 1 && x <= 6) return vary(r, C(o.apron), 0.05);
+      if (y >= 20) return vary(r, dark, 0.06);
+      if (o.trimFront && f === 'front' && (x === 3 || x === 4) && y < 14) return vary(r, C(o.trimFront), 0.05);
+      return vary(r, robe, 0.07);
+    });
+    // folded arms: two sleeves and the hands crossed between them
+    s.box(0, 18, 4, 8, 4, (f, x, y) => (y >= 6 && f !== 'top') ? vary(r, skin, 0.05) : vary(r, robe, 0.07));
+    s.box(16, 18, 6, 4, 4, (f, x, y) => vary(r, f === 'top' || f === 'front' ? skin : robe, 0.05));
+    return s;
+  }
+  S.villager_farmer = villagerSkin('farmer', { robe: '#7a5a32', trim: '#4a3418', hat: '#d8c060', belt: '#3a2410' });
+  S.villager_fisher = villagerSkin('fisher', { robe: '#5a7a8a', trim: '#2a3a48', hat: '#c8b050', belt: '#2a2a2a' });
+  S.villager_librarian = villagerSkin('librarian', { robe: '#e4e0d4', trim: '#9a9488', trimFront: '#6a4a2a', eyes: '#3a4a7a' });
+  S.villager_cleric = villagerSkin('cleric', { robe: '#7a3a92', trim: '#3a1a48', trimFront: '#e8c040', eyes: '#6a2a8a' });
+  S.villager_smith = villagerSkin('smith', { robe: '#6a5a4a', trim: '#2a2420', apron: '#2a2a2e', belt: '#1a1a1a' });
+  S.villager_butcher = villagerSkin('butcher', { robe: '#8a8a8a', trim: '#4a4a4a', apron: '#ece8e0', belt: '#6a2a2a' });
   // wolves: wild (amber-eyed), tame (soft eyes, tongue out) and angry (red eyes, bared teeth)
   function wolfSkin(kind) {
     const s = new Skin(); const r = rng('wolf');

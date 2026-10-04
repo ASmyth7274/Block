@@ -3648,6 +3648,77 @@ function WorldGenFactory(Noise, TAB) {
     return list[list.length - 1][0];
   }
 
+  // ------------------------------------------------------------ villages
+  const VILLAGE_STYLE = { plains: 'plains', meadow: 'plains', desert: 'desert', taiga: 'taiga' };
+  // building templates: layers from y = -1 (foundation) up; rows run front (road side) to back, left to right seen from the road
+  //  # foundation  P planks  L log  l log lying across  C wall stone  G glass pane  D/E door (lower/upper)  F fence  p wooden plate
+  //  > < ^ v stairs climbing right/left/back/front   _ slab   - top slab   t torch on the wall behind it  B bookshelf  K crafting table
+  //  O furnace  H chest  W water  f farmland  c crops  h thatch  Y hay  w wool  x lava  * } ladder on the wall behind / to the right
+  //  j k torch on the wall to the left / right  R/Q bed foot/head (head towards the back)  . air
+  const VB = {
+    house: { w: 5, d: 5, folk: 1, layers: [
+      '#####|#####|#####|#####|#####',
+      'LPDPL|P...P|P...P|PF..P|LPPPL',
+      'LGEGL|G...G|P...P|Pp.tP|LPGPL',
+      'LPPPL|P...P|P...P|P...P|LPPPL',
+      '>PPP<|>PPP<|>PPP<|>PPP<|>PPP<',
+      '.>P<.|.>P<.|.>P<.|.>P<.|.>P<.',
+      '.._..|.._..|.._..|.._..|.._..'] },
+    hut: { w: 5, d: 5, folk: 1, layers: [
+      '#####|#####|#####|#####|#####',
+      'CCDCC|C...C|CR..C|CQ..C|CCCCC',
+      'PPEPP|G...G|P...P|P..tP|PPGPP',
+      'hhhhh|h...h|h...h|h...h|hhhhh',
+      '.....|.hhh.|.hhh.|.hhh.|.....',
+      '.....|.....|..h..|.....|.....'] },
+    big_house: { w: 9, d: 7, folk: 2, layers: [
+      '#########|#########|#########|#########|#########|#########|#########',
+      'LPPPDPPPL|P.......P|P.......P|P.......P|PR.....RP|PQK...YQP|LPPPPPPPL',
+      'LPGPEPGPL|P.......P|G.......G|P.......P|G.......G|P..t.t..P|LPGPPPGPL',
+      'LPPPPPPPL|P.......P|P.......P|P.......P|P.......P|P.......P|LPPPPPPPL',
+      '>PPPPPPP<|>PPPPPPP<|>PPPPPPP<|>PPPPPPP<|>PPPPPPP<|>PPPPPPP<|>PPPPPPP<',
+      '.>PPPPP<.|.>.....<.|.>.....<.|.>.....<.|.>.....<.|.>.....<.|.>PPPPP<.',
+      '..>PPP<..|..>...<..|..>...<..|..>...<..|..>...<..|..>...<..|..>PPP<..',
+      '...>P<...|...>P<...|...>P<...|...>P<...|...>P<...|...>P<...|...>P<...',
+      '...._....|...._....|...._....|...._....|...._....|...._....|...._....'] },
+    smithy: { w: 7, d: 7, folk: 1, prof: 'smith', loot: 'smithy', stoneRoof: true, layers: [
+      '#######|#######|#######|#xx####|#xx####|#######|#######',
+      'L.....L|C....OC|CFF..OC|C..F..C|C..F..C|CFF.HKC|CCCCCCC',
+      'L.....L|C.....C|C.....C|G.....G|C.....C|C.....C|CCCCCCC',
+      'L.....L|C.....C|Cj...kC|C.....C|C.....C|C.....C|CCCCCCC',
+      '_______|_______|_______|_______|_______|_______|_______'] },
+    library: { w: 7, d: 9, folk: 1, prof: 'librarian', layers: [
+      '#######|#######|#######|#######|#######|#######|#######|#######|#######',
+      'LCCDCCL|CB...BC|CB...BC|C.....C|C.....C|C.....C|C..K..C|CBBBBBC|LCCCCCL',
+      'LPGEGPL|PB...BP|PB...BP|G.....G|P.....P|G.....G|Pj...kP|PBBBBBP|LPGGGPL',
+      'LPPPPPL|PB...BP|PB...BP|P.....P|P.....P|P.....P|P.....P|PBBBBBP|LPPPPPL',
+      '>PPPPP<|>PPPPP<|>PPPPP<|>PPPPP<|>PPPPP<|>PPPPP<|>PPPPP<|>PPPPP<|>PPPPP<',
+      '.>PPP<.|.>...<.|.>...<.|.>...<.|.>...<.|.>...<.|.>...<.|.>...<.|.>PPP<.',
+      '..>P<..|..>P<..|..>P<..|..>P<..|..>P<..|..>P<..|..>P<..|..>P<..|..>P<..',
+      '..._...|..._...|..._...|..._...|..._...|..._...|..._...|..._...|..._...'] },
+    chapel: { w: 5, d: 9, folk: 1, prof: 'cleric', layers: [
+      '#####|#####|#####|#####|#####|#####|#####|#####|#####',
+      'CCDCC|C...C|C...C|C...C|C...C|C...C|C...C|C^^^C|CCCCC',
+      'CCECC|G...G|C...C|G...G|C...C|G...G|C...C|C...C|CCCCC',
+      'CCCCC|C...C|Cj.kC|C...C|C...C|C...C|C..}C|C...C|CCCCC',
+      'CCCCC|CCCCC|CCCCC|CCCCC|CCCCC|CCCCC|C..}C|C...C|CCCCC',
+      '.....|.....|.....|.....|.....|.....|C..}C|C...C|CCCCC',
+      '.....|.....|.....|.....|.....|.....|C..}C|G...G|CCGCC',
+      '.....|.....|.....|.....|.....|.....|C..}C|C...C|CCCCC',
+      '.....|.....|.....|.....|.....|.....|CCC.C|CCCCC|CCCCC',
+      '.....|.....|.....|.....|.....|.....|F...F|.....|F...F'] },
+    farm: { w: 9, d: 7, ground: true, layers: [
+      'LLLLLLLLL|LfffWfffL|LfffWfffL|LfffWfffL|LfffWfffL|LfffWfffL|LLLLLLLLL',
+      '.........|.ccc.ccc.|.ccc.ccc.|.ccc.ccc.|.ccc.ccc.|.ccc.ccc.|.........'] },
+    lamp: { w: 1, d: 1, ground: true, layers: ['.', 'F', 'F', 'F', 'w'] },
+    well: { w: 6, d: 6, ground: true, stoneRoof: true, layers: [
+      '######|######|##WW##|##WW##|######|######',
+      '......|.CCCC.|.C..C.|.C..C.|.CCCC.|......',
+      '......|.F..F.|......|......|.F..F.|......',
+      '......|.F..F.|......|......|.F..F.|......',
+      '......|.____.|.____.|.____.|.____.|......'] },
+  };
+
   // ------------------------------------------------------------ generator
   class Generator {
     constructor(seed, opts) {
@@ -4080,6 +4151,7 @@ function WorldGenFactory(Noise, TAB) {
           for (const f of p.features) if (f.phase === phase) this.placeFeature(W, f);
         }
       }
+      if (this.structuresOn) this.villages(out);
       this.springs(cx, cz, blocks, meta, out);
       this.freeze(cx, cz, blocks, meta, biomes);
       this.spawnAnimals(out, t);
@@ -4162,8 +4234,9 @@ function WorldGenFactory(Noise, TAB) {
       const isDry = (x, z) => { const y = t.height[z * 16 + x]; return t.blocks[IDX(x, y + 1, z)] === 0; };
       const mark = (x0l, z0l, w, d) => { for (let z = Math.max(0, z0l); z < Math.min(16, z0l + d); z++) for (let x = Math.max(0, x0l); x < Math.min(16, x0l + w); x++) occupied[z * 16 + x] = 1; };
 
+      const vmask = this.structuresOn && this.type !== 'flat' ? this.villageMask(cx, cz) : null;
       // ---- structures ----
-      if (this.structuresOn) {
+      if (this.structuresOn && !vmask) {
         const sr = new Random(seedHash(this.seed, cx, cz, 0x57C7));
         const roll = sr.nextFloat();
         const kinds = center.structures;
@@ -4196,6 +4269,8 @@ function WorldGenFactory(Noise, TAB) {
         }
       }
 
+      // villages keep their streets and plots clear of trees
+      if (vmask) for (let i = 0; i < 256; i++) if (vmask[i]) occupied[i] = 1;
       // ---- trees ----
       let count = Math.floor(center.trees);
       if (rng.nextFloat() < center.trees - count) count++;
@@ -4435,6 +4510,243 @@ function WorldGenFactory(Noise, TAB) {
       if (p.rails) for (let rz = 0; rz <= L; rz++) { const below = G(1, -1, rz); if (rng.nextFloat() < 0.7 && below > 0 && OPAQUE[below] && G(1, 0, rz) === 0) S(1, 0, rz, B.RAIL, (f === 0 || f === 2) ? 0 : 1); }
     }
 
+    // ---- villages: a well, roads of gravel and houses that sit on the land ----
+    villageAt(rx, rz) {
+      const key = (rx + 32768) * 65536 + (rz + 32768);
+      if (!this.villageCache) this.villageCache = new Map();
+      if (this.villageCache.has(key)) return this.villageCache.get(key);
+      let V = null;
+      const r = new Random(seedHash(this.seed, rx, rz, 0x7A11E5));
+      const cx = rx * 20 + 2 + r.nextInt(14), cz = rz * 20 + 2 + r.nextInt(14);
+      const t = this.terrain(cx, cz);
+      const b = BIOMES[t.biomes[136]];
+      const style = b && VILLAGE_STYLE[b.key];
+      const vseed = r.nextInt(0x7fffffff);
+      if (style && r.nextInt(100) < 55 && t.height[136] > SEA && t.blocks[IDX(8, t.height[136] + 1, 8)] !== B.WATER) V = this.villageLayout(cx, cz, style, vseed);
+      this.villageCache.set(key, V);
+      if (this.villageCache.size > 256) this.villageCache.delete(this.villageCache.keys().next().value);
+      return V;
+    }
+    // cells of a chunk taken by a village's roads and buildings (with some elbow room)
+    villageMask(cx, cz) {
+      const x0 = cx * 16, z0 = cz * 16;
+      let mask = null;
+      for (let rx = Math.floor((cx - 6) / 20); rx <= Math.floor((cx + 6) / 20); rx++) for (let rz = Math.floor((cz - 6) / 20); rz <= Math.floor((cz + 6) / 20); rz++) {
+        const V = this.villageAt(rx, rz);
+        if (!V || V.box[2] + 4 < x0 || V.box[0] - 4 > x0 + 15 || V.box[3] + 4 < z0 || V.box[1] - 4 > z0 + 15) continue;
+        const mark = (r, m) => {
+          for (let x = Math.max(r[0] - m, x0); x <= Math.min(r[2] + m, x0 + 15); x++) for (let z = Math.max(r[1] - m, z0); z <= Math.min(r[3] + m, z0 + 15); z++) {
+            if (!mask) mask = new Uint8Array(256);
+            mask[((z - z0) << 4) | (x - x0)] = 1;
+          }
+        };
+        for (const r of V.roads) mark(r.rect, 1);
+        for (const p of V.pieces) mark(p.rect, 3);
+      }
+      return mask;
+    }
+    groundAt(x, z) { const t = this.terrain(x >> 4, z >> 4); return t.height[((z & 15) << 4) | (x & 15)]; }
+    villageLayout(cx, cz, style, seed) {
+      const rng = new Random(seed);
+      const x0 = cx * 16 + 8, z0 = cz * 16 + 8;
+      const pieces = [], roads = [];
+      // buildings keep a block apart; anything may run right up to a road
+      const clash = (r, m) => pieces.some((p) => r[0] - m <= p.rect[2] && r[2] + m >= p.rect[0] && r[1] - m <= p.rect[3] && r[3] + m >= p.rect[1])
+        || roads.some((q) => r[0] <= q.rect[2] && r[2] >= q.rect[0] && r[1] <= q.rect[3] && r[3] >= q.rect[1]);
+      pieces.push({ t: 'well', rect: [x0 - 3, z0 - 3, x0 + 2, z0 + 2], f: 2, seed: rng.nextInt(0x7fffffff) });
+      const counts = {};
+      const KINDS = [['house', 6, 6], ['hut', 4, 5], ['big_house', 2, 2], ['smithy', 2, 1], ['library', 2, 1], ['chapel', 2, 1], ['farm', 5, 4]];
+      const DIR = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+      const pickKind = () => {
+        const opts = KINDS.filter((k) => (counts[k[0]] || 0) < k[2]);
+        if (!opts.length) return null;
+        let tot = 0; for (const k of opts) tot += k[1];
+        let v = rng.nextInt(tot);
+        for (const k of opts) { v -= k[1]; if (v < 0) return k[0]; }
+        return opts[0][0];
+      };
+      const queue = [];
+      for (let d = 0; d < 4; d++) {
+        const [dx, dz] = DIR[d];
+        queue.push({ x: x0 + dx * 4 - (dx === 1 ? 1 : 0), z: z0 + dz * 4 - (dz === 1 ? 1 : 0), d, depth: 0 });
+      }
+      while (queue.length) {
+        const q = queue.shift();
+        const [fx, fz] = DIR[q.d], lx = fz, lz = -fx;   // left of travel
+        let len = q.depth === 0 ? 14 + rng.nextInt(16) : 8 + rng.nextInt(14);
+        // shorten until the road is clear and stays near the middle
+        const rect = (n) => { const ex = q.x + fx * (n - 1), ez = q.z + fz * (n - 1); return [Math.min(q.x, ex) - Math.abs(lx), Math.min(q.z, ez) - Math.abs(lz), Math.max(q.x, ex) + Math.abs(lx), Math.max(q.z, ez) + Math.abs(lz)]; };
+        while (len >= 5 && (clash(rect(len), 0) || Math.abs(q.x + fx * len - x0) > 72 || Math.abs(q.z + fz * len - z0) > 72)) len--;
+        if (len < 5) continue;
+        roads.push({ rect: rect(len), x: q.x, z: q.z, d: q.d, len });
+        // buildings down both sides, their fronts on the road
+        for (const side of [1, -1]) {
+          let s = 1 + rng.nextInt(3);
+          while (s < len - 2) {
+            const kind = rng.nextInt(9) === 0 ? 'lamp' : pickKind();
+            if (!kind) break;
+            const T = VB[kind], W = T.w, D = T.d;
+            const sx = lx * side, sz = lz * side;
+            // building corner nearest the road start, then its extent along the road and away from it
+            const ax = q.x + fx * s + sx * 2, az = q.z + fz * s + sz * 2;
+            const bx = ax + fx * (W - 1) + sx * (D - 1), bz = az + fz * (W - 1) + sz * (D - 1);
+            const r = [Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz)];
+            const far = Math.max(Math.abs(r[0] - x0), Math.abs(r[2] - x0), Math.abs(r[1] - z0), Math.abs(r[3] - z0)) > 80;
+            if (s + W <= len + 1 && !far && !clash(r, 1)) {
+              // which way the front faces (towards the road)
+              const face = sx === 0 ? (sz > 0 ? 0 : 2) : (sx > 0 ? 3 : 1);
+              pieces.push({ t: kind, rect: r, f: face, seed: rng.nextInt(0x7fffffff) });
+              if (kind !== 'lamp') counts[kind] = (counts[kind] || 0) + 1;
+              s += W + 1 + rng.nextInt(2);
+            } else s += 2;
+          }
+        }
+        // branch off at the end of the road, and now and then from its side
+        if (q.depth < 2) {
+          // a square where the road ends, with new roads leading off it
+          const jx = q.x + fx * (len + 1), jz = q.z + fz * (len + 1), J = [jx - 1, jz - 1, jx + 1, jz + 1];
+          if (!clash(J, 0)) {
+            roads.push({ rect: J });
+            if (rng.nextInt(4) !== 0) queue.push({ x: jx + lx * 2, z: jz + lz * 2, d: (q.d + 3) & 3, depth: q.depth + 1 });
+            if (rng.nextInt(4) !== 0) queue.push({ x: jx - lx * 2, z: jz - lz * 2, d: (q.d + 1) & 3, depth: q.depth + 1 });
+            if (rng.nextInt(3) === 0) queue.push({ x: jx + fx * 2, z: jz + fz * 2, d: q.d, depth: q.depth + 1 });
+          }
+        }
+      }
+      let xa = 1e9, xb = -1e9, za = 1e9, zb = -1e9;
+      for (const p of pieces.concat(roads)) { xa = Math.min(xa, p.rect[0]); xb = Math.max(xb, p.rect[2]); za = Math.min(za, p.rect[1]); zb = Math.max(zb, p.rect[3]); }
+      return { x: x0, z: z0, style, pieces, roads, box: [xa - 1, za - 1, xb + 1, zb + 1] };
+    }
+    villages(out) {
+      const cx = out.cx, cz = out.cz, x0 = cx * 16, z0 = cz * 16;
+      const rx0 = Math.floor((cx - 6) / 20), rx1 = Math.floor((cx + 6) / 20), rz0 = Math.floor((cz - 6) / 20), rz1 = Math.floor((cz + 6) / 20);
+      for (let rx = rx0; rx <= rx1; rx++) for (let rz = rz0; rz <= rz1; rz++) {
+        const V = this.villageAt(rx, rz);
+        if (!V || V.box[2] < x0 || V.box[0] > x0 + 15 || V.box[3] < z0 || V.box[1] > z0 + 15) continue;
+        for (const r of V.roads) if (!(r.rect[2] < x0 || r.rect[0] > x0 + 15 || r.rect[3] < z0 || r.rect[1] > z0 + 15)) this.villageRoad(out, V, r);
+        for (const p of V.pieces) if (!(p.rect[2] + 1 < x0 || p.rect[0] - 1 > x0 + 15 || p.rect[3] + 1 < z0 || p.rect[1] - 1 > z0 + 15)) this.villagePiece(out, V, p);
+      }
+    }
+    villagePalette(style) {
+      if (style === 'desert') return { P: [B.SANDSTONE, 2], L: [B.SANDSTONE, 1], C: [B.SANDSTONE, 0], '#': [B.SANDSTONE, 0], stairs: 10, slab: 10, roofSlab: 10, path: [B.SANDSTONE, 0], wood: 0 };
+      if (style === 'taiga') return { P: [B.PLANKS, 1], L: [B.LOG, 1], C: [B.COBBLESTONE, 0], '#': [B.COBBLESTONE, 0], stairs: 1, slab: 7, roofSlab: 1, path: [B.GRAVEL, 0], wood: 1 };
+      return { P: [B.PLANKS, 0], L: [B.LOG, 0], C: [B.COBBLESTONE, 0], '#': [B.COBBLESTONE, 0], stairs: 0, slab: 7, roofSlab: 0, path: [B.GRAVEL, 0], wood: 0 };
+    }
+    villageRoad(out, V, r) {
+      const { blocks, meta } = out, x0 = out.cx * 16, z0 = out.cz * 16;
+      const pal = this.villagePalette(V.style);
+      for (let x = Math.max(r.rect[0], x0); x <= Math.min(r.rect[2], x0 + 15); x++) for (let z = Math.max(r.rect[1], z0); z <= Math.min(r.rect[3], z0 + 15); z++) {
+        const lx = x - x0, lz = z - z0;
+        let y = H - 2;
+        // look past plants, snow and leaves to the ground (or water) beneath
+        while (y > 1) { const id = blocks[IDX(lx, y, lz)]; if (id !== 0 && (OPAQUE[id] || id === B.WATER) && id !== B.LEAVES && id !== B.LOG) break; y--; }
+        const id = blocks[IDX(lx, y, lz)];
+        if (id === B.WATER) { blocks[IDX(lx, y, lz)] = B.PLANKS; meta[IDX(lx, y, lz)] = pal.wood; }
+        else if (id === B.GRASS || id === B.DIRT || id === B.SAND || id === B.PODZOL || id === B.SNOW || id === B.GRAVEL || id === B.STONE || id === B.SANDSTONE) { blocks[IDX(lx, y, lz)] = pal.path[0]; meta[IDX(lx, y, lz)] = pal.path[1]; }
+        for (let k = 1; k <= 3; k++) { const a = blocks[IDX(lx, y + k, lz)]; if (a !== 0 && !OPAQUE[a] && a !== B.WATER && (REPL[a] || a === B.FLOWER || a === B.TALL_GRASS || a === B.SNOW_LAYER || a === B.LEAF_LITTER || a === B.LEAVES)) blocks[IDX(lx, y + k, lz)] = 0; }
+      }
+    }
+    villagePiece(out, V, p) {
+      const { blocks, meta } = out, x0 = out.cx * 16, z0 = out.cz * 16;
+      const inC = (x, z) => x >= x0 && x < x0 + 16 && z >= z0 && z < z0 + 16;
+      const get = (x, y, z) => (!inC(x, z) || y < 0 || y >= H) ? -1 : blocks[IDX(x - x0, y, z - z0)];
+      const set = (x, y, z, id, m) => { if (!inC(x, z) || y < 1 || y >= H) return; const i = IDX(x - x0, y, z - z0); blocks[i] = id; meta[i] = m || 0; };
+      const T = VB[p.t], pal = this.villagePalette(V.style);
+      const [ra, rb, rc, rd] = p.rect, f = p.f;
+      // the floor sits on the average ground under the footprint (from the base terrain, so every chunk agrees)
+      if (p.y === undefined) {
+        let sum = 0, n = 0;
+        for (let x = ra; x <= rc; x++) for (let z = rb; z <= rd; z++) { sum += this.groundAt(x, z); n++; }
+        p.y = Math.round(sum / n) + (T.ground ? 0 : 1);
+      }
+      const y0 = p.y;
+      // local (x across the front, z from front to back) -> world
+      const wx = (lx, lz) => f === 2 ? ra + lx : f === 0 ? rc - lx : f === 1 ? rc - lz : ra + lz;
+      const wz = (lx, lz) => f === 2 ? rd - lz : f === 0 ? rb + lz : f === 1 ? rd - lx : rb + lx;
+      // local directions -> world face index (0 N, 1 S, 2 W, 3 E): front, back, left, right
+      const FRONT = [0, 3, 1, 2][f], BACK = [1, 2, 0, 3][f], LEFT = [3, 1, 2, 0][f], RIGHT = [2, 0, 3, 1][f];
+      const HF = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+      const torchMeta = (face) => [3, 4, 1, 2][face];          // support lies towards face
+      const ladderMeta = (face) => [1, 0, 3, 2][face];
+      const stairs = (face, mat) => (mat << 3) | face;
+      const acrossAxis = (f === 0 || f === 2) ? 1 : 2;           // logs lying across the front
+      const rng = new Random(p.seed);
+      const W = T.w, D = T.d, NL = T.layers.length;
+      // clear the space above and prop the lowest layer up on stone down to the ground
+      const base = T.ground ? y0 : y0 - 1;
+      for (let lx = 0; lx < W; lx++) for (let lz = 0; lz < D; lz++) {
+        const x = wx(lx, lz), z = wz(lx, lz);
+        if (!inC(x, z)) continue;
+        for (let y = base + 1; y < base + NL + 2; y++) set(x, y, z, 0);
+        let y = base - 1;
+        while (y > 1) { const id = get(x, y, z); if (id > 0 && OPAQUE[id] && id !== B.LEAVES && id !== B.LOG) break; set(x, y, z, pal['#'][0], pal['#'][1]); y--; }
+      }
+      const spawns = [];
+      for (let li = 0; li < NL; li++) {
+        const rows = T.layers[li].split('|');
+        const y = y0 + li - (T.ground ? 0 : 1);
+        for (let lz = 0; lz < D; lz++) {
+          const row = rows[lz] || '';
+          for (let lx = 0; lx < W; lx++) {
+            const ch = row[lx] || '.';
+            const x = wx(lx, lz), z = wz(lx, lz);
+            if (!inC(x, z)) continue;
+            switch (ch) {
+              case '.': set(x, y, z, 0); break;
+              case '#': case 'P': case 'L': case 'C': set(x, y, z, pal[ch][0], pal[ch][1]); break;
+              case 'l': set(x, y, z, pal.L[0], pal.L[0] === B.LOG ? (pal.L[1] | (acrossAxis << 3)) : pal.L[1]); break;
+              case 'G': set(x, y, z, B.GLASS_PANE); break;
+              case 'D': set(x, y, z, B.DOOR_WOOD, FRONT); break;
+              case 'E': set(x, y, z, B.DOOR_WOOD, FRONT | 8); break;
+              case 'F': set(x, y, z, B.FENCE); break;
+              case 'p': set(x, y, z, B.WOOD_PLATE); break;
+              case '>': set(x, y, z, B.STAIRS, stairs(RIGHT, pal.stairs)); break;
+              case '<': set(x, y, z, B.STAIRS, stairs(LEFT, pal.stairs)); break;
+              case '^': set(x, y, z, B.STAIRS, stairs(BACK, pal.stairs)); break;
+              case 'v': set(x, y, z, B.STAIRS, stairs(FRONT, pal.stairs)); break;
+              case '_': set(x, y, z, B.SLAB, (T.stoneRoof ? pal.slab : pal.roofSlab)); break;
+              case '-': set(x, y, z, B.SLAB, pal.slab | 32); break;
+              case 't': set(x, y, z, B.TORCH, torchMeta(BACK)); break;
+              case 'j': set(x, y, z, B.TORCH, torchMeta(LEFT)); break;
+              case 'k': set(x, y, z, B.TORCH, torchMeta(RIGHT)); break;
+              case '*': set(x, y, z, B.LADDER, ladderMeta(BACK)); break;
+              case '}': set(x, y, z, B.LADDER, ladderMeta(RIGHT)); break;
+              case 'B': set(x, y, z, B.BOOKSHELF); break;
+              case 'K': set(x, y, z, B.CRAFTING_TABLE); break;
+              case 'O': set(x, y, z, B.FURNACE, FRONT); break;
+              case 'H': set(x, y, z, B.CHEST, FRONT); out.tiles.push({ type: 'chest', x, y, z, items: this.loot(rng, T.loot || 'smithy') }); break;
+              case 'W': set(x, y, z, B.WATER); if (T.ground) { set(x, y - 1, z, B.WATER); set(x, y - 2, z, B.WATER); set(x, y - 3, z, pal['#'][0], pal['#'][1]); } break;
+              case 'f': set(x, y, z, B.FARMLAND, 7); break;
+              case 'c': { const k = rng.nextInt(4); set(x, y, z, k < 2 ? B.WHEAT : k === 2 ? B.CARROTS : B.POTATOES, 2 + rng.nextInt(6)); break; }
+              case 'h': set(x, y, z, B.THATCH); break;
+              case 'Y': set(x, y, z, B.HAY_BALE); break;
+              case 'w': set(x, y, z, B.WOOL, 15); break;
+              case 'x': set(x, y, z, B.LAVA); break;
+              case 'R': set(x, y, z, B.BED, BACK); break;
+              case 'Q': set(x, y, z, B.BED, BACK | 4); break;
+            }
+          }
+        }
+      }
+      // a lamp post: four torches round the wool
+      if (p.t === 'lamp') {
+        const x = wx(0, 0), z = wz(0, 0), y = y0 + 4;
+        for (let k = 0; k < 4; k++) { const d = HF[k]; set(x + d[0], y, z + d[1], B.TORCH, torchMeta(k ^ 1)); }
+      }
+      // villagers live in the houses (spawned once, by the chunk holding the doorway)
+      if (T.folk) {
+        const dx = wx(W >> 1, 1), dz = wz(W >> 1, 1);
+        if (inC(dx, dz)) {
+          const PROF = ['farmer', 'farmer', 'fisher', 'butcher', 'librarian', 'cleric', 'smith'];
+          for (let i = 0; i < T.folk; i++) {
+            if (!T.prof && rng.nextInt(10) < 4) continue;
+            const prof = T.prof || PROF[rng.nextInt(PROF.length)];
+            out.entities.push({ type: 'villager', x: dx + 0.5, y: y0, z: dz + 0.5, extra: { prof, home: [V.x, V.z] } });
+          }
+        }
+      }
+    }
+
     dungeonValid(t, x, y, z) {
       let openings = 0;
       for (let dx = -3; dx <= 3; dx++) for (let dy = -1; dy <= 4; dy++) for (let dz = -3; dz <= 3; dz++) {
@@ -4592,6 +4904,8 @@ function WorldGenFactory(Noise, TAB) {
         hut: [[I.book, 1, 3, 8], [I.paper, 2, 6, 8], [I.seeds, 2, 8, 10], [I.carrot, 1, 4, 8], [I.potato, 1, 4, 8], [B.SAPLING, 1, 3, 8], [I.dye, 2, 6, 6], [I.jerky, 1, 4, 8], [I.compass, 1, 1, 3], [I.clock, 1, 1, 3], [I.salt, 2, 6, 6], [I.berry_pie, 1, 2, 4]],
         treasure: [[I.gold_ingot, 2, 6, 10], [I.diamond, 1, 3, 6], [I.jade, 2, 5, 8], [I.golden_apple, 1, 1, 3], [I.cobalt_ingot, 1, 4, 6], [I.starmetal_ingot, 1, 1, 1], [I.gold_nugget, 4, 12, 8], [I.wisp_essence, 1, 2, 4], [I.iron_ingot, 2, 5, 8]],
         ruins: [[I.gold_nugget, 3, 10, 10], [I.fish, 1, 4, 8], [I.jade, 1, 3, 5], [I.diamond, 1, 1, 2], [I.iron_ingot, 1, 3, 6], [I.lumite_shard, 1, 4, 6]],
+        smithy: [[I.diamond, 1, 3, 3], [I.iron_ingot, 1, 5, 10], [I.gold_ingot, 1, 3, 5], [I.bread, 1, 3, 15], [I.apple, 1, 3, 15], [I.iron_pickaxe, 1, 1, 5], [I.iron_sword, 1, 1, 5],
+          [I.iron_chestplate, 1, 1, 5], [I.iron_helmet, 1, 1, 5], [I.iron_leggings, 1, 1, 5], [I.iron_boots, 1, 1, 5], [B.OBSIDIAN, 3, 7, 5], [B.SAPLING, 3, 7, 5], [I.jade, 1, 3, 4]],
         mineshaft: [[I.iron_ingot, 1, 5, 10], [I.gold_ingot, 1, 3, 5], [I.ember_dust, 4, 9, 5], [I.dye, 4, 9, 5, 11], [I.diamond, 1, 2, 3], [I.coal, 3, 8, 10], [I.bread, 1, 3, 15],
           [I.iron_pickaxe, 1, 1, 1], [B.RAIL, 4, 8, 1], [I.seeds, 2, 4, 10], [I.cobalt_ingot, 1, 2, 3], [I.lumite_shard, 2, 5, 4], [B.TORCH, 4, 10, 6], [I.prospector_rod, 1, 1, 1]],
       }[table] || [];
@@ -13357,6 +13671,46 @@ const Skins = (() => {
     s.box(16, 12, 2, 3, 1, () => vary(r, belly, 0.05));                     // tail
     return s;
   })();
+  // villagers: a big nose, a long robe and arms folded in their sleeves; the robe tells the trade
+  function villagerSkin(name, o) {
+    const s = new Skin(); const r = rng('villager_' + name);
+    const skin = C('#c08f72'), brow = C('#4a3020'), robe = C(o.robe), dark = C(o.trim || '#3a2a1a');
+    // head (8x10x8)
+    s.box(0, 0, 8, 10, 8, (f, x, y) => {
+      if (f === 'top') return o.hat ? vary(r, C(o.hat), 0.08) : vary(r, C('#5a3a22'), 0.08);
+      if (o.hat && y <= 1) return vary(r, C(o.hat), 0.08);
+      if (f === 'front') {
+        if (y === 3 && x >= 1 && x <= 6) return brow;
+        if (y === 4 && (x === 1 || x === 6)) return [240, 240, 240];
+        if (y === 4 && (x === 2 || x === 5)) return C(o.eyes || '#2e6a2a');
+        if (y >= 8 && x >= 2 && x <= 5) return vary(r, C('#a87a60'), 0.05);
+      }
+      if (f === 'back' && y < 6 && !o.hat) return vary(r, C('#5a3a22'), 0.08);
+      return vary(r, skin, 0.05);
+    });
+    // nose (2x4x2)
+    s.box(28, 26, 2, 4, 2, (f, x, y) => vary(r, C('#b07e64'), 0.06));
+    // robe (8x22x6)
+    s.box(36, 4, 8, 22, 6, (f, x, y, fw, fh) => {
+      if (f === 'top') return vary(r, robe, 0.06);
+      if (f === 'bottom') return dark;
+      if (y === 9 && o.belt) return C(o.belt);
+      if (o.apron && f === 'front' && y >= 3 && y <= 17 && x >= 1 && x <= 6) return vary(r, C(o.apron), 0.05);
+      if (y >= 20) return vary(r, dark, 0.06);
+      if (o.trimFront && f === 'front' && (x === 3 || x === 4) && y < 14) return vary(r, C(o.trimFront), 0.05);
+      return vary(r, robe, 0.07);
+    });
+    // folded arms: two sleeves and the hands crossed between them
+    s.box(0, 18, 4, 8, 4, (f, x, y) => (y >= 6 && f !== 'top') ? vary(r, skin, 0.05) : vary(r, robe, 0.07));
+    s.box(16, 18, 6, 4, 4, (f, x, y) => vary(r, f === 'top' || f === 'front' ? skin : robe, 0.05));
+    return s;
+  }
+  S.villager_farmer = villagerSkin('farmer', { robe: '#7a5a32', trim: '#4a3418', hat: '#d8c060', belt: '#3a2410' });
+  S.villager_fisher = villagerSkin('fisher', { robe: '#5a7a8a', trim: '#2a3a48', hat: '#c8b050', belt: '#2a2a2a' });
+  S.villager_librarian = villagerSkin('librarian', { robe: '#e4e0d4', trim: '#9a9488', trimFront: '#6a4a2a', eyes: '#3a4a7a' });
+  S.villager_cleric = villagerSkin('cleric', { robe: '#7a3a92', trim: '#3a1a48', trimFront: '#e8c040', eyes: '#6a2a8a' });
+  S.villager_smith = villagerSkin('smith', { robe: '#6a5a4a', trim: '#2a2420', apron: '#2a2a2e', belt: '#1a1a1a' });
+  S.villager_butcher = villagerSkin('butcher', { robe: '#8a8a8a', trim: '#4a4a4a', apron: '#ece8e0', belt: '#6a2a2a' });
   // wolves: wild (amber-eyed), tame (soft eyes, tongue out) and angry (red eyes, bared teeth)
   function wolfSkin(kind) {
     const s = new Skin(); const r = rng('wolf');
@@ -14111,6 +14465,13 @@ const MODELS = (() => {
       leg1: { pivot: [-2.5, 11, 5], boxes: [bx([-1, -11, -1], [2, 11, 2], [0, 16], { mirror: true })] },
       leg2: { pivot: [2.5, 11, -5], boxes: [bx([-1, -11, -1], [2, 11, 2], [0, 16])] },
       leg3: { pivot: [-2.5, 11, -5], boxes: [bx([-1, -11, -1], [2, 11, 2], [0, 16], { mirror: true })] },
+    },
+    // a villager: tall head and big nose, a robe to the ground, arms folded in the sleeves
+    villager: {
+      body: { pivot: [0, 0, 0], boxes: [bx([-4, 0, -3], [8, 22, 6], [36, 4])] },
+      head: { pivot: [0, 22, 0], boxes: [bx([-4, 0, -4], [8, 10, 8], [0, 0])] },
+      nose: { pivot: [0, 22, 0], follow: 'head', boxes: [bx([-1, 1, -6], [2, 4, 2], [28, 26])] },
+      arms: { pivot: [0, 20, -1], rot0: [0.75, 0, 0], boxes: [bx([-8, -6, -2], [4, 8, 4], [0, 18]), bx([4, -6, -2], [4, 8, 4], [0, 18], { mirror: true }), bx([-3, -6, -2], [6, 4, 4], [16, 18])] },
     },
     wolf: {
       head: { pivot: [0, 10.5, -5], boxes: [bx([-3, -3, -4], [6, 6, 4], [0, 0]), bx([-1.5, -3, -7], [3, 3, 4], [0, 10]), bx([-3, 3, -2.5], [2, 2, 1], [48, 0]), bx([1, 3, -2.5], [2, 2, 1], [48, 0], { mirror: true })] },
@@ -15465,6 +15826,25 @@ const SOUND_DEFS = (() => {
     return render(0.7, (t) => bp.p(noise()) * (0.5 + 0.5 * Math.sin(t * 2 * Math.PI * 14)) * Math.sin(Math.PI * t / 0.7));
   };
   S.wolf_howl = glide(2.6, (t) => 380 + Math.min(1, t / 0.6) * 260 - Math.max(0, t - 1.8) * 220 + Math.sin(t * 11) * 6, (t) => Math.sin(Math.PI * t / 2.6) * 0.85, 0.03);
+  // villagers: nasal hums - a musing 'hrrm', a pleased 'hmm-hm', a doubtful 'hm-mm'
+  const hum = (pts, dur, nasal) => () => {
+    const f1 = new Biquad('bp', 1100, 3), f2 = new Biquad('bp', 2500, 5), lp = new Biquad('lp', 2800, 0.8);
+    let ph = 0;
+    return render(dur, (t) => {
+      const u = t / dur;
+      let f = pts[0][1];
+      for (let i = 1; i < pts.length; i++) if (u >= pts[i - 1][0]) { const a = pts[i - 1], b = pts[i]; f = a[1] + (b[1] - a[1]) * clamp((u - a[0]) / (b[0] - a[0]), 0, 1); }
+      ph += 2 * Math.PI * f / DSP.SR;
+      const src = ((ph / (2 * Math.PI)) % 1) * 2 - 1 + noise() * 0.08;
+      const gate = Math.sin(Math.PI * Math.min(1, u * 1.05)) * (0.75 + 0.25 * Math.sin(u * Math.PI * 2 * 3));
+      return lp.p(f1.p(src) * 0.9 + f2.p(src) * nasal) * gate;
+    });
+  };
+  S.villager_say = hum([[0, 150], [0.4, 175], [1, 140]], 0.55, 0.6);
+  S.villager_yes = hum([[0, 160], [0.45, 150], [0.55, 200], [1, 210]], 0.5, 0.55);
+  S.villager_no = hum([[0, 190], [0.45, 200], [0.55, 150], [1, 130]], 0.5, 0.55);
+  S.villager_hurt = hum([[0, 240], [0.3, 300], [1, 200]], 0.3, 0.7);
+  S.villager_death = hum([[0, 220], [1, 110]], 0.9, 0.6);
   S.boomcap_say = () => { const lp = new Biquad('lp', 600, 2); return render(0.4, (t) => lp.p(noise()) * env(t, 0.02, 0.1)); };
   S.wisp = () => render(1.2, (t) => { let s = 0; [2093, 2637, 3136].forEach((f, i) => { const st = i * 0.18; if (t > st) s += Math.sin(2 * Math.PI * f * (t - st)) * Math.exp(-(t - st) / 0.3); }); return s; });
   S.stranger = () => { const lp = new Biquad('lp', 300, 1); return render(3, (t) => (lp.p(noise()) * 0.6 + Math.sin(2 * Math.PI * 55 * t) * 0.3) * Math.sin(Math.PI * t / 3)); };
@@ -17115,6 +17495,7 @@ const HOW_TO_PLAY = [
   ['Survival', 'Your health regenerates while your hunger bar is nearly full. Eat by holding the right mouse button with food selected. Sprinting, jumping and fighting make you hungry faster.', 'Falling from high places, drowning, fire, lava and monsters all hurt. Wear armour to take less damage. If you die you drop your items where you fell.'],
   ['Mining & Smelting', 'Ores hide underground: coal, iron, gold, ember, lapis, diamonds - and new finds like cobalt deep in slate, sulfur near lava and jade in high places.', 'Smelt ores in a Furnace with fuel such as coal, charcoal, wood or peat. Better pickaxes mine harder materials: some ores need iron or diamond tools.'],
   ['Farming', 'Till grass or dirt with a hoe and plant seeds near water. Crops need light to grow. Bone meal speeds up growth.', 'Animals give food, leather and wool. Shear sheep for wool and use buckets to collect milk. Brambles in the forest give berries you can bake into pies.'],
+  ['Villages', 'Villages grow up on the plains, in the desert and among the taiga pines: a well in the middle, roads of gravel and houses all along them. Their blacksmiths keep a chest of supplies.', 'Right-click a villager to trade. Jade is their money - you will find it high in the mountains. Every new trade can teach them something more, and a sold-out offer comes back in time.'],
   ['Companions', 'Wolves roam forests and taigas in packs. Strike one and the whole pack turns on you - but offer a wild wolf bones and it may become your companion. A collar shows it is yours.', 'Right-click your wolf to make it sit or follow. It fights at your side and keeps up wherever you go. Feed it meat to heal it, breed two tame wolves with meat, and dye its collar any colour you like.'],
   ['Exploration', 'The world is huge. Biomes have their own plants, creatures and treasures: look for camps, ruined towers, hermit huts, desert wells, sunken ruins and old mineshafts deep underground.', 'Your Explorer\'s Map (M) fills in as you travel, and your Explorer\'s Journal (J) records every biome and creature you discover. Some secrets are rare - keep travelling!'],
   ['Waterways', 'Craft a boat from five planks to cross lakes and seas: right-click to climb in, steer with W and the mouse, and press Shift to hop out. Do not ram the shore at full speed!', 'Cast a fishing rod into water and wait for the float to dip, then reel in. Different waters hold different fish, and now and then a bottle washes up with a note about buried treasure.'],
@@ -18023,6 +18404,8 @@ const MILESTONES = [
   { id: 'tnt', name: 'Kaboom', desc: 'Craft TNT', icon: () => [B.TNT, 0] },
   { id: 'fish', name: 'Gone Fishing', desc: 'Catch a fish', icon: () => [ITEM_IDS.fish, 0] },
   { id: 'sail', name: 'Set Sail', desc: 'Row a boat 500 blocks', icon: () => [ITEM_IDS.boat, 0] },
+  { id: 'village', name: 'Neighbours', desc: 'Find a village', icon: () => [B.HAY_BALE, 0] },
+  { id: 'trade', name: 'Fair Trade', desc: 'Trade with a villager', icon: () => [ITEM_IDS.jade, 0] },
   { id: 'mineshaft', name: 'Down the Shaft', desc: 'Find a chest minecart in an abandoned mineshaft', icon: () => [ITEM_IDS.chest_minecart, 0] },
   { id: 'rails', name: 'On the Rails', desc: 'Ride a minecart 1000 blocks', icon: () => [ITEM_IDS.minecart, 0] },
   { id: 'bottle', name: 'Message Received', desc: 'Read a message in a bottle', icon: () => [ITEM_IDS.message_bottle, 0] },
@@ -18187,6 +18570,14 @@ class MapScreen extends Screen {
     if (w0 && w0.spawn) mark(w0.spawn.x + 0.5, w0.spawn.z + 0.5, (sx, sy) => { ctx.fillStyle = '#202020'; ctx.fillRect(sx - 3, sy - 1, 7, 3); ctx.fillRect(sx - 1, sy - 3, 3, 7); ctx.fillStyle = '#f0e8d0'; ctx.fillRect(sx - 2, sy, 5, 1); ctx.fillRect(sx, sy - 2, 1, 5); });
     const sp = p && p.spawnPoint && !Array.isArray(p.spawnPoint) && !p.spawnPoint.forced ? p.spawnPoint : null;
     if (sp) mark(sp.x + 0.5, sp.z + 0.5, (sx, sy) => { ctx.fillStyle = '#202020'; ctx.fillRect(sx - 3, sy - 2, 7, 5); ctx.fillStyle = '#c02020'; ctx.fillRect(sx - 2, sy - 1, 5, 3); ctx.fillStyle = '#ffffff'; ctx.fillRect(sx - 2, sy - 1, 2, 1); });
+    // villages you have found: a little house
+    const vill = w0 && w0.info && w0.info.villages;
+    if (vill) for (const v of vill) mark(v.x + 0.5, v.z + 0.5, (sx, sy) => {
+      ctx.fillStyle = '#2a1a0a'; ctx.fillRect(sx - 4, sy - 1, 9, 6); ctx.fillRect(sx - 3, sy - 3, 7, 2); ctx.fillRect(sx - 1, sy - 4, 3, 1);
+      ctx.fillStyle = '#e8d8a8'; ctx.fillRect(sx - 3, sy, 7, 4);
+      ctx.fillStyle = '#b04020'; ctx.fillRect(sx - 2, sy - 2, 5, 2); ctx.fillRect(sx, sy - 3, 1, 1);
+      ctx.fillStyle = '#5a3a1a'; ctx.fillRect(sx, sy + 1, 1, 3);
+    });
     // treasure from messages in bottles: a red X
     const marks = w0 && w0.info && w0.info.treasureMarks;
     if (marks) for (const t of marks) mark(t.x + 0.5, t.z + 0.5, (sx, sy) => {
@@ -18477,6 +18868,122 @@ class EnchantScreen extends ContainerScreen {
   onClose() {
     super.onClose();
     for (let i = 0; i < 2; i++) if (this.inv.items[i]) { this.game.giveItem(this.inv.items[i]); this.inv.items[i] = null; }
+  }
+}
+
+// ---- src/ui/merchantscreen.js
+// ---------------------------------------------------------------------------
+// Trading with a villager, laid out like the classic merchant screen: the
+// offer at the top (flip through with the arrows), payment in the two slots
+// below, and the goods in the slot on the right. A sold-out offer is crossed
+// out until the villager restocks.
+// ---------------------------------------------------------------------------
+class MerchantScreen extends ContainerScreen {
+  constructor(game, villager) {
+    super(game, 176, 166);
+    this.v = villager;
+    this.idx = 0;
+    this.pay = new Inventory(2);
+    this.out = new Inventory(1);
+    this.pay.listeners.push(() => this.updateResult());
+    this.slots.push(new Slot(this.pay, 0, 36, 53, { group: 'pay' }));
+    this.slots.push(new Slot(this.pay, 1, 62, 53, { group: 'pay' }));
+    this.slots.push(new Slot(this.out, 0, 120, 53, { output: true, group: 'result' }));
+    this.addPlayerSlots(84);
+  }
+  init() {
+    if (super.init) super.init();
+    this.add(new Button(this.left + 36 - 19, this.top + 23, 12, 19, '<', () => this.flip(-1)));
+    this.add(new Button(this.left + 120 + 27, this.top + 23, 12, 19, '>', () => this.flip(1)));
+  }
+  get offers() { return this.v.offers || []; }
+  get offer() { return this.offers[this.idx] || null; }
+  flip(d) { const n = this.offers.length; if (!n) return; this.idx = clamp(this.idx + d, 0, n - 1); this.updateResult(); }
+  static fits(have, need) { return !!have && !!need && have.id === need.id && have.dmg === need.dmg && have.count >= need.count && !Enchant.has(have); }
+  // which pay slot holds which price (either order works)
+  match() {
+    const o = this.offer, a = this.pay.items[0], b = this.pay.items[1];
+    if (!o || o.uses >= o.max) return null;
+    const F = MerchantScreen.fits;
+    if (o.buy2) {
+      if (F(a, o.buy) && F(b, o.buy2)) return [0, 1];
+      if (F(b, o.buy) && F(a, o.buy2)) return [1, 0];
+      return null;
+    }
+    if (F(a, o.buy)) return [0, -1];
+    if (F(b, o.buy)) return [1, -1];
+    return null;
+  }
+  updateResult() {
+    const m = this.match();
+    this.out.items[0] = m ? this.offer.sell.copy() : null;
+  }
+  takeOutput(s, shift) {
+    const g = this.game;
+    for (let guard = 0; guard < 64; guard++) {
+      const got = this.out.items[0], m = this.match();
+      if (!got || !m) break;
+      if (shift) {
+        if (!g.player.inventory.canFit(got)) break;
+        g.player.inventory.add(got.copy());
+      } else {
+        const cur = this.cursor;
+        if (cur && (!cur.canStackWith(got) || cur.count + got.count > maxStackOf(got.id))) break;
+        if (cur) cur.count += got.count; else this.cursor = got.copy();
+      }
+      const o = this.offer;
+      const take = (slot, need) => { const st = this.pay.items[slot]; st.count -= need.count; if (st.count <= 0) this.pay.items[slot] = null; };
+      take(m[0], o.buy);
+      if (m[1] >= 0) take(m[1], o.buy2);
+      g.player.stats.trades = (g.player.stats.trades || 0) + 1;
+      g.achieve('trade');
+      this.v.traded(g, o);
+      this.pay.changed();
+      if (!shift) break;
+    }
+    this.updateResult();
+  }
+  quickTargets(s, st) {
+    if (s.group === 'main' || s.group === 'hotbar') return { slots: this.slots.filter((x) => x.group === 'pay') };
+    return { slots: this.slots.filter((x) => x.group === 'hotbar' || x.group === 'main'), reverse: true };
+  }
+  drawForeground(gui, mx, my) {
+    const ctx = gui.ctx, o = this.offer;
+    gui.textCentered(this.v.title, this.left + 88, this.top + 6, '#404040', false);
+    this.label(gui, 'Inventory', 8, 72);
+    drawArrow(gui, this.left + 86, this.top + 52, 0);
+    this.hoverTip = null;
+    if (!o) return;
+    // the offer: what it costs and what you get
+    const show = (st, x, y) => {
+      if (!st) return;
+      gui.item(st, this.left + x, this.top + y, { showOne: false });
+      if (mx >= this.left + x && my >= this.top + y && mx < this.left + x + 16 && my < this.top + y + 16) this.hoverTip = [this.tooltipFor(st), mx, my];
+    };
+    show(o.buy, 36, 24);
+    show(o.buy2, 62, 24);
+    show(o.sell, 120, 24);
+    drawArrow(gui, this.left + 86, this.top + 23, 0);
+    if (o.uses >= o.max) {
+      // sold out: a red cross over the arrow
+      ctx.fillStyle = '#c82020';
+      for (let i = 0; i < 12; i++) { ctx.fillRect(this.left + 89 + i, this.top + 22 + i, 2, 2); ctx.fillRect(this.left + 100 - i, this.top + 22 + i, 2, 2); }
+      if (mx >= this.left + 83 && my >= this.top + 20 && mx < this.left + 110 && my < this.top + 40) this.hoverTip = [['§cThis trade is used up for now'], mx, my];
+    }
+    gui.textRight((this.idx + 1) + '/' + this.offers.length, this.left + 168, this.top + 6, '#606060', false);
+  }
+  draw(gui, mx, my) {
+    super.draw(gui, mx, my);
+    if (this.hoverTip && !this.cursor) gui.tooltip(this.hoverTip[0], this.hoverTip[1], this.hoverTip[2]);
+  }
+  tick() {
+    const v = this.v;
+    if (v.dead || v.removed || this.player.distanceSq(v.x, v.y, v.z) > 64) this.game.closeScreen();
+  }
+  onClose() {
+    super.onClose();
+    for (let i = 0; i < 2; i++) if (this.pay.items[i]) { this.game.giveItem(this.pay.items[i]); this.pay.items[i] = null; }
+    this.v.customer = null;
   }
 }
 
@@ -18818,6 +19325,7 @@ const MOB_TYPES = [
   { key: 'wisp', name: 'Wisp', egg: ['#8affee', '#2a6a64'], cat: 'ambient', lore: 'A drifting light over swamp and shore after dark. Follow it and it may lead you to buried treasure.' },
   { key: 'stranger', name: 'The Stranger', egg: null, cat: 'special', lore: 'Watching. Always at the edge of sight. Gone when you look closer.' },
   { key: 'wolf', name: 'Wolf', egg: ['#d2ccc3', '#8a7c6c'], cat: 'creature', lore: 'Hunts in packs through forest and taiga - strike one and the whole pack answers. Offer bones and it may become a loyal companion.' },
+  { key: 'villager', name: 'Villager', egg: ['#5e3e2a', '#c08f72'], cat: 'creature', lore: 'Keeps a home in the villages of the plains, deserts and taiga. Bring jade and see what they will trade.' },
   { key: 'squid', name: 'Squid', egg: ['#2c3c5c', '#7a8aa8'], cat: 'water', lore: 'Pulses through rivers and seas. Startle it and it vanishes in a cloud of ink. Its ink sacs make black dye.' },
 ];
 const MOB_INDEX = {};
@@ -18860,6 +19368,7 @@ function lineOfSight(w, x0, y0, z0, x1, y1, z1) {
 const PathFinder = (() => {
   const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   // 0 open, 1 solid, 2 water, 3 dangerous, 4 tall solid (fences)
+  let throughDoors = false;
   function kind(w, x, y, z) {
     if (y < 0) return 1;
     if (y >= CH_H) return 0;
@@ -18869,7 +19378,8 @@ const PathFinder = (() => {
       case B.WATER: return 2;
       case B.LAVA: case B.FIRE: case B.CACTUS: case B.COBWEB: case B.QUICKSAND: case B.BRAMBLE: return 3;
       case B.FENCE: case B.FENCE_GATE: return 4;
-      case B.DOOR_WOOD: case B.DOOR_IRON: return (w.getMeta(x, y, z) & 4) ? 0 : 1;
+      case B.DOOR_WOOD: return (throughDoors || (w.getMeta(x, y, z) & 4)) ? 0 : 1;
+      case B.DOOR_IRON: return (w.getMeta(x, y, z) & 4) ? 0 : 1;
       case B.LADDER: case B.VINE: case B.ROPE: return 0;
     }
     return BT.solid[id] ? 1 : 0;
@@ -18889,6 +19399,10 @@ const PathFinder = (() => {
     return true;
   }
   function find(w, mob, tx, ty, tz, range, maxNodes) {
+    throughDoors = !!mob.opensDoors;
+    try { return search(w, mob, tx, ty, tz, range, maxNodes); } finally { throughDoors = false; }
+  }
+  function search(w, mob, tx, ty, tz, range, maxNodes) {
     const hb = Math.max(1, Math.ceil(mob.h - 0.05));
     let sx = Math.floor(mob.x), sy = Math.floor(mob.y + 0.01), sz = Math.floor(mob.z);
     if (!valid(w, sx, sy, sz, hb)) {
@@ -20215,6 +20729,213 @@ class Wolf extends Animal {
   save() { const d = super.save(); d.tamed = this.tamed; d.sitting = this.sitting; d.collar = this.collar; return d; }
   load(d) { super.load(d); this.setTamed(!!d.tamed); if (d.health !== undefined) this.health = Math.min(d.health, this.maxHealth); this.sitting = !!d.sitting; if (d.collar !== undefined) this.collar = d.collar; }
 }
+// ---------------------------------------------------------------------------
+// Villagers: they live in villages, open their doors, flee the undead and
+// trade for jade. Each new trade unlocks more of what they have to offer.
+// ---------------------------------------------------------------------------
+const VILLAGER_PROFS = { farmer: 'Farmer', fisher: 'Fisherman', librarian: 'Librarian', cleric: 'Cleric', smith: 'Smith', butcher: 'Butcher' };
+// [buy item, count range, (second buy), sell item, count range] - J = jade
+const VILLAGER_TRADES = (() => {
+  const J = 'jade';
+  const t = (buy, bn, sell, sn, buy2, b2n, ench) => ({ buy, bn, sell, sn, buy2, b2n, ench });
+  return {
+    farmer: [
+      [t('wheat', [18, 22], J, [1, 1]), t(J, [1, 1], 'bread', [2, 4])],
+      [t('potato', [15, 19], J, [1, 1]), t('carrot', [15, 19], J, [1, 1])],
+      [t('block:pumpkin', [8, 13], J, [1, 1]), t(J, [1, 1], 'pumpkin_pie', [2, 3])],
+      [t('melon_slice', [7, 12], J, [1, 1]), t(J, [1, 1], 'apple', [5, 7])],
+      [t(J, [1, 1], 'cookie', [6, 10]), t(J, [1, 2], 'berry_pie', [1, 2])],
+    ],
+    fisher: [
+      [t('string', [15, 20], J, [1, 1]), t('coal', [16, 24], J, [1, 1])],
+      [t('fish', [6, 6], 'cooked_fish', [6, 6], J, [1, 1]), t(J, [1, 1], 'cooked_salmon', [3, 5])],
+      [t(J, [7, 8], 'fishing_rod', [1, 1], null, null, true), t(J, [2, 3], 'message_bottle', [1, 1])],
+    ],
+    librarian: [
+      [t('paper', [24, 36], J, [1, 1]), t(J, [3, 4], 'block:bookshelf', [1, 1])],
+      [t('book', [8, 10], J, [1, 1]), t(J, [10, 12], 'compass', [1, 1])],
+      [t(J, [1, 1], 'block:glass', [3, 5]), t(J, [10, 12], 'clock', [1, 1])],
+      [t(J, [2, 4], 'message_bottle', [1, 1]), t(J, [8, 11], 'wayfinder', [1, 1])],
+    ],
+    cleric: [
+      [t('rotten_flesh', [36, 40], J, [1, 1]), t('gold_ingot', [8, 10], J, [1, 1])],
+      [t(J, [1, 1], 'ember_dust', [1, 4]), t(J, [1, 2], 'dye:11', [1, 2])],
+      [t(J, [1, 1], 'lumite_shard', [1, 3]), t(J, [6, 9], 'wisp_essence', [1, 1])],
+      [t(J, [9, 12], 'golden_apple', [1, 1])],
+    ],
+    smith: [
+      [t('coal', [16, 24], J, [1, 1]), t('iron_ingot', [7, 9], J, [1, 1])],
+      [t(J, [2, 3], 'iron_sword', [1, 1]), t(J, [2, 4], 'iron_helmet', [1, 1]), t(J, [4, 6], 'iron_chestplate', [1, 1])],
+      [t('diamond', [3, 4], J, [1, 1]), t(J, [7, 8], 'iron_pickaxe', [1, 1], null, null, true)],
+      [t(J, [12, 15], 'diamond_sword', [1, 1], null, null, true), t(J, [16, 19], 'diamond_chestplate', [1, 1], null, null, true)],
+    ],
+    butcher: [
+      [t('porkchop', [14, 18], J, [1, 1]), t('chicken', [14, 18], J, [1, 1])],
+      [t('coal', [16, 24], J, [1, 1]), t(J, [1, 1], 'cooked_porkchop', [5, 7]), t(J, [1, 1], 'cooked_chicken', [6, 8])],
+      [t('leather', [9, 12], J, [1, 1]), t(J, [1, 1], 'jerky', [3, 5])],
+    ],
+  };
+})();
+function tradeStack(name, n) {
+  if (name.startsWith('block:')) return new ItemStack(B[name.slice(6).toUpperCase()], n, 0);
+  if (name.startsWith('dye:')) return new ItemStack(ITEM_IDS.dye, n, +name.slice(4));
+  return new ItemStack(ITEM_IDS[name], n, 0);
+}
+class Villager extends Mob {
+  constructor(world) {
+    super(world, 'villager');
+    this.category = 'creature'; this.persistent = true;
+    this.maxHealth = this.health = 20;
+    this.baseSpeed = 0.22;
+    this.w = 0.6; this.h = 1.95; this.eye = 1.62;
+    this.prof = 'farmer'; this.home = null;
+    this.offers = null; this.tier = 0; this.unlockIn = 0;
+    this.customer = null; this.flee = 0;
+    this.opensDoors = true; this.doors = [];
+    this.xpValue = 0; this.talkInterval = 80;
+  }
+  onSpawn(fresh, extra) {
+    if (!fresh) return;
+    const profs = Object.keys(VILLAGER_PROFS);
+    this.prof = (extra && extra.prof && VILLAGER_PROFS[extra.prof]) ? extra.prof : profs[this.rnd(profs.length)];
+    if (extra && extra.home) this.home = extra.home.slice();
+  }
+  get title() { return VILLAGER_PROFS[this.prof] || 'Villager'; }
+  // ------------------------------------------------ trading
+  ensureOffers() { if (!this.offers) { this.offers = []; this.unlockTier(); } }
+  unlockTier() {
+    const tiers = VILLAGER_TRADES[this.prof] || VILLAGER_TRADES.farmer;
+    if (this.tier >= tiers.length) return false;
+    const r = (a) => a[0] + this.rnd(a[1] - a[0] + 1);
+    for (const d of tiers[this.tier]) {
+      const o = { buy: tradeStack(d.buy, r(d.bn)), buy2: d.buy2 ? tradeStack(d.buy2, r(d.b2n)) : null, sell: tradeStack(d.sell, r(d.sn)), uses: 0, max: 7 };
+      if (d.ench) Enchant.apply(o.sell, Enchant.roll(new Noise.Random((Math.random() * 2147483647) | 0), o.sell, 5 + this.rnd(15)));
+      if (!Enchant.list(o.sell).length) delete o.sell.tag;
+      this.offers.push(o);
+    }
+    this.tier++;
+    return true;
+  }
+  // a finished trade: sometimes the villager has learned something new
+  traded(game, o) {
+    o.uses++;
+    this.ambientTimer = -this.talkInterval;
+    game.audio.play('villager_yes', 0.8, this.soundPitch(), this.x, this.y + this.eye, this.z);
+    game.spawnXP(this.x, this.y + 0.5, this.z, 3 + this.rnd(4));
+    if (o === this.offers[this.offers.length - 1] && o.uses === 1 && !this.unlockIn) this.unlockIn = 40;
+    else if (o.uses === 1 && Math.random() < 0.2 && !this.unlockIn) this.unlockIn = 40;
+  }
+  interact(player, held) {
+    const g = this.game;
+    if (held && held.id === ITEM_IDS.spawn_egg) return false;
+    if (this.dead || this.baby) return false;
+    this.ensureOffers();
+    this.customer = player;
+    this.clearPath();
+    g.audio.play('villager_say', 0.9, this.soundPitch(), this.x, this.y + this.eye, this.z);
+    g.openScreen(new MerchantScreen(g, this));
+    return true;
+  }
+  // ------------------------------------------------ behaviour
+  aiTick(game) {
+    const p = game.player, w = this.world;
+    if (this.customer && (game.screen === null || !(game.screen instanceof MerchantScreen) || game.screen.v !== this)) this.customer = null;
+    if (this.customer) { this.lookAtEntity(this.customer, 2); this.clearPath(); return; }
+    // keep away from the undead
+    if (this.flee > 0) { this.flee--; if (this.pathDone) this.wander(8, 3, 1.25); return; }
+    if (this.age % 10 === 0) {
+      for (const e of w.entitiesInBox(this.x - 8, this.y - 3, this.z - 8, this.x + 8, this.y + 3, this.z + 8)) {
+        if (!e.dead && (e.type === 'zombie' || e.type === 'mummy' || e.type === 'wraith')) {
+          const dx = this.x - e.x, dz = this.z - e.z, d = Math.sqrt(dx * dx + dz * dz) || 1;
+          this.navigateTo(this.x + dx / d * 10, this.y, this.z + dz / d * 10, 1.25, 14);
+          this.flee = 40;
+          return;
+        }
+      }
+    }
+    // home before dark
+    const night = w.skyDarken() >= 6;
+    if (this.home) {
+      const hx = this.home[0] + 0.5, hz = this.home[1] + 0.5, d2 = (this.x - hx) ** 2 + (this.z - hz) ** 2;
+      if ((d2 > 40 * 40 || (night && d2 > 10 * 10)) && this.pathDone && Math.random() < 0.05) {
+        const ty = this.world.topSolidY ? this.world.topSolidY(Math.floor(hx), Math.floor(hz)) + 1 : this.y;
+        this.navigateTo(hx, ty, hz, 0.9, 48);
+        return;
+      }
+      if (night && d2 <= 10 * 10) { this.idleLook(game); this.keepWatching(); return; }
+    }
+    if (this.pathDone && Math.random() < 1 / 100) this.wander(10, 4, 0.8, (x, y, z) => (this.home ? -Math.hypot(x - this.home[0], z - this.home[1]) / 8 : 0));
+    // gossip: two villagers stop and look at each other
+    if (this.pathDone && Math.random() < 0.01) {
+      const o = w.entitiesInBox(this.x - 4, this.y - 2, this.z - 4, this.x + 4, this.y + 2, this.z + 4).find((e) => e !== this && e.type === 'villager');
+      if (o) { this.lookAtEntity(o, 40); return; }
+    }
+    this.idleLook(game); this.keepWatching();
+  }
+  onRevenge(e) { this.flee = 60; this.clearPath(); if (e) { const dx = this.x - e.x, dz = this.z - e.z, d = Math.sqrt(dx * dx + dz * dz) || 1; this.navigateTo(this.x + dx / d * 8, this.y, this.z + dz / d * 8, 1.25, 12); } }
+  mobTick(game) {
+    const w = this.world;
+    // new trades arrive with a sparkle
+    if (this.unlockIn > 0 && --this.unlockIn === 0) {
+      if (this.unlockTier()) game.particles.happy(this.x, this.y + this.h, this.z);
+      for (const o of this.offers) if (o.uses >= o.max) o.max += 2 + this.rnd(6);
+    }
+    // open wooden doors in the way, close them behind
+    if (this.path || this.flee > 0) {
+      const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+      for (const d of [0.3, 0.9]) {
+        const bx = Math.floor(this.x + fx * d), by = Math.floor(this.y + 0.1), bz = Math.floor(this.z + fz * d);
+        if (w.getBlock(bx, by, bz) !== B.DOOR_WOOD) continue;
+        const lower = (w.getMeta(bx, by, bz) & 8) ? by - 1 : by;
+        const lm = w.getMeta(bx, lower, bz);
+        if (!(lm & 4)) {
+          w.setBlock(bx, lower, bz, B.DOOR_WOOD, lm | 4, 4); w.setBlock(bx, lower + 1, bz, B.DOOR_WOOD, (lm | 4) | 8, 4);
+          game.audio.play('door_open', 0.6, 0.9 + Math.random() * 0.1, bx + 0.5, lower + 0.5, bz + 0.5);
+          this.doors.push({ x: bx, y: lower, z: bz, t: 20 });
+        }
+      }
+    }
+    for (let i = this.doors.length - 1; i >= 0; i--) {
+      const d = this.doors[i];
+      if (--d.t > 0 || this.distanceSq(d.x + 0.5, d.y, d.z + 0.5) < 2.5) continue;
+      this.doors.splice(i, 1);
+      if (w.getBlock(d.x, d.y, d.z) !== B.DOOR_WOOD) continue;
+      const lm = w.getMeta(d.x, d.y, d.z);
+      if (lm & 4) {
+        w.setBlock(d.x, d.y, d.z, B.DOOR_WOOD, lm & ~4, 4); w.setBlock(d.x, d.y + 1, d.z, B.DOOR_WOOD, (lm & ~4) | 8, 4);
+        game.audio.play('door_close', 0.6, 0.9 + Math.random() * 0.1, d.x + 0.5, d.y + 0.5, d.z + 0.5);
+      }
+    }
+  }
+  saySound() { return this.customer ? null : 'villager_say'; }
+  hurtSound() { return 'villager_hurt'; }
+  deathSound() { return 'villager_death'; }
+  dropLoot() {}
+  render(er, rx, ry, rz, partial) {
+    const [sky, blk] = er.lightAt(this.x, this.y + 1, this.z);
+    const pose = this.quadPose(partial);
+    const head = this.baby ? pose.head.rot : pose.head;
+    const swing = this.limbSwing - this.limbAmount * (1 - partial);
+    const amt = clamp(this.prevLimbAmount + (this.limbAmount - this.prevLimbAmount) * partial, 0, 1);
+    const sway = Math.cos(swing * 0.6662) * 0.06 * amt;
+    const p = { head, body: [0, 0, sway], arms: [0, 0, sway] };
+    er.drawModel(MODELS.villager, 'villager_' + this.prof, er.baseMatrix(this, rx, ry, rz, partial, this.baby ? 0.5 : 1), p, er.entColor(this), sky, blk);
+  }
+  save() {
+    const d = super.save();
+    d.prof = this.prof; d.home = this.home; d.tier = this.tier;
+    if (this.unlockIn) d.unlockIn = this.unlockIn;
+    if (this.offers) d.offers = this.offers.map((o) => ({ buy: o.buy.toJSON(), buy2: o.buy2 ? o.buy2.toJSON() : null, sell: o.sell.toJSON(), uses: o.uses, max: o.max }));
+    return d;
+  }
+  load(d) {
+    super.load(d);
+    if (d.prof && VILLAGER_PROFS[d.prof]) this.prof = d.prof;
+    this.home = d.home || null; this.tier = d.tier || 0; this.unlockIn = d.unlockIn || 0;
+    if (d.offers) this.offers = d.offers.map((o) => ({ buy: ItemStack.fromJSON(o.buy), buy2: o.buy2 ? ItemStack.fromJSON(o.buy2) : null, sell: ItemStack.fromJSON(o.sell), uses: o.uses || 0, max: o.max || 7 })).filter((o) => o.buy && o.sell);
+  }
+}
+
 // tamed wolves defend their owner and join in when the owner attacks
 function rallyWolves(game, foe) {
   const p = game.player, w = game.world;
@@ -20489,7 +21210,7 @@ class Stranger extends Mob {
 // ---------------------------------------------------------------------------
 // Registry, creation & persistence
 // ---------------------------------------------------------------------------
-const MOB_CLASSES = { zombie: Zombie, skeleton: Skeleton, spider: Spider, boomcap: Boomcap, slime: Slime, mummy: Mummy, wraith: Wraith, pig: Pig, cow: Cow, sheep: Sheep, chicken: Chicken, deer: Deer, bat: Bat, wisp: Wisp, stranger: Stranger, wolf: Wolf, squid: Squid };
+const MOB_CLASSES = { zombie: Zombie, skeleton: Skeleton, spider: Spider, boomcap: Boomcap, slime: Slime, mummy: Mummy, wraith: Wraith, pig: Pig, cow: Cow, sheep: Sheep, chicken: Chicken, deer: Deer, bat: Bat, wisp: Wisp, stranger: Stranger, wolf: Wolf, squid: Squid, villager: Villager };
 function createMob(type, world, extra) {
   const C = MOB_CLASSES[type];
   if (!C) return null;
@@ -21308,6 +22029,7 @@ class Game {
     this.renderer.atlas.tickAnimations();
     DynamicItems.update(this);
     this.tickWaterways();
+    if (w.time % 40 === 9) this.checkVillages();
     Circuits.tickPlates(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
@@ -22115,6 +22837,22 @@ class Game {
     }
     mark.placed = true; mark.x = best.x; mark.y = cy; mark.z = best.z;
     return true;
+  }
+  // walking into a village for the first time puts it on the map
+  checkVillages() {
+    const w = this.world, p = this.player;
+    if (!w || !p || w.menu || !w.localGen || !w.localGen.villageAt || w.genOpts && w.genOpts.structures === false || (w.genOpts && w.genOpts.type === 'flat')) return;
+    const cx = Math.floor(p.x) >> 4, cz = Math.floor(p.z) >> 4;
+    const list = w.info.villages || (w.info.villages = []);
+    for (let rx = Math.floor((cx - 4) / 20); rx <= Math.floor((cx + 4) / 20); rx++) for (let rz = Math.floor((cz - 4) / 20); rz <= Math.floor((cz + 4) / 20); rz++) {
+      const V = w.localGen.villageAt(rx, rz);
+      if (!V || (V.x - p.x) ** 2 + (V.z - p.z) ** 2 > 48 * 48) continue;
+      if (list.some((v) => v.x === V.x && v.z === V.z)) continue;
+      list.push({ x: V.x, z: V.z, style: V.style });
+      this.hud.toast('Village discovered!', { plains: 'A village on the plains', desert: 'A desert village', taiga: 'A taiga village' }[V.style] || 'A village', new ItemStack(B.HAY_BALE, 1, 0), '#ffd060');
+      this.audio.play('discover', 0.8, 1.05);
+      this.achieve('village');
+    }
   }
   tickWaterways() {
     const p = this.player, w = this.world;

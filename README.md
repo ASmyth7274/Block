@@ -94,6 +94,11 @@ splash text and a slowly turning live panorama.
   Prospector's Rod that twitches towards ore, the Wayfinder that points at
   uncharted lands, and the Explorer's Journal that records every biome,
   creature and milestone you discover.
+- Villages on the plains, in the desert and in the taiga — a well, gravel
+  roads, houses, thatched huts, a smithy with a supply chest, a library, a
+  chapel with a bell tower, farms and lamp posts — with villagers who open
+  their doors, head home at night, run from the undead and trade for jade in
+  the classic merchant screen. Villages you find appear on your map.
 - Structures: ruined towers, camps, hermit huts, desert wells, sunken ruins,
   dungeons with monster cages, quicksand pits, buried chests and sprawling
   abandoned mineshafts — timber-propped tunnels with rails, cobwebs, spider

@@ -219,6 +219,25 @@ const SOUND_DEFS = (() => {
     return render(0.7, (t) => bp.p(noise()) * (0.5 + 0.5 * Math.sin(t * 2 * Math.PI * 14)) * Math.sin(Math.PI * t / 0.7));
   };
   S.wolf_howl = glide(2.6, (t) => 380 + Math.min(1, t / 0.6) * 260 - Math.max(0, t - 1.8) * 220 + Math.sin(t * 11) * 6, (t) => Math.sin(Math.PI * t / 2.6) * 0.85, 0.03);
+  // villagers: nasal hums - a musing 'hrrm', a pleased 'hmm-hm', a doubtful 'hm-mm'
+  const hum = (pts, dur, nasal) => () => {
+    const f1 = new Biquad('bp', 1100, 3), f2 = new Biquad('bp', 2500, 5), lp = new Biquad('lp', 2800, 0.8);
+    let ph = 0;
+    return render(dur, (t) => {
+      const u = t / dur;
+      let f = pts[0][1];
+      for (let i = 1; i < pts.length; i++) if (u >= pts[i - 1][0]) { const a = pts[i - 1], b = pts[i]; f = a[1] + (b[1] - a[1]) * clamp((u - a[0]) / (b[0] - a[0]), 0, 1); }
+      ph += 2 * Math.PI * f / DSP.SR;
+      const src = ((ph / (2 * Math.PI)) % 1) * 2 - 1 + noise() * 0.08;
+      const gate = Math.sin(Math.PI * Math.min(1, u * 1.05)) * (0.75 + 0.25 * Math.sin(u * Math.PI * 2 * 3));
+      return lp.p(f1.p(src) * 0.9 + f2.p(src) * nasal) * gate;
+    });
+  };
+  S.villager_say = hum([[0, 150], [0.4, 175], [1, 140]], 0.55, 0.6);
+  S.villager_yes = hum([[0, 160], [0.45, 150], [0.55, 200], [1, 210]], 0.5, 0.55);
+  S.villager_no = hum([[0, 190], [0.45, 200], [0.55, 150], [1, 130]], 0.5, 0.55);
+  S.villager_hurt = hum([[0, 240], [0.3, 300], [1, 200]], 0.3, 0.7);
+  S.villager_death = hum([[0, 220], [1, 110]], 0.9, 0.6);
   S.boomcap_say = () => { const lp = new Biquad('lp', 600, 2); return render(0.4, (t) => lp.p(noise()) * env(t, 0.02, 0.1)); };
   S.wisp = () => render(1.2, (t) => { let s = 0; [2093, 2637, 3136].forEach((f, i) => { const st = i * 0.18; if (t > st) s += Math.sin(2 * Math.PI * f * (t - st)) * Math.exp(-(t - st) / 0.3); }); return s; });
   S.stranger = () => { const lp = new Biquad('lp', 300, 1); return render(3, (t) => (lp.p(noise()) * 0.6 + Math.sin(2 * Math.PI * 55 * t) * 0.3) * Math.sin(Math.PI * t / 3)); };
