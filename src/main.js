@@ -10,7 +10,7 @@ const MENU_SEEDS = [1337, 20111118, 404, 8675309, 31415, 777, 2468, 99, 12345, 4
 // blocks that receive random ticks
 const RANDOM_TICK = new Uint8Array(256);
 for (const id of [B.GRASS, B.MYCELIUM, B.SAPLING, B.WHEAT, B.CARROTS, B.POTATOES, B.FARMLAND, B.SUGAR_CANE, B.CACTUS, B.LEAVES, B.ICE, B.SNOW_LAYER,
-  B.EMBER_ORE_LIT, B.BRAMBLE, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.GLOWSHROOM, B.FIRE, B.WATER, B.BLOODCAP, B.PORTAL]) if (id !== undefined) RANDOM_TICK[id] = 1;
+  B.EMBER_ORE_LIT, B.BRAMBLE, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.GLOWSHROOM, B.FIRE, B.WATER, B.BLOODCAP, B.PORTAL, B.GLOW_VINE, B.GLOW_VINE_BERRIES]) if (id !== undefined) RANDOM_TICK[id] = 1;
 
 // ore values for the prospector's rod
 const PROSPECT = (() => {
@@ -62,7 +62,7 @@ class Game {
     this.sleepFade = 0; this.deathMessage = ''; this.saveStatus = '';
     this.handSway = [0, 0]; this.armYaw = 0; this.armPitch = 0;
     this.fovMod = 1; this.pfovMod = 1;
-    this.mist = 0; this.waterTime = 0;
+    this.mist = 0; this.waterTime = 0; this.darkT = 0;
     this.treasures = new Map();
     this.entityKeys = new Set(); this.pendingEntityLoads = new Set();
     this.loading = null;
@@ -413,16 +413,23 @@ class Game {
   }
   tickPortal() {
     const p = this.player, w = this.world;
-    let inPortal = false, inRift = false;
+    let inPortal = false, inRift = false, inGate = false;
     if (!p.dead && !p.riding && !p.sleeping) {
       const b = p.box;
       for (let x = Math.floor(b.x0); x <= Math.floor(b.x1 - 1e-4); x++) for (let y = Math.floor(b.y0); y <= Math.floor(b.y1 - 1e-4); y++) for (let z = Math.floor(b.z0); z <= Math.floor(b.z1 - 1e-4); z++) {
         const id = w.getBlock(x, y, z);
-        if (id === B.PORTAL) inPortal = true; else if (id === B.RIFT) inRift = true;
+        if (id === B.PORTAL) inPortal = true; else if (id === B.RIFT) inRift = true; else if (id === B.SIFT_GATE) inGate = true;
       }
     }
     if (inPortal && w.dim === DIM_ISLES) inPortal = false;
-    if (!inPortal && !inRift) p.portalLock = false;
+    if (!inPortal && !inRift && !inGate) p.portalLock = false;
+    // a city gate, once woken, opens on the Sift
+    if (inGate && !p.portalLock) {
+      p.portalLock = true;
+      if (typeof Sift !== 'undefined') this.travel(DIM_SIFT);
+      else this.hud.showAction('§7The grey light is cold, and will not take you. Not yet.');
+      return;
+    }
     // a rift takes you at once: out to the Far Isles, or home through the Star Well
     if (inRift && !p.portalLock) {
       p.portalLock = true;
@@ -583,6 +590,7 @@ class Game {
     p.inventory.decrementHeld(n);
     this.dropStack(d);
     p.swing();
+    this.noise(p.x, p.y + 1, p.z, 'drop', p);
   }
   giveItem(stack) {
     const p = this.player; if (!p || !stack) return;
@@ -711,11 +719,12 @@ class Game {
     DynamicItems.update(this);
     this.tickWaterways();
     if (w.time % 40 === 9) {
-      if (!w.dim) { this.checkVillages(); this.checkVaults(); } else if (w.dim === 1) this.checkFortress();
+      if (!w.dim) { this.checkVillages(); this.checkVaults(); this.checkCities(); } else if (w.dim === 1) this.checkFortress();
       // until the Starwyrm guards it, the Star Well stands open as the way home
       else if (w.dim === 2 && typeof Wyrm === 'undefined') Isles.setWell(w, true);
     }
     Circuits.tickPlates(this);
+    Hush.tick(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
     const h = p.inventory.held();
@@ -1032,6 +1041,13 @@ class Game {
     a.loop('under_drone', w.dim === 1 ? 0.3 * this.settings.sound : 0);
     // the Far Isles: a cold breath of air and, now and then, the stars ringing
     a.loop('isles_air', w.dim === 2 ? 0.32 * this.settings.sound : 0);
+    // the deep caves have air of their own
+    if (w.time % 10 === 0) { const cb = w.dim ? -1 : w.biomeAt3(bx, by, bz); this.caveAir = cb === HUSH_BIOME ? 1 : cb === MOSSGLOW_BIOME ? 2 : 0; }
+    this.caveAirV = this.caveAirV || [0, 0];
+    this.caveAirV[0] += ((this.caveAir === 1 ? 0.5 : 0) - this.caveAirV[0]) * 0.05;
+    this.caveAirV[1] += ((this.caveAir === 2 ? 0.35 : 0) - this.caveAirV[1]) * 0.05;
+    a.loop('hush_air', this.caveAirV[0] * this.settings.sound);
+    a.loop('moss_air', this.caveAirV[1] * this.settings.sound);
     if (w.dim === 1) {
       if (--this.ambienceTimer <= 0) {
         const ang = Math.random() * TAU;
@@ -1129,6 +1145,7 @@ class Game {
     const d = BLOCKS[id];
     if (!d || BT.fluid[id]) return;
     this.audio.playBlock(d.sound, 'step', p.x, p.y, p.z);
+    if (id !== B.WOOL && id !== B.CARPET) this.noise(p.x, p.y, p.z, landing ? 'land' : 'step', p);
     if (landing) this.audio.playBlock(d.sound, 'step', p.x, p.y, p.z);
   }
   onBiomeEnter(b) {
@@ -1155,12 +1172,15 @@ class Game {
       ashen_wastes: [B.ASH, 0], salt_flats: [B.SALT, 0], meadow: [B.FLOWER, 3], canyon: [B.SAND, 1], stone_shore: [B.COBBLESTONE, 0],
       brimstone_depths: [B.BRIMSTONE, 0], bone_shoals: [B.BONESAND, 0], cinder_hollows: [B.BASALT, 0], glimmering_grotto: [B.SUNSTONE, 0],
       great_isle: [B.STARSTONE, 0], starlit_gulf: [B.OBSIDIAN, 0], drift_isles: [B.STARSTONE_BRICKS, 0],
+      the_hush: [B.HUSHMOSS, 0], mossglow_caves: [B.GLOW_VINE_BERRIES, 0],
       grand_peaks: [B.SNOW, 0], highlands: [B.TALL_GRASS, 1], spire_woods: [B.MOSSY_COBBLESTONE, 0], tablelands: [B.STONE, 0], glacier: [B.PACKED_ICE, 0],
     };
     const e = map[key] || [B.GRASS, 0];
     return new ItemStack(e[0], 1, e[1]);
   }
-  onAte() {}
+  onAte() { const p = this.player; if (p) this.noise(p.x, p.y + 1, p.z, 'eat', p); }
+  // the Hush hears everything: something made a sound here
+  noise(x, y, z, kind, src) { if (this.world && !this.world.menu) Hush.vibrate(this, x, y, z, kind, src === undefined ? this.player : src); }
   onPickup(st) {
     const p = this.player;
     p.discovered.items[st.id] = true;
@@ -1209,6 +1229,7 @@ class Game {
       case 'fireball': return n + ' was fireballed' + (by && by !== 'themselves' ? ' by a ' + by : '');
       case 'lightning': return n + ' was struck by lightning';
       case 'magic': return n + ' was killed by magic';
+      case 'sonic': return n + ' was silenced' + (by && by !== 'themselves' ? ' by the ' + by : '');
       case 'cactus': return n + ' was pricked to death';
       case 'bramble': return n + ' was scratched to death by brambles';
       case 'suffocate': return n + ' suffocated in a wall';
@@ -1359,6 +1380,7 @@ class Game {
     const p = this.player;
     p.stats.mobsKilled++;
     if (m.hostile) this.achieve('kill');
+    if (m.type === 'listener') this.achieve('listener');
   }
   onBred() { this.achieve('breed'); }
   onStrangerSeen() {
@@ -1606,6 +1628,21 @@ class Game {
       return;
     }
   }
+  // coming down into a forgotten city
+  checkCities() {
+    const p = this.player, w = this.world;
+    if (!w.localGen.nearestCity || p.y > 60 || (w.genOpts && (w.genOpts.structures === false || w.genOpts.type === 'flat'))) return;
+    const L = w.localGen.nearestCity(p.x, p.z);
+    if (!L) return;
+    const b = L.box;
+    if (p.x < b[0] || p.x > b[3] || p.z < b[2] || p.z > b[5] || p.y < b[1] || p.y > b[4]) return;
+    const list = w.info.cities || (w.info.cities = []);
+    if (list.some((c) => c[0] === L.x && c[1] === L.z)) return;
+    list.push([L.x, L.z]);
+    this.hud.toast('City discovered!', 'A forgotten city', new ItemStack(B.DEEPSTONE_BRICKS, 1, 2), '#5fe0d0');
+    this.audio.play('discover', 0.7, 0.6);
+    this.achieve('city');
+  }
   // walking into the walls of an Underworld fortress
   checkFortress() {
     const p = this.player, w = this.world;
@@ -1721,9 +1758,12 @@ class Game {
       this.mist += (mistT - this.mist) * Math.min(1, dt / 3000);
       let nv = 0;
       if (p && p.effects.nightVision) { const t = p.effects.nightVision; nv = t > 200 ? 1 : 0.7 + Math.sin((t - partial) * Math.PI * 0.2) * 0.3; }
+      // darkness: comes on over a second, then beats like a slow heart
+      this.darkT += ((p && p.effects.darkness ? 1 : 0) - this.darkT) * Math.min(1, dt / 700);
+      const dark = this.darkT < 0.01 ? 0 : this.darkT * (0.5 + 0.5 * Math.pow(0.5 + 0.5 * Math.sin((w.time + partial) / 60 * TAU), 2));
       const er = this.entityRenderer;
       const hooks = {
-        lightExtra: { nightVision: nv },
+        lightExtra: { nightVision: nv, darkness: dark }, dark,
         inFluid, waterVision: this.waterTime / 600,
         moorMist: this.mist > 0.01 ? this.mist : 0,
         drawWorldObjects: (rr, pt) => {

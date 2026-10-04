@@ -49,10 +49,10 @@ const Circuits = (() => {
   const ATT = CIRCUIT_ATT;
   const IS = new Uint8Array(256), SOURCE = new Uint8Array(256), MACHINE = new Uint8Array(256), CONNECT = new Uint8Array(256);
   for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE,
-    B.EMBER_LAMP, B.EMBER_LAMP_ON, B.RELAY, B.RELAY_ON, B.NOTE_BLOCK, B.EMBER_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT, B.BOOSTER_RAIL, B.DETECTOR_RAIL]) IS[id] = 1;
-  for (const id of [B.EMBER_TORCH, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.RELAY_ON, B.EMBER_BLOCK, B.DETECTOR_RAIL]) SOURCE[id] = 1;
+    B.EMBER_LAMP, B.EMBER_LAMP_ON, B.RELAY, B.RELAY_ON, B.NOTE_BLOCK, B.EMBER_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT, B.BOOSTER_RAIL, B.DETECTOR_RAIL, B.HUSH_SENSOR]) IS[id] = 1;
+  for (const id of [B.EMBER_TORCH, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.RELAY_ON, B.EMBER_BLOCK, B.DETECTOR_RAIL, B.HUSH_SENSOR]) SOURCE[id] = 1;
   for (const id of [B.EMBER_LAMP, B.EMBER_LAMP_ON, B.NOTE_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.RELAY, B.RELAY_ON, B.BOOSTER_RAIL]) MACHINE[id] = 1;
-  for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK, B.DETECTOR_RAIL]) CONNECT[id] = 1;
+  for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK, B.DETECTOR_RAIL, B.HUSH_SENSOR]) CONNECT[id] = 1;
   for (const id of [B.PISTON, B.STICKY_PISTON, B.PISTON_HEAD]) { IS[id] = 1; MACHINE[id] = 1; }
   // blocks a piston crushes (dropping them) rather than pushes
   const BREAKS = new Uint8Array(256);
@@ -66,6 +66,7 @@ const Circuits = (() => {
       case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: return (meta & 8) ? 15 : 0;
       case B.STONE_PLATE: case B.WOOD_PLATE: return (meta & 1) ? 15 : 0;
       case B.DETECTOR_RAIL: return (meta & 8) ? 15 : 0;
+      case B.HUSH_SENSOR: return (meta & 1) ? 15 : 0;
       case B.EMBER_TORCH: { const a = TORCH_ATT[meta] || TORCH_ATT[0]; return (dx === a[0] && dy === a[1] && dz === a[2]) ? 0 : 15; }
       case B.RELAY_ON: { const f = HFACE_DIR[meta & 3]; return (dy === 0 && dx === f[0] && dz === f[1]) ? 15 : 0; }
     }
@@ -82,6 +83,7 @@ const Circuits = (() => {
         case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: { const a = ATT[m & 7] || ATT[0]; if ((m & 8) && a[0] === -d[0] && a[1] === -d[1] && a[2] === -d[2]) return 15; break; }
         case B.STONE_PLATE: case B.WOOD_PLATE: if ((m & 1) && d[1] === 1) return 15; break;
         case B.DETECTOR_RAIL: if ((m & 8) && d[1] === 1) return 15; break;
+        case B.HUSH_SENSOR: if ((m & 1) && d[1] === 1) return 15; break;
         case B.EMBER_TORCH: if (d[1] === -1) return 15; break;
         case B.RELAY_ON: { const fd = HFACE_DIR[m & 3]; if (d[1] === 0 && fd[0] === -d[0] && fd[1] === -d[2]) return 15; break; }
       }
@@ -416,6 +418,8 @@ const Circuits = (() => {
         // a sticky head pulling back left nothing behind; heads re-check their piston
         break;
       }
+      // a sensor's glow fades a couple of seconds after it last heard something
+      case B.HUSH_SENSOR: if (m & 1) w.setBlock(x, y, z, id, m & ~1); break;
       case B.STONE_PLATE: case B.WOOD_PLATE:
         if (m & 1) {
           if (plateOccupied(w, x, y, z, id)) w.scheduleTick(x, y, z, 20, id);
@@ -496,7 +500,7 @@ const Circuits = (() => {
   }
 
   // ------------------------------------------------------------ hooks
-  for (const id of [B.EMBER_LAMP_ON, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.RELAY, B.RELAY_ON, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.PISTON_MOVING]) BLOCKS[id].circuitTick = (w, x, y, z) => circuitTick(w, x, y, z, id);
+  for (const id of [B.EMBER_LAMP_ON, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.RELAY, B.RELAY_ON, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.PISTON_MOVING, B.HUSH_SENSOR]) BLOCKS[id].circuitTick = (w, x, y, z) => circuitTick(w, x, y, z, id);
   // meta-only changes (lever flips, wire levels) and neighbour edits nearby
   function blockChanged(w, x, y, z, oldId, newId) {
     if (w.menu) return;

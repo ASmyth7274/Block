@@ -151,7 +151,7 @@ const Recipes = (() => {
   // slabs & stairs for stone-like materials
   const mats = [[6, [B.STONE, ANY]], [7, [B.COBBLESTONE, ANY]], [8, [B.STONE_BRICKS, 0]], [9, [B.BRICKS, ANY]], [10, [B.SANDSTONE, ANY]], [11, [B.RED_SANDSTONE, ANY]],
     [12, [B.SLATE_BRICKS, ANY]], [13, [B.MARBLE_BRICKS, 0]], [14, [B.POLISHED_BASALT, ANY]], [15, [B.MOSSY_COBBLESTONE, ANY]], [16, [B.THATCH, ANY]],
-    [17, [B.BRIMSTONE_BRICKS, ANY]], [18, [B.QUARTZ_BLOCK, ANY]]];
+    [17, [B.BRIMSTONE_BRICKS, ANY]], [18, [B.QUARTZ_BLOCK, ANY]], [19, [B.DEEPSTONE_BRICKS, 0]], [20, [B.DEEPSTONE_BRICKS, 1]], [21, [B.STARSTONE_BRICKS, ANY]]];
   for (const [m, x] of mats) {
     shaped([B.SLAB, 6, m], ['###'], { '#': x });
     if (m !== 6) shaped([B.STAIRS, 4, m], ['#  ', '## ', '###'], { '#': x });
@@ -201,6 +201,13 @@ const Recipes = (() => {
   // ---------------- the Far Isles ----------------
   shaped([B.STARSTONE_BRICKS, 4], ['##', '##'], { '#': B.STARSTONE });
   shaped([I.star_crystal], ['GGG', 'GEG', 'GTG'], { G: B.GLASS, E: I.seeker_eye, T: I.wailer_tear });
+  // ---------------- the deep caves ----------------
+  shaped([B.DEEPSTONE_BRICKS, 4, 0], ['##', '##'], { '#': B.DEEPSTONE });
+  shaped([B.DEEPSTONE_BRICKS, 4, 1], ['##', '##'], { '#': [B.DEEPSTONE_BRICKS, 0] });
+  shaped([B.DEEPSTONE_BRICKS, 1, 2], ['#', '#'], { '#': [B.SLAB, 19] });
+  shaped([B.PALE_LANTERN], [' I ', 'IGI', ' I '], { I: I.iron_ingot, G: I.glowberry });
+  shaped([I.echo_fork], ['S S', ' I ', ' I '], { S: I.hush_shard, I: I.iron_ingot });
+  shaped([I.echo_heart], ['SSS', 'SWS', 'SSS'], { S: I.hush_shard, W: I.wisp_essence });
 
   // ---------------- smelting ----------------
   smelt(B.COBBLESTONE, [B.STONE], 0.1);
@@ -233,6 +240,7 @@ const Recipes = (() => {
   smelt([B.STONE_BRICKS, 0], [B.STONE_BRICKS, 1, 2], 0.1);
   smelt(B.QUICKSAND, [B.SAND], 0.1);
   smelt(B.SLATE, [B.SLATE_BRICKS], 0.1);
+  smelt([B.DEEPSTONE_BRICKS, 0], [B.DEEPSTONE_BRICKS, 1, 3], 0.1);
 
   // ---------------- matching ----------------
   function matches(r, s) {

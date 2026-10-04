@@ -75,6 +75,13 @@ const Behaviors = (() => {
       case B.WALL_SIGN: { const d = HFACE_DIR[meta & 3]; return BT.solid[w.getBlock(x - d[0], y, z - d[1])]; }
       case B.FIRE: return BT.solid[below] || neighbourFlammable(w, x, y, z);
       case B.VINE: return true;
+      case B.GLOW_VINE: case B.GLOW_VINE_BERRIES: { const a = w.getBlock(x, y + 1, z); return a === B.GLOW_VINE || a === B.GLOW_VINE_BERRIES || (BT.solid[a] && BT.opaque[a]); }
+      case B.HUSH_SENSOR: case B.HUSH_SHRIEKER: return isSolidTop(w, x, y - 1, z);
+      case B.PALE_LANTERN: {
+        if (!(meta & 1)) return isSolidTop(w, x, y - 1, z);
+        const a = w.getBlock(x, y + 1, z);
+        return BT.solid[a] || a === B.ROPE || a === B.GLOW_VINE;
+      }
     }
     return true;
   }
@@ -140,6 +147,11 @@ const Behaviors = (() => {
       }
       case B.SNOW_LAYER: return 0;
       case B.SAPLING: return dmg & 7;
+      // clicked on a ceiling, a lantern hangs; otherwise it stands if it can
+      case B.PALE_LANTERN:
+        if (f === 0 && canStay(w, x, y, z, id, 1)) return 1;
+        if (canStay(w, x, y, z, id, 0)) return 0;
+        return canStay(w, x, y, z, id, 1) ? 1 : -1;
     }
     const d = BLOCKS[id];
     return dmg & (d.itemMetaMask || 0) || (d.variants ? dmg : 0);
@@ -209,6 +221,15 @@ const Behaviors = (() => {
     if (!def) return false;
     const tx = hit.x + FACE_DIR[hit.face][0], ty = hit.y + FACE_DIR[hit.face][1], tz = hit.z + FACE_DIR[hit.face][2];
     const target = w.getBlock(hit.x, hit.y, hit.z);
+    // glow berries pressed to a cave ceiling take root as a vine
+    if (stack.id === I.glowberry && hit.face === 0) {
+      const cur = w.getBlock(tx, ty, tz);
+      if (!BT.replaceable[cur] || BT.fluid[cur] || !canStay(w, tx, ty, tz, B.GLOW_VINE, 0)) return false;
+      w.setBlock(tx, ty, tz, B.GLOW_VINE, 0);
+      game.audio.playBlock('grass', 'place', tx + 0.5, ty + 0.5, tz + 0.5);
+      if (!player.creative) player.inventory.decrementHeld(1);
+      return true;
+    }
     // plants & crops
     if (def.plant) {
       const p = def.plant;
@@ -377,6 +398,7 @@ const Behaviors = (() => {
     if (id === B.SAPLING) { if (Math.random() < 0.45) growTree(w, x, y, z, m); used = true; }
     else if (id === B.WHEAT || id === B.CARROTS || id === B.POTATOES) { if (m < 7) { w.setMeta(x, y, z, Math.min(7, m + 2 + Math.floor(Math.random() * 3))); used = true; } }
     else if (id === B.BRAMBLE) { if (m < 3) { w.setMeta(x, y, z, 3); used = true; } }
+    else if (id === B.GLOW_VINE) { w.setBlock(x, y, z, B.GLOW_VINE_BERRIES, 0); used = true; }
     else if (id === B.GRASS) {
       used = true;
       for (let i = 0; i < 64; i++) {
@@ -438,6 +460,12 @@ const Behaviors = (() => {
       case B.BREWING_STAND: { const te = w.getTile(x, y, z); if (te) game.openScreen(new BrewingScreen(game, te)); return true; }
       case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: case B.RELAY: case B.RELAY_ON: case B.NOTE_BLOCK:
         return Circuits.use(game, x, y, z, id);
+      case B.GLOW_VINE_BERRIES:
+        w.setBlock(x, y, z, B.GLOW_VINE, 0);
+        dropStack(game, x + 0.5, y + 0.3, z + 0.5, new ItemStack(I.glowberry, 1, 0));
+        game.audio.playBlock('grass', 'break', x + 0.5, y + 0.5, z + 0.5);
+        return true;
+      case B.GATE_KEYSTONE: return Hush.useKeystone(game, player, x, y, z);
       case B.BRAMBLE: {
         if (m >= 3) { w.setMeta(x, y, z, 0); dropStack(game, x + 0.5, y + 0.5, z + 0.5, new ItemStack(I.berries, 2 + Math.floor(Math.random() * 2), 0)); game.audio.playBlock('grass', 'break', x + 0.5, y + 0.5, z + 0.5); return true; }
         return false;
@@ -739,6 +767,13 @@ const Behaviors = (() => {
         return;
       }
       case B.BLOODCAP: if (m < 3 && w.rng.nextInt(10) === 0) w.setMeta(x, y, z, m + 1, 4); return;
+      // glow vines creep slowly downward; now and then the new growth bears berries
+      case B.GLOW_VINE: case B.GLOW_VINE_BERRIES: {
+        if (w.getBlock(x, y - 1, z) !== 0 || w.rng.nextInt(8) !== 0) return;
+        let n = 1; while (n < 24 && (w.getBlock(x, y + n, z) === B.GLOW_VINE || w.getBlock(x, y + n, z) === B.GLOW_VINE_BERRIES)) n++;
+        if (n < 24) w.setBlock(x, y - 1, z, w.rng.nextInt(8) === 0 ? B.GLOW_VINE_BERRIES : B.GLOW_VINE, 0);
+        return;
+      }
       case B.PORTAL:
         // now and then something wanders up out of the swirl
         if (!w.dim && w.game && w.difficulty > 0 && w.gameRules.doMobSpawning && w.getBlock(x, y - 1, z) === B.OBSIDIAN && w.rng.nextInt(2000) < w.difficulty) {
@@ -856,6 +891,7 @@ const Behaviors = (() => {
   // ---------------------------------------------------------------- explosions
   function explode(game, x, y, z, power, source, fire) {
     const w = game.world;
+    if (game.noise) game.noise(x, y, z, 'explode', null);
     const rng = w.rng;
     const affected = new Map();
     if (w.gameRules.mobGriefing || !source || source.type === 'tnt') {

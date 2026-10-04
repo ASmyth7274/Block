@@ -305,7 +305,7 @@ class Living extends Entity {
     return true;
   }
   applyDamage(amount, src) {
-    if (src.type !== 'fire' && src.type !== 'lava' && src.type !== 'void' && src.type !== 'starve' && src.type !== 'drown' && src.type !== 'fall' && src.type !== 'magic') {
+    if (src.type !== 'fire' && src.type !== 'lava' && src.type !== 'void' && src.type !== 'starve' && src.type !== 'drown' && src.type !== 'fall' && src.type !== 'magic' && src.type !== 'sonic') {
       const armor = this.armorValue();
       amount = amount * (25 - Math.min(20, armor)) / 25;
       if (this.damageArmor) this.damageArmor(amount);

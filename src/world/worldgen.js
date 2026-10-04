@@ -69,6 +69,9 @@ function WorldGenFactory(Noise, TAB) {
     trees: 0.2, treeKinds: [['oak', 2], ['dead', 1]], tallGrass: 6, flowers: 1, flowerKinds: [1, 7], deadBush: 0.5, cane: 2, animals: [['cow', 2], ['sheep', 1]], structures: ['tower', 'camp'] });
   BI.GLACIER = biome(27, 'glacier', 'Glacier', { temp: -0.6, rain: 0.5, depth: 1.1, scale: 0.28, peak: 0.45, glacier: true, top: B.SNOW, filler: B.PACKED_ICE, under: B.PACKED_ICE, grass: '#80b497', foliage: '#60a17b',
     trees: 0, tallGrass: 0, flowers: 0, cane: 0, pumpkins: false, animals: [], structures: [] });
+  // ---- cave biomes (3D: they live below the surface, wherever the caves run) ----
+  BI.LUSH_CAVES = biome(28, 'mossglow_caves', 'Mossglow Caves', { cave: true, temp: 0.8, rain: 0.8, grass: '#5fae3a', foliage: '#4f9e2e', trees: 0, tallGrass: 0, flowers: 0, cane: 0, pumpkins: false, animals: [], structures: [] });
+  BI.HUSH = biome(29, 'the_hush', 'The Hush', { cave: true, temp: 0.6, rain: 0.5, grass: '#3a5a50', foliage: '#2a4a40', trees: 0, tallGrass: 0, flowers: 0, cane: 0, pumpkins: false, animals: [], structures: [] });
   BI.MOUNTAINS.peak = 0.35; BI.MOUNTAINS.rocky = true; BI.MOUNTAINS.snowcap = 150; BI.MOUNTAINS.temp = 0.3;   // snow above ~118
   BI.CANYON.plateau = [7, 66];
 
@@ -181,6 +184,17 @@ function WorldGenFactory(Noise, TAB) {
       // the high country's own noise (seeded apart, so older terrain keeps its shape)
       const hr = new Random(seedHash(this.seed, 77, 4096));
       this.nPeak = new Octaves(hr, 4); this.nPeak2 = new Octaves(hr, 3); this.nCrag = new Octaves(hr, 2);
+      const cr = new Random(seedHash(this.seed, 31337, 808));
+      this.nCav1 = new Octaves(cr, 3); this.nCav2 = new Octaves(cr, 2); this.nCaveA = new Octaves(cr, 3); this.nCaveB = new Octaves(cr, 3); this.nCavePatch = new Octaves(cr, 2);
+    }
+    // ---- cave regions: the Hush deep down where 'a' runs high, mossglow caves where 'b' does ----
+    caveRegion(x, z) { return [this.nCaveA.noise2(x / 240, z / 240), this.nCaveB.noise2(x / 170 + 9.1, z / 170 - 4.3)]; }
+    caveBiomeAt(x, y, z) {
+      if (this.type === 'flat' || y > 72) return 0;
+      const r = this.caveRegion(x, z);
+      if (y < 44 && r[0] > 0.22) return BI.HUSH.id;
+      if (y > 12 && r[1] > 0.2) return BI.LUSH_CAVES.id;
+      return 0;
     }
     // 0 in the valleys, 1 along the crests of the great ranges
     ridge(x, z) {
@@ -387,15 +401,18 @@ function WorldGenFactory(Noise, TAB) {
       }
       this.surface(cx, cz, blocks, meta, biomes);
       this.spires(cx, cz, blocks, meta, biomes);
+      this.caverns(cx, cz, blocks, meta);
       this.carveCaves(cx, cz, blocks, meta);
       this.carveRavines(cx, cz, blocks, meta);
+      this.caveLife(cx, cz, blocks, meta);
+      const caveTiles = this.caveTiles; this.caveTiles = null;
       // heightmap: highest non-air, non-liquid block
       for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
         let y = H - 1;
         while (y > 0) { const id = blocks[IDX(x, y, z)]; if (id !== 0 && id !== B.WATER && id !== B.LAVA) break; y--; }
         height[z * 16 + x] = y;
       }
-      return { blocks, meta, biomes, height, cx, cz };
+      return { blocks, meta, biomes, height, cx, cz, caveTiles };
     }
 
     surface(cx, cz, blocks, meta, biomes) {
@@ -521,6 +538,104 @@ function WorldGenFactory(Noise, TAB) {
       const off = Math.round(this.nBand.noise2(x / 120, z / 120) * 3);
       const c = this.bands[(y + off + 64) & 63];
       return c; // 0 = plain terracotta, otherwise colour+1
+    }
+
+    // ---- caverns: great hollows in the middle depths, biggest of all in the Hush ----
+    caverns(cx, cz, blocks, meta) {
+      if (this.type === 'flat') return;
+      const x0 = cx * 16, z0 = cz * 16, Y0 = 4, NC = 19;   // lattice levels every 4 blocks, y 4..76
+      const top = new Int16Array(256), wet = new Uint8Array(256);
+      for (let i = 0; i < 256; i++) {
+        let y = H - 1, w = 0;
+        while (y > 0) { const id = blocks[(y << 8) | i]; if (id === B.WATER || id === B.ICE) w = 1; else if (id !== 0) break; y--; }
+        top[i] = y; wet[i] = w;
+      }
+      const bell = (y, c, w) => Math.exp(-((y - c) / w) * ((y - c) / w));
+      const dens = new Float32Array(5 * NC * 5);
+      for (let gz = 0; gz < 5; gz++) for (let gx = 0; gx < 5; gx++) {
+        const wx = x0 + gx * 4, wz = z0 + gz * 4;
+        const [a, b] = this.caveRegion(wx, wz);
+        const hush = smooth(0.12, 0.3, a), lush = smooth(0.1, 0.28, b);
+        for (let gy = 0; gy < NC; gy++) {
+          const y = Y0 + gy * 4;
+          let v = this.nCav1.noise3(wx / 70, y / 30, wz / 70) + this.nCav2.noise3(wx / 26, y / 14, wz / 26) * 0.45 - 0.38;
+          v += hush * 0.33 * bell(y, 24, 19) + lush * 0.17 * bell(y, 40, 18);
+          if (y < 10) v -= (10 - y) * 0.06;
+          if (y > 54) v -= (y - 54) * 0.035;
+          dens[(gz * 5 + gx) * NC + gy] = v;
+        }
+      }
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
+        const ci = z * 16 + x, gx = x >> 2, gz = z >> 2, tx = (x & 3) / 4, tz = (z & 3) / 4;
+        const lim = Math.min(Y0 + (NC - 1) * 4 - 1, top[ci] - (wet[ci] ? 9 : 10));
+        const a = (gz * 5 + gx) * NC, b2 = (gz * 5 + gx + 1) * NC, c2 = ((gz + 1) * 5 + gx) * NC, d2 = ((gz + 1) * 5 + gx + 1) * NC;
+        for (let y = Y0 + 1; y <= lim; y++) {
+          const gy = (y - Y0) >> 2, ty = ((y - Y0) & 3) / 4;
+          const v00 = dens[a + gy] + (dens[a + gy + 1] - dens[a + gy]) * ty, v10 = dens[b2 + gy] + (dens[b2 + gy + 1] - dens[b2 + gy]) * ty;
+          const v01 = dens[c2 + gy] + (dens[c2 + gy + 1] - dens[c2 + gy]) * ty, v11 = dens[d2 + gy] + (dens[d2 + gy + 1] - dens[d2 + gy]) * ty;
+          const v = (v00 + (v10 - v00) * tx) * (1 - tz) + (v01 + (v11 - v01) * tx) * tz;
+          if (v <= 0) continue;
+          const i = IDX(x, y, z), id = blocks[i];
+          if (id === 0 || id === B.BEDROCK || id === B.WATER || id === B.LAVA) continue;
+          blocks[i] = y < 8 ? B.LAVA : 0; meta[i] = 0;
+        }
+      }
+    }
+    // ---- life in the caves: moss and glow vines, or the listening dark ----
+    caveLife(cx, cz, blocks, meta) {
+      if (this.type === 'flat') return;
+      const x0 = cx * 16, z0 = cz * 16;
+      const rng = new Random(seedHash(this.seed, cx, cz, 0xC4FE));
+      const out = this.caveTiles = [];
+      const solidRock = (id) => id === B.STONE || id === B.DEEPSTONE || id === B.DIRT || id === B.GRAVEL || id === B.SLATE || id === B.CLAY || id === B.CAVE_MOSS;
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
+        const wx = x0 + x, wz = z0 + z;
+        const [a, b] = this.caveRegion(wx, wz);
+        if (a <= 0.2 && b <= 0.18) continue;
+        const patch = this.nCavePatch.noise2(wx / 9, wz / 9);
+        let ytop = H - 1; while (ytop > 0 && blocks[IDX(x, ytop, z)] === 0) ytop--;
+        const hushTop = 44 + Math.round(this.nCavePatch.noise2(wx / 30 + 5, wz / 30) * 6);
+        for (let y = 2; y < Math.min(72, ytop - 3); y++) {
+          const i = IDX(x, y, z), id = blocks[i];
+          const hush = a > 0.22 && y < hushTop, lush = !hush && b > 0.2 && y > 12;
+          if (!hush && !lush) continue;
+          if (hush) {
+            if (id === B.STONE) { blocks[i] = B.DEEPSTONE; continue; }
+            if (id !== 0) continue;
+            const below = blocks[i - 256], above = blocks[i + 256];
+            if (solidRock(below) || below === B.DEEPSTONE) {
+              if (patch > -0.12 || rng.nextInt(5) === 0) { blocks[i - 256] = B.HUSHMOSS; meta[i - 256] = 0; }
+              if (blocks[i - 256] === B.HUSHMOSS && above === 0) {
+                const r = rng.nextInt(1000);
+                if (r < 22) { blocks[i] = B.HUSH_SENSOR; meta[i] = 0; out.push({ type: 'sensor', x: wx, y, z: wz }); }
+                else if (r < 26) { blocks[i] = B.HUSH_SHRIEKER; meta[i] = 0; out.push({ type: 'shrieker', x: wx, y, z: wz, wild: true }); }
+              }
+            } else if ((solidRock(above) || above === B.DEEPSTONE) && patch > 0.15) { blocks[i + 256] = B.HUSHMOSS; meta[i + 256] = 0; }
+          } else {
+            if (id !== 0) continue;
+            const below = blocks[i - 256], above = blocks[i + 256];
+            if (solidRock(below)) {
+              blocks[i - 256] = B.CAVE_MOSS; meta[i - 256] = 0;
+              const r = rng.nextInt(100);
+              if (r < 14) { blocks[i] = B.TALL_GRASS; meta[i] = rng.nextInt(3) === 0 ? 2 : 1; }
+              else if (r < 16) blocks[i] = B.GLOWSHROOM;
+              else if (r < 19 && patch > 0.3) blocks[i - 256] = B.CLAY;   // now and then a seam of clay
+            } else if (solidRock(above)) {
+              if (patch > 0.05) { blocks[i + 256] = B.CAVE_MOSS; meta[i + 256] = 0; }
+              // glow vines hang down from the ceiling
+              if (rng.nextInt(9) === 0) {
+                const len = 1 + rng.nextInt(6);
+                for (let k = 0; k < len; k++) {
+                  const j = i - k * 256;
+                  if (y - k < 2 || blocks[j] !== 0) break;
+                  blocks[j] = rng.nextInt(3) === 0 ? B.GLOW_VINE_BERRIES : B.GLOW_VINE; meta[j] = 0;
+                  if (blocks[j - 256] !== 0) break;
+                }
+              }
+            }
+          }
+        }
+      }
     }
 
     // ---- classic worm caves ----
@@ -672,6 +787,8 @@ function WorldGenFactory(Noise, TAB) {
       this.ores(cx, cz, blocks, meta, biomes);
       if (this.structuresOn) this.mineshafts(out);
       const plan = this.plan(cx, cz);
+      // the listening blocks of the Hush keep a little memory each
+      if (t.caveTiles) for (const te of t.caveTiles) { const id = blocks[IDX(te.x & 15, te.y, te.z & 15)]; if (id === B.HUSH_SENSOR || id === B.HUSH_SHRIEKER) out.tiles.push(Object.assign({}, te)); }
       // local structures (fully inside this chunk)
       for (const s of plan.local) this.buildLocal(out, s);
       this.decorate(cx, cz, blocks, meta, biomes, t, plan);
@@ -685,6 +802,7 @@ function WorldGenFactory(Noise, TAB) {
       }
       if (this.structuresOn) this.villages(out);
       if (this.structuresOn) this.vaults(out);
+      if (this.structuresOn) this.cities(out);
       this.springs(cx, cz, blocks, meta, out);
       this.freeze(cx, cz, blocks, meta, biomes);
       this.spawnAnimals(out, t);
@@ -872,6 +990,308 @@ function WorldGenFactory(Noise, TAB) {
         at(4, F + 2, 1, B.STAIRS, (8 << 3) | 1); at(4, F + 2, 7, B.STAIRS, (8 << 3) | 0);
         at(1, F + 2, 1, B.MOB_SPAWNER); if (inC(ox + 1, oz + 1)) out.tiles.push({ type: 'spawner', x: ox + 1, y: F + 2, z: oz + 1, mob: 'mite' });
         at(1, F + 4, 6, B.TORCH, 1); at(7, F + 4, 2, B.TORCH, 2);
+      }
+    }
+
+    // ---- forgotten cities: deep in the Hush, a dead city round a great gate ----
+    // one chance per 512-block cell; only where the Hush runs strong
+    cityAt(i, j) {
+      if (!this.cityCache) this.cityCache = new Map();
+      const key = i + ',' + j;
+      if (this.cityCache.has(key)) return this.cityCache.get(key);
+      let L = null;
+      const rng = new Random(seedHash(this.seed, i, j, 0xC17E));
+      for (let tries = 0; tries < 2 && !L; tries++) {
+        const x = i * 512 + 96 + rng.nextInt(320), z = j * 512 + 96 + rng.nextInt(320);
+        if (x * x + z * z < 500 * 500) continue;
+        if (this.caveRegion(x, z)[0] < 0.28) continue;
+        const shaft = this.cityShaftSpot(x, z);
+        if (!shaft) continue;
+        L = this.cityLayout(x, z, new Random(seedHash(this.seed, x, z, 0xC17F)), shaft);
+      }
+      if (this.cityCache.size > 64) this.cityCache.clear();
+      this.cityCache.set(key, L);
+      return L;
+    }
+    // where the Long Stair comes down: off the end of one of the avenues, never under water
+    // and, if it can be helped, not under the high peaks
+    cityShaftSpot(x, z) {
+      const WET = { ocean: 1, deep_ocean: 1, river: 1, beach: 1, swamp: 1 }, HIGH = { grand_peaks: 1, glacier: 1, mountains: 1 };
+      let fallback = null;
+      for (const [dx, dz] of [[0, 1], [1, 0], [-1, 0], [0, -1]]) {
+        const sx = x + dx * 62, sz = z + dz * 62;
+        let wet = false, high = false;
+        for (let k = 0; k < 13 && !wet; k++) {
+          const a = k * Math.PI / 6, rr = k === 12 ? 0 : 22;
+          const b = BIOMES[this.biomeAt(Math.round(sx + Math.cos(a) * rr), Math.round(sz + Math.sin(a) * rr))];
+          if (!b || WET[b.key]) wet = true; else if (HIGH[b.key]) high = true;
+        }
+        if (wet) continue;
+        const s = { x: sx, z: sz, end: Math.atan2(-dz, -dx) };
+        if (!high) return s;
+        if (!fallback) fallback = s;
+      }
+      return fallback;
+    }
+    nearestCity(x, z) {
+      let best = null, bd = Infinity;
+      const i0 = Math.floor(x / 512), j0 = Math.floor(z / 512);
+      for (let j = j0 - 2; j <= j0 + 2; j++) for (let i = i0 - 2; i <= i0 + 2; i++) {
+        const L = this.cityAt(i, j); if (!L) continue;
+        const d = (L.x - x) ** 2 + (L.z - z) ** 2; if (d < bd) { bd = d; best = L; }
+      }
+      return best;
+    }
+    cityLayout(x, z, rng, shaft) {
+      const F = 20, R = 56;
+      const parts = [];
+      // avenues run out from the plaza; buildings stand in the quarters between them
+      const slots = [];
+      for (let gz = -4; gz <= 4; gz++) for (let gx = -4; gx <= 4; gx++) {
+        const px = gx * 12, pz = gz * 12, r = Math.hypot(px, pz);
+        if (r < 24 || r > 46 || Math.abs(px) < 6 || Math.abs(pz) < 6) continue;
+        slots.push([px + rng.nextInt(3) - 1, pz + rng.nextInt(3) - 1]);
+      }
+      for (let k = slots.length - 1; k > 0; k--) { const j = rng.nextInt(k + 1); const t = slots[k]; slots[k] = slots[j]; slots[j] = t; }
+      const kinds = ['hall', 'tower', 'hall', 'shrine', 'ruin', 'tower', 'hall', 'ruin', 'shrine', 'hall', 'tower', 'ruin', 'hall', 'shrine'];
+      const used = [];
+      for (const [px, pz] of slots) {
+        if (parts.length >= 14) break;
+        const kind = kinds[parts.length % kinds.length];
+        const w = kind === 'hall' ? 9 : kind === 'tower' ? 7 : kind === 'shrine' ? 5 : 9, d = kind === 'hall' ? 11 : w;
+        if (used.some(([ux, uz, uw, ud]) => Math.abs(ux - px) < (uw + w) / 2 + 3 && Math.abs(uz - pz) < (ud + d) / 2 + 3)) continue;
+        // keep the foot of the Long Stair clear
+        if (shaft && Math.hypot(Math.max(0, Math.abs(x + px - shaft.x) - w / 2), Math.max(0, Math.abs(z + pz - shaft.z) - d / 2)) < 16) continue;
+        used.push([px, pz, w, d]);
+        // doors face the plaza
+        const face = Math.abs(px) > Math.abs(pz) ? (px > 0 ? 2 : 3) : (pz > 0 ? 0 : 1);   // 0 door on -z, 1 +z, 2 -x, 3 +x
+        parts.push({ kind, x: x + px, z: z + pz, w, d, face, h: kind === 'tower' ? 14 + rng.nextInt(9) : 6, seed: rng.nextInt(0x7fffffff) });
+      }
+      const ext = [Math.min(x - R - 2, shaft.x - 24), 0, Math.min(z - R - 2, shaft.z - 24), Math.max(x + R + 2, shaft.x + 24), H, Math.max(z + R + 2, shaft.z + 24)];
+      return { x, z, F, R, parts, shaft, seed: rng.nextInt(0x7fffffff), box: [x - R - 2, F - 10, z - R - 2, x + R + 2, F + 34, z + R + 2], ext };
+    }
+    cities(out) {
+      const X0 = out.cx * 16, Z0 = out.cz * 16;
+      const i0 = Math.floor((X0 - 110) / 512), i1 = Math.floor((X0 + 125) / 512), j0 = Math.floor((Z0 - 110) / 512), j1 = Math.floor((Z0 + 125) / 512);
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        const L = this.cityAt(i, j);
+        if (!L || L.ext[3] < X0 || L.ext[0] > X0 + 15 || L.ext[5] < Z0 || L.ext[2] > Z0 + 15) continue;
+        this.buildCity(out, L);
+      }
+    }
+    buildCity(out, L) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16, F = L.F, cx = L.x, cz = L.z;
+      const inC = (x, z) => x >= X0 && x < X0 + 16 && z >= Z0 && z < Z0 + 16;
+      const get = (x, y, z) => (!inC(x, z) || y < 0 || y >= H) ? -1 : blocks[IDX(x - X0, y, z - Z0)];
+      const set = (x, y, z, id, m) => { if (!inC(x, z) || y < 1 || y >= H - 1) return; const i = IDX(x - X0, y, z - Z0); blocks[i] = id; meta[i] = m || 0; };
+      const tile = (te) => { if (inC(te.x, te.z)) out.tiles.push(te); };
+      const BR = B.DEEPSTONE_BRICKS;
+      const rngAt = (x, y, z) => ((Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791) ^ L.seed) >>> 0) % 1000 / 1000;
+      const brick = (x, y, z) => { const r = rngAt(x, y, z); return r < 0.12 ? 3 : r < 0.18 ? 1 : 0; };
+      const wall = (x, y, z) => set(x, y, z, BR, brick(x, y, z));
+      // ---- the cavern: a great dome with a floor of tiles ----
+      for (let x = Math.max(X0, cx - L.R - 2); x <= Math.min(X0 + 15, cx + L.R + 2); x++) for (let z = Math.max(Z0, cz - L.R - 2); z <= Math.min(Z0 + 15, cz + L.R + 2); z++) {
+        const r = Math.hypot(x - cx, z - cz) / L.R;
+        if (r > 1.04) continue;
+        const roof = F + Math.floor(30 - r * r * 14 + (rngAt(x, 0, z) - 0.5) * 3);
+        for (let y = F; y <= roof; y++) { const id = get(x, y, z); if (id !== B.BEDROCK) set(x, y, z, 0); }
+        if (r > 0.97) continue;
+        const pathy = Math.abs(x - cx) <= 2 || Math.abs(z - cz) <= 2;
+        set(x, F - 1, z, pathy || r < 0.36 ? BR : B.DEEPSTONE, pathy || r < 0.36 ? 1 : 0);
+        for (let y = F - 4; y < F - 1; y++) { const id = get(x, y, z); if (id === 0 || id === B.WATER || id === B.LAVA) set(x, y, z, B.DEEPSTONE); }
+        // hushmoss creeping over the old streets
+        const moss = this.nCavePatch.noise2(x / 7 + 31, z / 7 - 17);
+        if (moss > 0.12 && r > 0.3) set(x, F - 1, z, B.HUSHMOSS);
+      }
+      // ---- the Long Stair down from the world above ----
+      this.cityShaft(out, L, set, get);
+      // ---- the avenues: lantern posts every ten blocks ----
+      for (let k = -50; k <= 50; k += 10) {
+        if (Math.abs(k) < 20) continue;
+        for (const [px, pz] of [[cx + k, cz - 3], [cx + k, cz + 3], [cx - 3, cz + k], [cx + 3, cz + k]]) {
+          if (Math.hypot(px - L.shaft.x, pz - L.shaft.z) < 14) continue;
+          for (let y = F; y < F + 3; y++) wall(px, y, pz);
+          set(px, F + 3, pz, B.PALE_LANTERN, 0);
+        }
+      }
+      // ---- the Great Gate, facing south across the plaza ----
+      const gz = cz - 6;
+      for (let x = cx - 14; x <= cx + 14; x++) for (let z = gz - 4; z <= gz + 8; z++) {
+        set(x, F, z, BR, 1); set(x, F + 1, z, BR, (x + z) % 7 === 0 ? 2 : 1);
+        if (z === gz + 8) { set(x, F + 1, z, B.STAIRS, (19 << 3) | 0); }
+      }
+      for (const sx of [-1, 1]) {
+        for (let x = cx + sx * 9; x !== cx + sx * 14; x += sx) for (let z = gz - 2; z <= gz + 2; z++) for (let y = F + 2; y <= F + 21; y++) {
+          const edge = x === cx + sx * 9 || x === cx + sx * 13 || z === gz - 2 || z === gz + 2;
+          set(x, y, z, BR, (y - F) % 6 === 0 ? 2 : edge ? brick(x, y, z) : 0);
+        }
+      }
+      for (let x = cx - 13; x <= cx + 13; x++) for (let z = gz - 2; z <= gz + 2; z++) for (let y = F + 18; y <= F + 21; y++) {
+        if (y === F + 21 && (Math.abs(x - cx) > 10 || Math.abs(z - gz) > 1)) continue;
+        set(x, y, z, BR, y === F + 18 ? 1 : brick(x, y, z));
+      }
+      // the frame itself, and the sheet it will one day hold
+      for (let x = cx - 9; x <= cx + 9; x++) for (let y = F + 2; y <= F + 17; y++) {
+        const ring = Math.abs(x - cx) === 9 || y === F + 2 || y === F + 17;
+        set(x, y, gz, ring ? B.REINFORCED_DEEPSTONE : 0, 0);
+      }
+      set(cx, F + 2, gz + 4, B.GATE_KEYSTONE, 0);
+      for (const sx of [-6, 6]) { set(cx + sx, F + 2, gz + 5, B.HUSH_SHRIEKER, 0); tile({ type: 'shrieker', x: cx + sx, y: F + 2, z: gz + 5, wild: true }); }
+      for (const sx of [-12, 12]) { set(cx + sx, F + 2, gz + 6, B.PALE_LANTERN, 0); set(cx + sx, F + 2, gz - 4, B.PALE_LANTERN, 0); }
+      for (const [sx, sz] of [[-3, 7], [3, 7], [-10, 5], [10, 5], [-8, -3], [8, -3]]) { set(cx + sx, F + 2, gz + sz, B.HUSH_SENSOR, 0); tile({ type: 'sensor', x: cx + sx, y: F + 2, z: gz + sz }); }
+      // ---- the keep beneath the gate: a hidden stair behind it leads down ----
+      for (let x = cx - 3; x <= cx + 3; x++) for (let z = gz - 3; z <= gz + 3; z++) for (let y = F - 7; y <= F - 2; y++) {
+        const edge = Math.abs(x - cx) === 3 || Math.abs(z - gz) === 3 || y === F - 7 || y === F - 2;
+        set(x, y, z, edge ? B.REINFORCED_DEEPSTONE : 0, 0);
+      }
+      for (let k = 0; k < 6; k++) { set(cx, F - 1 - k, gz - 10 + k, 0); set(cx, F - k, gz - 10 + k, 0); set(cx, F - 2 - k, gz - 10 + k, B.STAIRS, (19 << 3) | 0); }
+      for (let z = gz - 4; z <= gz - 3; z++) for (let y = F - 6; y <= F - 5; y++) set(cx, y, z, 0);
+      set(cx, F - 6, gz + 2, B.CHEST, 1);
+      tile({ type: 'chest', x: cx, y: F - 6, z: gz + 2, items: this.loot(new Random(L.seed), 'city_keep').concat([{ slot: 13, id: I.echo_heart, c: 1, d: 0 }]) });
+      set(cx - 2, F - 3, gz, B.PALE_LANTERN, 1); set(cx + 2, F - 3, gz, B.PALE_LANTERN, 1);
+      set(cx, F - 6, gz - 2, B.HUSH_SENSOR, 0); tile({ type: 'sensor', x: cx, y: F - 6, z: gz - 2 });
+      // ---- the quarters ----
+      for (const P of L.parts) this.cityPart(P, F, set, get, wall, tile, rngAt);
+    }
+    // ---- the Long Stair: a great pit sunk from the surface to the city, a broad ledge
+    // spiralling down its wall in half steps, lit by pale lanterns; a bowl round its mouth
+    // and a ring of broken pillars mark it from far off ----
+    cityShaft(out, L, set, get) {
+      const S = L.shaft, X0 = out.cx * 16, Z0 = out.cz * 16, F = L.F;
+      if (S.x + 24 < X0 || S.x - 24 > X0 + 15 || S.z + 24 < Z0 || S.z - 24 > Z0 + 15) return;
+      const R0 = 12.5, RIN = 8.5, BOWL = 17, PITCH = 15, TAU = Math.PI * 2, BR = B.DEEPSTONE_BRICKS;
+      const hash = (x, z, k) => ((Math.imul(x, 73856093) ^ Math.imul(z, 19349663) ^ Math.imul(k + 7, 83492791) ^ L.seed) >>> 0) % 1000 / 1000;
+      // the lie of the land before anything was dug (the same answer from every chunk)
+      const ground = (x, z) => this.terrain(x >> 4, z >> 4).height[(z & 15) * 16 + (x & 15)];
+      const stoneAt = (y) => y < 40 ? B.DEEPSTONE : B.STONE;
+      const LOOSE = new Set([B.LOG, B.LEAVES, B.TALL_GRASS, B.FLOWER, B.SNOW_LAYER, B.SAPLING, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.DEAD_BUSH, B.CACTUS, B.SUGAR_CANE, B.VINE, B.PUMPKIN, B.MELON].filter((v) => v !== undefined));
+      const brickM = (x, y, z) => { const r = hash(x, z, y); return r < 0.14 ? 3 : r < 0.2 ? 1 : 0; };
+      for (let x = Math.max(X0, S.x - 23); x <= Math.min(X0 + 15, S.x + 23); x++) for (let z = Math.max(Z0, S.z - 23); z <= Math.min(Z0 + 15, S.z + 23); z++) {
+        const dx = x - S.x, dz = z - S.z, rr = Math.hypot(dx, dz) + (hash(x, z, 1) - 0.5) * 0.8;
+        if (rr >= 23) continue;
+        const gy = ground(x, z);
+        if (rr < R0) {
+          // the pit: open from the city floor to the sky
+          for (let y = F; y < H - 1; y++) set(x, y, z, 0);
+          const moss = this.nCavePatch.noise2(x / 7 + 31, z / 7 - 17);
+          set(x, F - 1, z, moss > 0.15 ? B.HUSHMOSS : BR, 1);
+          for (let y = F - 4; y < F - 1; y++) { const id = get(x, y, z); if (id === 0 || id === B.WATER || id === B.LAVA) set(x, y, z, B.DEEPSTONE); }
+          if (rr < RIN) continue;
+          // the ledge, once for every turn of the spiral that passes over this spot
+          const u0 = (((Math.atan2(dz, dx) - S.end) / TAU) % 1 + 1) % 1;
+          const thick = rr < RIN + 1 ? 1 : 2;
+          for (let k = 0; ; k++) {
+            const h = F + (u0 + k) * PITCH;
+            if (h > gy - 4 || h > H - 6) break;
+            const hs = Math.round(h * 2) / 2, yb = Math.floor(hs);
+            if (hs === yb) { for (let t = 1; t <= thick; t++) set(x, yb - t, z, BR, t === 1 ? 1 : brickM(x, yb - t, z)); }
+            else { set(x, yb, z, B.SLAB, 19); for (let t = 1; t <= thick; t++) set(x, yb - t, z, BR, brickM(x, yb - t, z)); }
+          }
+          continue;
+        }
+        // the wall: whole (but where it opens on the city), with a few old windows onto the caves
+        // beyond, and nothing may pour in through it
+        if (rr < R0 + 1.6 && Math.hypot(x - L.x, z - L.z) > L.R + 1) {
+          const seg = Math.floor((Math.atan2(dz, dx) + Math.PI) / TAU * 10);
+          for (let y = F - 1; y < gy - 2; y++) {
+            const id = get(x, y, z);
+            if (id === B.WATER || id === B.LAVA) set(x, y, z, stoneAt(y));
+            else if (id === 0 && !(y > F + 4 && hash(seg, Math.floor(y / 7), 5) < 0.14)) set(x, y, z, stoneAt(y));
+          }
+        }
+        // no ponds by the rim either: they are filled in, so nothing spills into the bowl
+        for (let y = gy - 6; y <= gy + 6; y++) { const id = get(x, y, z); if (id === B.WATER || id === B.ICE) set(x, y, z, B.DIRT); else if (id === B.LAVA) set(x, y, z, B.STONE); }
+        if (rr < BOWL) {
+          // the bowl round the mouth of the pit
+          const d = Math.max(0, Math.round(BOWL - rr));
+          const top = get(x, gy, z);
+          for (let y = gy - d + 1; y < H - 1; y++) set(x, y, z, 0);
+          if (d > 0) set(x, gy - d, z, top === B.GRASS || top === B.DIRT || top === B.PODZOL ? B.GRASS : top === B.SAND || top === B.SNOW ? top : get(x, gy - d, z));
+        } else if (rr < BOWL + 2.5 && hash(x, z, 3) < 0.4) {
+          // old paving, broken up and half buried
+          const top = get(x, gy, z);
+          if (top !== B.WATER && top !== 0) set(x, gy, z, BR, hash(x, z, 4) < 0.5 ? 1 : 3);
+        }
+      }
+      // lanterns on posts at the ledge's inner edge, six to a turn
+      for (let j = 0; ; j++) {
+        const h = F + 1.5 + j * PITCH / 6;
+        if (h > H - 8) break;
+        const a = S.end + (1.5 / PITCH + j / 6) * TAU, x = Math.round(S.x + Math.cos(a) * 9.3), z = Math.round(S.z + Math.sin(a) * 9.3);
+        if (x < X0 || x > X0 + 15 || z < Z0 || z > Z0 + 15) continue;
+        if (h > ground(x, z) - 4) break;
+        const yb = Math.floor(Math.round(h * 2) / 2);
+        set(x, yb, z, BR, 2); set(x, yb + 1, z, B.PALE_LANTERN, 0);
+      }
+      // a ring of broken pillars round the rim, tall enough to be seen from a distance
+      for (let j = 0; j < 9; j++) {
+        const a = S.end + (j + 0.5) / 9 * TAU, x = Math.round(S.x + Math.cos(a) * 20), z = Math.round(S.z + Math.sin(a) * 20);
+        if (x < X0 || x > X0 + 15 || z < Z0 || z > Z0 + 15) continue;
+        const gy = ground(x, z), top = get(x, gy, z);
+        if (top === B.WATER || gy < 4) continue;
+        const r = hash(x, z, 9 + j), hgt = r < 0.3 ? 3 + Math.floor(r * 10) : 7 + Math.floor(r * 8);
+        for (let y = gy - 2; y <= gy + hgt; y++) set(x, y, z, BR, y === gy + hgt && hgt > 6 ? 2 : brickM(x, y, z));
+        for (let y = gy + hgt + 1; y < gy + hgt + 4; y++) if (LOOSE.has(get(x, y, z))) set(x, y, z, 0);
+        if (hgt > 6 && r > 0.55) set(x, gy + hgt + 1, z, B.PALE_LANTERN, 0);
+        else if (hgt <= 6) set(x, gy + hgt + 1, z, B.SLAB, 19);
+      }
+    }
+    cityPart(P, F, set, get, wall, tile, rngAt) {
+      const rng = new Random(P.seed);
+      const x0 = P.x - (P.w >> 1), z0 = P.z - (P.d >> 1), x1 = x0 + P.w - 1, z1 = z0 + P.d - 1;
+      const door = (x, z) => P.face === 0 ? (z === z0 && Math.abs(x - P.x) <= 1) : P.face === 1 ? (z === z1 && Math.abs(x - P.x) <= 1) : P.face === 2 ? (x === x0 && Math.abs(z - P.z) <= 1) : (x === x1 && Math.abs(z - P.z) <= 1);
+      const chestAt = (x, y, z, table) => { set(x, y, z, B.CHEST, 0); tile({ type: 'chest', x, y, z, items: this.loot(rng, table) }); };
+      if (P.kind === 'hall' || P.kind === 'ruin') {
+        const ruin = P.kind === 'ruin';
+        for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
+          const edge = x === x0 || x === x1 || z === z0 || z === z1, corner = (x === x0 || x === x1) && (z === z0 || z === z1);
+          set(x, F - 1, z, B.DEEPSTONE_BRICKS, 1);
+          const hgt = ruin ? Math.floor(rngAt(x, 5, z) * 6) : P.h;
+          for (let y = F; y < F + P.h; y++) {
+            if (!edge) { set(x, y, z, 0); continue; }
+            if (y - F >= hgt || (door(x, z) && y < F + 3)) { set(x, y, z, 0); continue; }
+            if (!ruin && !corner && y === F + 3 && (x + z) % 3 === 0) set(x, y, z, B.IRON_BARS);
+            else set(x, y, z, B.DEEPSTONE_BRICKS, corner ? 2 : (rngAt(x, y, z) < 0.15 ? 3 : 0));
+          }
+          if (!ruin) set(x, F + P.h, z, B.SLAB, edge ? 19 | 32 : 20);
+          else if (!edge && rngAt(x, 9, z) < 0.12) set(x, F, z, B.DEEPSTONE_BRICKS, 3);
+        }
+        if (!ruin) {
+          // a runner of grey carpet, lanterns overhead, and something left behind at the back
+          for (let k = -3; k <= 3; k++) { if (P.face < 2) set(P.x, F, P.z + k, B.CARPET, 7); else set(P.x + k, F, P.z, B.CARPET, 7); }
+          set(P.x, F + P.h - 1, P.z, B.PALE_LANTERN, 1);
+          const bx = P.face === 0 ? P.x : P.face === 1 ? P.x : P.face === 2 ? x1 - 1 : x0 + 1, bz = P.face === 0 ? z1 - 1 : P.face === 1 ? z0 + 1 : P.z;
+          chestAt(bx, F, bz, 'city');
+          if (rng.nextInt(3) === 0) { set(P.x + 2, F, P.z, B.HUSH_SHRIEKER, 0); tile({ type: 'shrieker', x: P.x + 2, y: F, z: P.z, wild: true }); }
+        } else if (rng.nextInt(2) === 0) { set(P.x, F, P.z, B.HUSH_SENSOR, 0); tile({ type: 'sensor', x: P.x, y: F, z: P.z }); }
+      } else if (P.kind === 'tower') {
+        for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
+          const edge = x === x0 || x === x1 || z === z0 || z === z1, corner = (x === x0 || x === x1) && (z === z0 || z === z1);
+          for (let y = F - 1; y <= F + P.h; y++) {
+            if (y === F - 1 || y === F + P.h) { set(x, y, z, B.DEEPSTONE_BRICKS, 1); continue; }
+            if (!edge) { set(x, y, z, 0); continue; }
+            if (door(x, z) && Math.abs((P.face < 2 ? x - P.x : z - P.z)) === 0 && y < F + 3) { set(x, y, z, 0); continue; }
+            set(x, y, z, B.DEEPSTONE_BRICKS, corner ? 2 : ((y - F) % 5 === 4 && !corner && (x + z) % 2 === 0 ? 0 : (rngAt(x, y, z) < 0.1 ? 3 : 0)));
+            if (!corner && (y - F) % 5 === 2 && (x + z) % 3 === 0) set(x, y, z, B.IRON_BARS);
+          }
+          // battlements
+          if (edge && (x + z) % 2 === 0) set(x, F + P.h + 1, z, B.DEEPSTONE_BRICKS, 0);
+        }
+        // a ladder up the inside of the back wall, a lantern and a chest on top
+        const lx = P.face === 0 ? P.x : P.face === 1 ? P.x : P.face === 2 ? x1 - 1 : x0 + 1, lz = P.face === 0 ? z1 - 1 : P.face === 1 ? z0 + 1 : P.z;
+        const lm = P.face;   // the ladder hangs on the back wall
+        for (let y = F; y <= F + P.h; y++) set(lx, y, lz, B.LADDER, lm);
+        set(P.x, F + P.h + 1, P.z, B.PALE_LANTERN, 0);
+        set(P.x, F, P.z, B.PALE_LANTERN, 0);
+        if (rng.nextInt(2) === 0) chestAt(x0 + 1 === lx ? x1 - 1 : x0 + 1, F + P.h + 1, z0 + 1 === lz ? z1 - 1 : z0 + 1, 'city');
+      } else if (P.kind === 'shrine') {
+        for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
+          set(x, F, z, B.DEEPSTONE_BRICKS, (x === x0 || x === x1 || z === z0 || z === z1) ? 1 : 2);
+          for (let y = F + 1; y < F + 5; y++) set(x, y, z, 0);
+        }
+        for (const [dx, dz] of [[0, 0], [P.w - 1, 0], [0, P.d - 1], [P.w - 1, P.d - 1]]) { for (let y = F + 1; y <= F + 3; y++) set(x0 + dx, y, z0 + dz, B.DEEPSTONE_BRICKS, 2); set(x0 + dx, F + 4, z0 + dz, B.PALE_LANTERN, 0); }
+        set(P.x, F + 1, P.z, B.HUSH_SHRIEKER, 0); tile({ type: 'shrieker', x: P.x, y: F + 1, z: P.z, wild: true });
+        for (const [dx, dz] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) if (rng.nextInt(2) === 0) { set(P.x + dx, F + 1, P.z + dz, B.HUSH_SENSOR, 0); tile({ type: 'sensor', x: P.x + dx, y: F + 1, z: P.z + dz }); }
       }
     }
 
@@ -1630,6 +2050,9 @@ function WorldGenFactory(Noise, TAB) {
           [I.iron_chestplate, 1, 1, 5], [I.iron_helmet, 1, 1, 5], [I.iron_leggings, 1, 1, 5], [I.iron_boots, 1, 1, 5], [B.OBSIDIAN, 3, 7, 5], [B.SAPLING, 3, 7, 5], [I.jade, 1, 3, 4]],
         vault_store: [[I.iron_ingot, 1, 5, 10], [I.gold_ingot, 1, 3, 5], [I.ember_dust, 4, 9, 5], [I.coal, 3, 8, 10], [I.bread, 1, 3, 15], [I.apple, 1, 3, 15], [I.iron_pickaxe, 1, 1, 5],
           [I.iron_sword, 1, 1, 5], [I.iron_chestplate, 1, 1, 5], [I.iron_helmet, 1, 1, 5], [I.iron_leggings, 1, 1, 5], [I.iron_boots, 1, 1, 5], [I.seeker_eye, 1, 1, 2], [I.wisp_essence, 1, 1, 3], [I.jade, 1, 3, 4]],
+        city: [[I.hush_shard, 1, 3, 10], [I.bone, 2, 6, 10], [I.coal, 3, 8, 8], [I.iron_ingot, 1, 4, 8], [I.gold_ingot, 1, 3, 5], [I.diamond, 1, 2, 4], [I.golden_apple, 1, 1, 3],
+          [I.iron_leggings, 1, 1, 3], [I.diamond_leggings, 1, 1, 1], [I.lumite_shard, 2, 5, 6], [I.glowberry, 2, 6, 8], [B.PALE_LANTERN, 1, 3, 4], [I.book, 1, 3, 6], [I.compass, 1, 1, 2], [I.echo_heart, 1, 1, 1]],
+        city_keep: [[I.hush_shard, 2, 5, 10], [I.diamond, 1, 3, 6], [I.golden_apple, 1, 2, 4], [I.diamond_leggings, 1, 1, 2], [I.starmetal_ingot, 1, 1, 1], [I.gold_ingot, 2, 5, 6]],
         vault_library: [[I.book, 1, 3, 20], [I.paper, 2, 7, 20], [I.compass, 1, 1, 5], [I.wisp_essence, 1, 2, 4], [I.jade, 1, 2, 4], [I.dye, 2, 6, 6, 11], [I.glass_bottle, 1, 3, 4], [I.seeker_eye, 1, 1, 1]],
         fortress: [[I.gold_ingot, 1, 3, 15], [I.iron_ingot, 1, 5, 6], [I.diamond, 1, 3, 5], [I.gold_sword, 1, 1, 5], [I.gold_chestplate, 1, 1, 5], [I.gold_pickaxe, 1, 1, 3], [I.flint_and_steel, 1, 1, 5],
           [I.bloodcap, 3, 7, 5], [B.OBSIDIAN, 2, 4, 2], [I.sunstone_dust, 2, 6, 6], [I.smoky_quartz, 2, 8, 6], [I.fire_charge, 1, 3, 4], [I.gold_nugget, 3, 9, 8]],

@@ -7,13 +7,14 @@
 const GEN_TAB = (() => { const t = workerBlockTable(); t.items = ITEM_IDS; return t; })();
 const WG = WorldGenFactory(Noise, GEN_TAB);
 const BIOMES = WG.BIOMES;
+const HUSH_BIOME = BIOMES.findIndex((b) => b && b.key === 'the_hush'), MOSSGLOW_BIOME = BIOMES.findIndex((b) => b && b.key === 'mossglow_caves');
 const BIOME_TINTS = BIOMES.map((b) => b ? { grass: hexToRgb(b.grass), foliage: hexToRgb(b.foliage), water: hexToRgb(b.water) } : null);
 
 // Dimensions share one save: the Underworld's and the Far Isles' chunk and
 // entity records are stored under keys offset by dim * DIM_KEY (exact doubles,
 // so keys stay unique).
 const DIM_KEY = 4294967296;
-const DIM_OVERWORLD = 0, DIM_UNDERWORLD = 1, DIM_ISLES = 2;
+const DIM_OVERWORLD = 0, DIM_UNDERWORLD = 1, DIM_ISLES = 2, DIM_SIFT = 3;
 function dimKeys(keys, dim) {
   const out = new Set(), lo = dim * DIM_KEY, hi = lo + DIM_KEY;
   for (const k of keys) if (k >= lo && k < hi) out.add(k - lo);
@@ -200,6 +201,11 @@ class World {
     const c = this.getChunk(x >> 4, z >> 4);
     if (c) return c.biomes[((z & 15) << 4) | (x & 15)];
     return this.localGen.biomeAt(x, z);
+  }
+  // the biome a creature is really in: the cave biomes lie deep under the surface ones
+  biomeAt3(x, y, z) {
+    if (!this.dim && this.localGen.caveBiomeAt && y < 72 && y < this.heightAt(x, z) - 10) { const cb = this.localGen.caveBiomeAt(x, y, z); if (cb) return cb; }
+    return this.biomeAt(x, z);
   }
   canSeeSky(x, y, z) { return y >= this.heightAt(x, z); }
   isRainingAt(x, y, z) {

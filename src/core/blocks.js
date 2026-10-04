@@ -51,6 +51,9 @@ const SLAB_MATS = [
   { key: 'thatch', name: 'Thatch', tex: 'thatch', tool: 'hoe', hard: 0.5, sound: 'grass', flam: true },
   { key: 'brimstone_brick', name: 'Brimstone Brick', tex: 'brimstone_bricks', tool: 'pickaxe', hard: 2, sound: 'stone' },
   { key: 'smoky_quartz', name: 'Smoky Quartz', tex: 'quartz_side', top: 'quartz_top', tool: 'pickaxe', hard: 0.8, sound: 'stone' },
+  { key: 'deepstone_brick', name: 'Deepstone Brick', tex: 'deepstone_bricks', tool: 'pickaxe', hard: 3.5, sound: 'stone' },
+  { key: 'deepstone_tile', name: 'Deepstone Tile', tex: 'deepstone_tiles', tool: 'pickaxe', hard: 3.5, sound: 'stone' },
+  { key: 'starstone_brick', name: 'Starstone Brick', tex: 'starstone_bricks', tool: 'pickaxe', hard: 3, sound: 'stone' },
 ];
 
 // Block storage
@@ -719,6 +722,61 @@ defBlock(149, 'rift', {
 });
 defBlock(150, 'starstone', { name: 'Starstone', hardness: 3, resistance: 45, tool: 'pickaxe', needsTool: true });
 defBlock(152, 'starstone_bricks', { name: 'Starstone Bricks', hardness: 3, resistance: 45, tool: 'pickaxe', needsTool: true });
+
+// --- the deep caves ----------------------------------------------------------
+defBlock(153, 'deepstone', { name: 'Deepstone', tex: (m, f) => f <= 1 ? 'deepstone_top' : 'deepstone', hardness: 3, resistance: 30, tool: 'pickaxe', needsTool: true });
+defBlock(154, 'deepstone_bricks', {
+  name: (m) => ['Deepstone Bricks', 'Deepstone Tiles', 'Chiseled Deepstone', 'Cracked Deepstone Bricks'][m & 3],
+  tex: (m) => ['deepstone_bricks', 'deepstone_tiles', 'deepstone_chiseled', 'deepstone_cracked'][m & 3],
+  hardness: 3.5, resistance: 30, tool: 'pickaxe', needsTool: true, itemMetaMask: 3, variants: [0, 1, 2, 3],
+});
+defBlock(155, 'reinforced_deepstone', { name: 'Reinforced Deepstone', tex: (m, f) => f <= 1 ? 'deepstone_reinforced_top' : 'deepstone_reinforced', light: 2, hardness: -1, resistance: 3600000, drops: () => [] });
+defBlock(156, 'cave_moss', { name: 'Cave Moss', hardness: 0.1, tool: 'hoe', sound: 'grass' });
+// glow vines hang from cave ceilings; the berried ones shine
+const glowVineBase = Object.assign({}, plantBase, { render: R.CROSS, climbable: true, sound: 'grass', select: () => box16(2, 0, 2, 14, 16, 14), itemMetaMask: 0 });
+defBlock(157, 'glow_vine', Object.assign({}, glowVineBase, { name: 'Glow Vine', tex: 'glow_vine', itemSprite: 'glow_vine', drops: () => [] }));
+defBlock(158, 'glow_vine_berries', Object.assign({}, glowVineBase, { name: 'Glow Vine', tex: 'glow_vine_berries', light: 14, itemSprite: 'glow_vine_berries', drops: () => [[ITEM_IDS.glowberry, 1, 0]] }));
+defBlock(159, 'hushmoss', { name: 'Hushmoss', hardness: 0.6, tool: 'hoe', sound: 'cloth', xp: [1, 1] });
+// the listening blocks: bit 0 = active
+defBlock(160, 'hush_sensor', {
+  name: 'Hush Sensor', render: R.MODEL, tex: (m, f) => f === 1 ? 'hush_sensor_top' : f === 0 ? 'hushmoss' : 'hush_sensor_side', opaque: false, opacity: 0, light: 1,
+  hardness: 1.5, tool: 'hoe', sound: 'cloth', itemMetaMask: 0, tileEntity: 'sensor',
+  model: (m) => [{ b: [0, 0, 0, 16, 8, 16] }, { b: [3, 8, 7, 13, 16, 9], tex: 'hush_tendril', faces: [2, 3] }, { b: [7, 8, 3, 9, 16, 13], tex: 'hush_tendril', faces: [4, 5] }],
+  collide: () => [[0, 0, 0, 1, 0.5, 1]], select: () => [0, 0, 0, 1, 0.5, 1],
+});
+defBlock(161, 'hush_shrieker', {
+  name: 'Hush Shrieker', render: R.MODEL, tex: (m, f) => f === 1 ? 'hush_shrieker_top' : f === 0 ? 'hushmoss' : 'hush_shrieker_side', opaque: false, opacity: 0,
+  hardness: 3, tool: 'hoe', sound: 'cloth', itemMetaMask: 0, tileEntity: 'shrieker', xp: [5, 5],
+  model: () => [{ b: [0, 0, 0, 16, 8, 16] }], collide: () => [[0, 0, 0, 1, 0.5, 1]], select: () => [0, 0, 0, 1, 0.5, 1],
+});
+// pale lanterns: bit 0 = hanging from the block above. The faces take fixed parts of the
+// texture so a hanging lantern looks just like a standing one.
+const PALE_LANTERN_UV = (() => {
+  const side = (u0, u1, v0, v1) => [[u0, v1], [u1, v1], [u1, v0], [u0, v0]];
+  const dark = { 0: [[0, 0], [5, 0], [5, 5], [0, 5]], 1: [[0, 0], [0, 5], [5, 5], [5, 0]] };
+  const body = Object.assign({ 2: side(5, 11, 9, 16), 3: side(5, 11, 9, 16), 4: side(5, 11, 9, 16), 5: side(5, 11, 9, 16) }, dark);
+  const cap = Object.assign({ 2: side(6, 10, 7, 9), 3: side(6, 10, 7, 9), 4: side(6, 10, 7, 9), 5: side(6, 10, 7, 9) }, dark);
+  return { body, cap };
+})();
+defBlock(162, 'pale_lantern', {
+  name: 'Pale Lantern', render: R.MODEL, tex: 'pale_lantern', opaque: false, opacity: 0, light: 12, hardness: 3.5, tool: 'pickaxe', sound: 'metal', itemMetaMask: 0, itemSprite: 'item_pale_lantern',
+  model: (m) => { const o = (m & 1) ? 7 : 0; return [{ b: [5, o, 5, 11, o + 7, 11], uvs: PALE_LANTERN_UV.body }, { b: [6, o + 7, 6, 10, o + 9, 10], uvs: PALE_LANTERN_UV.cap }]; },
+  collide: (m) => [(m & 1) ? [5 / 16, 7 / 16, 5 / 16, 11 / 16, 1, 11 / 16] : [5 / 16, 0, 5 / 16, 11 / 16, 9 / 16, 11 / 16]],
+  select: (m) => (m & 1) ? [5 / 16, 7 / 16, 5 / 16, 11 / 16, 1, 11 / 16] : [5 / 16, 0, 5 / 16, 11 / 16, 9 / 16, 11 / 16],
+});
+// the keystone before a forgotten city's gate: bit 0 = the Echo Heart is set in it
+defBlock(163, 'gate_keystone', {
+  name: 'Gate Keystone', render: R.MODEL, tex: (m, f) => f === 1 ? ((m & 1) ? 'gate_keystone_lit' : 'gate_keystone_top') : 'deepstone_reinforced', opaque: false, opacity: 0,
+  light: 3, hardness: -1, resistance: 3600000, itemMetaMask: 0, drops: () => [],
+  model: () => [{ b: [1, 0, 1, 15, 3, 15] }, { b: [3, 3, 3, 13, 12, 13] }, { b: [2, 12, 2, 14, 14, 14] }],
+  collide: () => [[1 / 16, 0, 1 / 16, 15 / 16, 14 / 16, 15 / 16]], select: () => [1 / 16, 0, 1 / 16, 15 / 16, 14 / 16, 15 / 16],
+});
+// the gate to the Sift: a sheet of falling grey light (meta like the portal)
+defBlock(164, 'sift_gate', {
+  name: 'Sift Gate', render: R.MODEL, tex: 'sift_gate', opaque: false, solid: false, translucent: true, opacity: 0, light: 11,
+  hardness: -1, resistance: 3600000, sound: 'glass', itemMetaMask: 0, drops: () => [], select: () => null,
+  model: (m) => [{ b: portalBox(m) }],
+});
 // infested bricks: something lives inside
 defBlock(151, 'infested_bricks', {
   name: (m) => ['Stone Bricks', 'Mossy Stone Bricks', 'Cracked Stone Bricks', 'Chiseled Stone Bricks'][m & 3],

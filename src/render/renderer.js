@@ -282,6 +282,7 @@ class Renderer {
     this.flicker = 1 + this.flickerT;
     const gamma = this.game.settings.brightness;
     const nv = extra && extra.nightVision ? extra.nightVision : 0;
+    const dk = extra && extra.darkness ? extra.darkness : 0;
     const flash = world.lightningFlash > 0 ? 1 : 0;
     const d = this.lightmapData;
     for (let s = 0; s < 16; s++) for (let bl = 0; bl < 16; bl++) {
@@ -297,6 +298,7 @@ class Renderer {
       const ig = (v) => { const f = 1 - v; return 1 - f * f * f * f; };
       r = r * (1 - gamma) + ig(r) * gamma; g = g * (1 - gamma) + ig(g) * gamma; b = b * (1 - gamma) + ig(b) * gamma;
       r = r * 0.96 + 0.03; g = g * 0.96 + 0.03; b = b * 0.96 + 0.03;
+      if (dk > 0) { const k = 1 - dk * 0.82; r *= k; g *= k; b *= k; }
       const i = (s * 16 + bl) * 4;
       d[i] = clamp(r, 0, 1) * 255; d[i + 1] = clamp(g, 0, 1) * 255; d[i + 2] = clamp(b, 0, 1) * 255; d[i + 3] = 255;
     }
@@ -430,6 +432,8 @@ class Renderer {
       fogColor = [0.6, 0.1, 0.0]; fogStart = 0; fogEnd = 2;
     } else if (hooks && hooks.blindFog) { fogStart = 0; fogEnd = hooks.blindFog; fogColor = [0, 0, 0]; }
     if (hooks && hooks.moorMist) { fogStart *= 1 - hooks.moorMist * 0.75; fogEnd *= 1 - hooks.moorMist * 0.45; }
+    // darkness: the world closes in, pulsing, to a few blocks of black fog
+    if (hooks && hooks.dark > 0 && inFluid !== 'lava') { const k = hooks.dark; fogStart *= 1 - k; fogEnd = fogEnd * (1 - k) + 13 * k; fogColor = [fogColor[0] * (1 - k), fogColor[1] * (1 - k), fogColor[2] * (1 - k)]; }
     if (this.rain > 0) { fogStart *= 1 - this.rain * 0.3; }
     this.fogStart = fogStart; this.fogEnd = fogEnd; this.curFog = fogColor;
     gl.clearColor(fogColor[0], fogColor[1], fogColor[2], 1);

@@ -211,6 +211,7 @@ class Arrow extends Entity {
       this.vx = 0; this.vy = 0; this.vz = 0;
       game.audio.play('arrow_hit', 1, 1.2 / (Math.random() * 0.2 + 0.9), this.x, this.y, this.z);
       this.crit = false;
+      game.noise(this.x, this.y, this.z, 'projectile', null);
       return;
     }
     this.x += this.vx; this.y += this.vy; this.z += this.vz;
@@ -254,6 +255,7 @@ class Thrown extends Entity {
     if (target || hit) {
       if (target) target.hurt(this.kind === 'snowball' && (target.type === 'wraith' || target.type === 'flare') ? (target.type === 'flare' ? 3 : 4) : 0, { type: 'thrown', entity: this.shooter || this, knockback: 0.25 });
       game.particles.burst(this.x, this.y, this.z, this.kind === 'snowball' ? 'snowball' : 'egg', 8);
+      game.noise(this.x, this.y, this.z, 'projectile', null);
       if (this.kind === 'egg' && Math.random() < 0.125 && game.spawnMob) game.spawnMob('chicken', this.x, this.y, this.z, { baby: true });
       this.removed = true;
       return;

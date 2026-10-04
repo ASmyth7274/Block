@@ -325,7 +325,7 @@ class Hud {
     const g = this.game, p = g.player, w = g.world, r = g.renderer;
     const bx = Math.floor(p.x), by = Math.floor(p.y), bz = Math.floor(p.z);
     const facing = ['north (Towards negative Z)', 'south (Towards positive Z)', 'west (Towards negative X)', 'east (Towards positive X)'][Behaviors.playerFacing(p)];
-    const b = BIOMES[w.biomeAt(bx, bz)];
+    const b = BIOMES[w.biomeAt3(bx, by, bz)];
     const l = w.getLightRaw(bx, Math.floor(p.y + 0.5), bz);
     const left = [
       'Blocklands ' + GAME_VERSION + ' (' + this.fps + ' fps, ' + r.stats.meshed + ' chunk updates)',

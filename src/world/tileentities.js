@@ -71,8 +71,17 @@ class EnchantTE extends TileEntity {
   }
 }
 
+// the deep caves' listeners: a sensor remembers when it last heard something,
+// a shrieker when it last cried out
+class HushTE extends TileEntity {
+  constructor(type, x, y, z) { super(type, x, y, z); this.cool = 0; this.wild = false; }
+  save() { return Object.assign(super.save(), { wild: this.wild || undefined }); }
+  load(d) { this.wild = !!d.wild; }
+}
+
 function makeTileEntity(type, x, y, z) {
   switch (type) {
+    case 'sensor': case 'shrieker': return new HushTE(type, x, y, z);
     case 'enchanting': return new EnchantTE(x, y, z);
     case 'moving': return new MovingTE(x, y, z);
     case 'sign': return new SignTE(x, y, z);

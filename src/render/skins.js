@@ -453,6 +453,82 @@ const Skins = (() => {
     return s;
   })();
 
+  // ------------------------------------------------------------ the Hush
+  // the Listener: slate-dark hide over a cage of ribs that glow when its heart beats,
+  // and no face at all - only a dish of an ear, whorled like a shell
+  const LS = { base: C('#162224'), dark: C('#0c1315'), hi: C('#24363a'), lichen: C('#2c4644'), bone: C('#5d7d78'), rim: C('#6f8f8a'), moss: C('#0f5c58') };
+  const ribAt = (x, y) => {
+    if ((x === 7 || x === 8) && y >= 2 && y <= 14) return true;
+    for (const ry of [3, 6, 9, 12]) { const off = Math.floor(Math.abs(x - 7.5) / 3.2); if (y === ry + off && x >= 1 && x <= 14 && !(x === 7 || x === 8)) return true; }
+    return false;
+  };
+  const heartAt = (x, y) => x >= 6 && x <= 9 && y >= 7 && y <= 9;
+  S.listener = (() => {
+    const s = new Skin(); const r = rng('listener');
+    s.box(0, 0, 16, 18, 8, (f, x, y) => {
+      if (f === 'front') { if (heartAt(x, y)) return C('#1d3a3a'); if (ribAt(x, y)) return vary(r, LS.bone, 0.08); }
+      if (f === 'back' && (x === 7 || x === 8)) return y % 3 === 0 ? vary(r, LS.lichen, 0.1) : vary(r, LS.hi, 0.08);
+      if (f === 'top' && (x * 5 + y * 3) % 7 < 2) return vary(r, LS.moss, 0.15);
+      const h = (x * 31 + y * 17) % 23;
+      return h === 0 ? vary(r, LS.lichen, 0.1) : vary(r, (x + y * 2) % 5 === 0 ? LS.dark : LS.base, 0.1);
+    });
+    return s;
+  })();
+  S.listener_glow = (() => {
+    const s = new Skin();
+    s.box(0, 0, 16, 18, 8, (f, x, y) => {
+      if (f === 'front') { if (heartAt(x, y)) return (x === 6 || x === 9 || y === 7 || y === 9) ? [95, 247, 238] : [232, 255, 253]; if (ribAt(x, y)) return [63, 224, 214]; }
+      // down its back, the spine and two rows of vents glow too, so you can see it walk away
+      if (f === 'back' && (x === 7 || x === 8) && y % 3 === 0) return [63, 224, 214];
+      if (f === 'back' && (x === 3 || x === 12) && y >= 3 && y <= 13 && y % 2 === 1) return [36, 160, 154];
+      if ((f === 'left' || f === 'right') && x === 4 && y >= 5 && y <= 11 && y % 3 === 2) return [36, 160, 154];
+      if (f === 'top' && (x * 5 + y * 3) % 11 === 0) return [40, 190, 180];
+      return null;
+    });
+    return s;
+  })();
+  S.listener_limbs = (() => {
+    const s = new Skin(); const r = rng('listener_limbs');
+    s.box(0, 0, 6, 14, 6, (f, x, y) => {
+      if (y >= 12) return f === 'front' && y === 13 && x % 2 === 0 ? vary(r, LS.rim, 0.08) : vary(r, LS.dark, 0.1);
+      if (y === 6 || y === 7) return vary(r, LS.hi, 0.08);
+      return vary(r, (x * 3 + y) % 7 === 0 ? LS.lichen : LS.base, 0.1);
+    });
+    s.box(24, 0, 5, 26, 5, (f, x, y) => {
+      if (y >= 22) return (f === 'front' || f === 'bottom') && y >= 24 && x % 2 === 0 ? vary(r, LS.rim, 0.08) : vary(r, LS.dark, 0.1);
+      if (y < 4 && f === 'top') return vary(r, LS.moss, 0.15);
+      return vary(r, y >= 13 ? ((x + y) % 6 === 0 ? LS.lichen : LS.hi) : ((x * 7 + y) % 9 === 0 ? LS.lichen : LS.base), 0.1);
+    });
+    return s;
+  })();
+  const whorl = (x, y) => { const d = Math.hypot(x - 4.5, y - 4.5); return d < 1.2 ? 0 : (d > 1.8 && d < 2.6) || (d > 3.5 && d < 4.3) ? 2 : 1; };
+  S.listener_head = (() => {
+    const s = new Skin(); const r = rng('listener_head');
+    s.box(0, 0, 10, 10, 8, (f, x, y) => {
+      if (f === 'front') { const w = whorl(x, y); return w === 0 ? [5, 9, 10] : w === 2 ? vary(r, C('#2a4a48'), 0.08) : vary(r, LS.dark, 0.1); }
+      return vary(r, (x * 3 + y * 5) % 11 === 0 ? LS.lichen : LS.base, 0.1);
+    });
+    // the rim's lip is dark and lichened; the inside of the dish is pale, veined with teal
+    const rimFn = (inner) => (f, x, y, fw, fh) => {
+      if (f === 'front') return (x * 5 + y * 3) % 7 === 0 ? vary(r, LS.lichen, 0.1) : vary(r, y === 0 || x === 0 ? LS.hi : LS.base, 0.08);
+      if (f === inner) return (x * 2 + y) % 5 === 0 ? vary(r, C('#3f6f6a'), 0.08) : vary(r, LS.bone, 0.1);
+      return vary(r, (x + y) % 4 === 0 ? LS.dark : LS.base, 0.1);
+    };
+    s.box(36, 0, 4, 10, 3, (f, x, y, fw, fh) => (f === 'left' || f === 'right') ? rimFn('left')(f === 'right' ? 'left' : f, x, y, fw, fh) : rimFn('none')(f, x, y, fw, fh));
+    s.box(0, 18, 18, 3, 3, rimFn('bottom'));
+    s.box(0, 24, 18, 3, 3, rimFn('top'));
+    return s;
+  })();
+  S.listener_head_glow = (() => {
+    const s = new Skin();
+    s.box(0, 0, 10, 10, 8, (f, x, y) => (f === 'front' && whorl(x, y) === 2 && (x + y) % 2 === 0) ? [63, 224, 214] : (f === 'back' && y % 4 === 2 && (x === 3 || x === 6)) ? [36, 160, 154] : null);
+    const glowRim = (inner) => (f, x, y) => f === 'front' ? ((x * 5 + y * 3) % 11 === 0 ? [95, 247, 238] : null) : f === inner && (x * 2 + y) % 5 === 0 ? [40, 180, 172] : null;
+    s.box(36, 0, 4, 10, 3, (f, x, y) => (f === 'left' || f === 'right') ? ((x * 2 + y) % 5 === 0 ? [40, 180, 172] : null) : glowRim('none')(f, x, y));
+    s.box(0, 18, 18, 3, 3, glowRim('bottom'));
+    s.box(0, 24, 18, 3, 3, glowRim('top'));
+    return s;
+  })();
+
   // ------------------------------------------------------------ the Underworld
   S.mite = (() => {
     const s = new Skin(); const r = rng('mite');

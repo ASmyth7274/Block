@@ -300,6 +300,7 @@ class Mob extends Living {
       this.updateLook();
     }
     this.livingTick();
+    if (!this.dead && this.category !== 'ambient') Hush.step(game, this);
     if (!this.dead) {
       // the head may turn further than the body (clamped)
       const hy = this.headYawTarget === undefined ? this.yaw : this.headYawTarget;
@@ -1991,6 +1992,7 @@ class MobSpawner {
     const b = BIOMES[w.biomeAt(x, z)];
     const key = b ? b.key : 'plains';
     if (key === 'mushroom_island') return null;
+    if (!w.dim && y < 50 && w.biomeAt3(x, y, z) === HUSH_BIOME) return null;
     const table = [['zombie', 95], ['skeleton', 100], ['spider', 100], ['boomcap', 90]];
     if (key === 'desert' || key === 'canyon' || key === 'salt_flats') { table[0][1] = 20; table.push(['mummy', 80]); }
     const surface = y >= w.heightAt(x, z) - 1;

@@ -490,6 +490,106 @@ const SOUND_DEFS = (() => {
     });
   };
   S.crystal_hum = () => render(3, (t) => (Math.sin(2 * Math.PI * 440 * t) * 0.5 + Math.sin(2 * Math.PI * 660.4 * t) * 0.3 + Math.sin(2 * Math.PI * 880.9 * t) * 0.15) * Math.sin(Math.PI * t / 3));
+  // ----- the Hush -----
+  // the air of the Hush: a pressure more than a sound, with something ticking far away (looped)
+  S.hush_air = () => {
+    const lp = new Biquad('lp', 110, 0.8), ck = [];
+    for (let i = 0; i < 10; i++) ck.push([rnd() * 7.6, 1400 + rnd() * 1600, 0.04 + rnd() * 0.05, 0.004]);
+    return render(8, (t) => {
+      const w = Math.sin(Math.PI * 2 * t / 8);
+      return lp.p(noise()) * 1.8 * (0.8 + 0.2 * w) + Math.sin(2 * Math.PI * 36.7 * t) * 0.14 + Math.sin(2 * Math.PI * 55 * t) * 0.05 * (0.5 + 0.5 * w) + ring(ck, t);
+    });
+  };
+  // mossglow caves: a soft green breath and water dripping somewhere (looped)
+  S.moss_air = () => {
+    const lp = new Biquad('lp', 500, 0.7), drips = [];
+    for (let i = 0; i < 6; i++) { const at = 0.4 + rnd() * 7, f = 900 + rnd() * 900; drips.push([at, f, 0.25, 0.04], [at + 0.004, f * 1.9, 0.08, 0.02]); }
+    return render(8, (t) => lp.p(noise()) * 0.35 * (0.8 + 0.2 * Math.sin(Math.PI * 2 * t / 8)) + ring(drips, t));
+  };
+  // a sensor hears something: a soft, hollow click and a breath of shimmer
+  S.hush_click = () => {
+    const bp = new Biquad('bp', 1900, 6), hp = new Biquad('hp', 3000, 0.7);
+    return render(0.55, (t) => bp.p(noise()) * Math.exp(-t / 0.012) * 1.4 + Math.sin(2 * Math.PI * 420 * t) * Math.exp(-t / 0.03) * 0.5
+      + hp.p(noise()) * 0.18 * Math.sin(Math.PI * Math.min(1, t / 0.55)) * (0.5 + 0.5 * Math.sin(t * 90)));
+  };
+  // a shrieker: a thin, rising wail with something rattling behind it
+  S.hush_shriek = () => {
+    const bp = new Biquad('bp', 900, 3), bp2 = new Biquad('bp', 2400, 8);
+    let ph = 0, ph2 = 0;
+    return render(2.6, (t) => {
+      const u = t / 2.6, f = 520 + 380 * Math.sin(Math.PI * Math.min(1, u * 1.6)) + Math.sin(t * 2 * Math.PI * 7) * 30;
+      ph += 2 * Math.PI * f / DSP.SR; ph2 += 2 * Math.PI * f * 1.502 / DSP.SR;
+      const saw = ((ph / (2 * Math.PI)) % 1) * 2 - 1;
+      const v = bp.p(saw) * 0.7 + Math.sin(ph2) * 0.25 + bp2.p(noise()) * (0.4 + 0.3 * Math.sin(t * 2 * Math.PI * 23));
+      return v * (t < 0.08 ? t / 0.08 : 1) * Math.pow(1 - u, 1.2);
+    });
+  };
+  // the Listener
+  const groan = (dur, f0, f1, rough, clicks) => () => {
+    const lp = new Biquad('lp', 500, 0.9), bp = new Biquad('bp', 320, 4), ck = [];
+    for (let i = 0; i < clicks; i++) ck.push([rnd() * dur * 0.9, 900 + rnd() * 1800, 0.3 + rnd() * 0.4, 0.004 + rnd() * 0.004]);
+    let ph = 0;
+    return render(dur, (t) => {
+      const u = t / dur, f = f0 + (f1 - f0) * u + Math.sin(t * 2 * Math.PI * 4.5) * f0 * 0.06;
+      ph += 2 * Math.PI * f / DSP.SR;
+      const src = (((ph / (2 * Math.PI)) % 1) * 2 - 1) * 0.6 + noise() * rough;
+      return (lp.p(src) * 1.2 + bp.p(src) * 0.6) * Math.sin(Math.PI * Math.min(1, u * 1.15)) + ring(ck, t);
+    });
+  };
+  S.listener_say = groan(1.6, 62, 48, 0.35, 7);
+  S.listener_hurt = groan(0.5, 95, 60, 0.5, 3);
+  S.listener_death = groan(3.2, 70, 24, 0.45, 18);
+  S.listener_roar = () => {
+    const base = groan(2.2, 58, 44, 0.7, 6)(), bp = new Biquad('bp', 700, 2);
+    return render((base.length + 0.5) / DSP.SR, (t, i) => base[i] + bp.p(noise()) * 0.5 * Math.sin(Math.PI * Math.min(1, t / 2.2)) * (0.6 + 0.4 * Math.sin(t * 40)));
+  };
+  // it tilts its dish: a dry ratchet of clicks
+  S.listener_listen = () => {
+    const ck = []; for (let i = 0; i < 9; i++) ck.push([0.03 + i * 0.045 + rnd() * 0.01, 1200 + rnd() * 900, 0.5, 0.005]);
+    const hp = new Biquad('hp', 1500, 0.7);
+    return render(0.6, (t) => ring(ck, t) + hp.p(noise()) * 0.12 * Math.sin(Math.PI * Math.min(1, t / 0.6)));
+  };
+  // the slow heart in its chest: lub-dub
+  S.listener_heart = () => {
+    const lp = new Biquad('lp', 120, 0.8);
+    return render(0.6, (t) => { const th = (u) => (u >= 0 ? Math.sin(2 * Math.PI * 48 * u) * Math.exp(-u / 0.06) : 0); return th(t) + th(t - 0.2) * 0.7 + lp.p(noise()) * 2 * (Math.exp(-t / 0.03) + (t > 0.2 ? Math.exp(-(t - 0.2) / 0.03) * 0.7 : 0)); });
+  };
+  S.listener_step = () => { const lp = new Biquad('lp', 160, 0.8); return render(0.35, (t) => lp.p(noise()) * 4 * Math.exp(-t / 0.05) + Math.sin(2 * Math.PI * 55 * t) * Math.exp(-t / 0.07) * 0.8); };
+  // digging up out of the floor, or back down into it
+  S.listener_emerge = () => {
+    const lp = new Biquad('lp', 260, 0.9), ck = [];
+    for (let i = 0; i < 40; i++) ck.push([rnd() * 2.6, 300 + rnd() * 1500, 0.15 + rnd() * 0.35, 0.004 + rnd() * 0.01]);
+    return render(3, (t) => (lp.p(noise()) * 3 * (0.6 + 0.4 * Math.sin(t * 13)) + Math.sin(2 * Math.PI * 38 * t) * 0.3) * Math.sin(Math.PI * Math.min(1, t / 3)) + ring(ck, t));
+  };
+  S.listener_dig = S.listener_emerge;
+  // drawing breath for the hush wave: a whine climbing as it gathers
+  S.listener_charge = () => {
+    let ph = 0;
+    const bp = new Biquad('bp', 1000, 3);
+    return render(1.7, (t) => {
+      const u = t / 1.7, f = 180 + u * u * 900;
+      ph += 2 * Math.PI * f / DSP.SR;
+      bp.set(400 + u * 2200, 3);
+      return (Math.sin(ph) * 0.4 + bp.p(noise()) * 0.6) * u * (0.7 + 0.3 * Math.sin(t * 2 * Math.PI * (6 + u * 20)));
+    });
+  };
+  // the hush wave: a deep blow, then a ringing that fills the head
+  S.listener_wave = () => {
+    const lp = new Biquad('lp', 200, 0.8), bp = new Biquad('bp', 1400, 2);
+    return render(2, (t) => lp.p(noise()) * 5 * Math.exp(-t / 0.08) + Math.sin(2 * Math.PI * (60 - t * 12) * t) * Math.exp(-t / 0.3) * 0.9
+      + (Math.sin(2 * Math.PI * 1760 * t) * 0.15 + Math.sin(2 * Math.PI * 2349 * t) * 0.1) * Math.exp(-t / 0.7) + bp.p(noise()) * Math.exp(-t / 0.25) * 0.5);
+  };
+  // the city gate waking: a deep chord swelling out of a hiss of falling grains
+  S.sift_gate_open = () => {
+    const hp = new Biquad('hp', 2500, 0.7);
+    return render(5, (t) => {
+      const u = t / 5, sw = Math.sin(Math.PI * Math.min(1, u * 1.2));
+      let s = 0; [55, 82.4, 110, 164.8, 220].forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t * (1 + i * 0.0007)) * (0.5 / (i + 1)); });
+      return s * sw + hp.p(noise()) * 0.25 * sw * (0.5 + 0.5 * Math.sin(t * 7));
+    });
+  };
+  // an echo fork, struck: a clear note that takes its time to die
+  S.echo_fork = () => render(2.4, (t) => (Math.sin(2 * Math.PI * 880 * t) * 0.6 + Math.sin(2 * Math.PI * 883 * t) * 0.3 + Math.sin(2 * Math.PI * 5550 * t) * 0.15 * Math.exp(-t / 0.05)) * Math.exp(-t / 0.8) * (t < 0.003 ? t / 0.003 : 1));
   return S;
 })();
 

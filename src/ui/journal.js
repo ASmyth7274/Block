@@ -51,6 +51,9 @@ const MILESTONES = [
   { id: 'isles', name: 'The Far Isles', desc: 'Step through the rift', icon: () => [B.STARSTONE, 0] },
   { id: 'crystal', name: 'Lights Out', desc: 'Shatter a star crystal', icon: () => [ITEM_IDS.star_crystal, 0] },
   { id: 'drift', name: 'Adrift', desc: 'Reach the Drift Isles beyond the gulf', icon: () => [B.STARSTONE_BRICKS, 0] },
+  { id: 'city', name: 'Lost and Found', desc: 'Find a forgotten city deep in the Hush', icon: () => [B.DEEPSTONE_BRICKS, 2] },
+  { id: 'gate', name: 'The Grey Door', desc: 'Wake a city gate with an Echo Heart', icon: () => [ITEM_IDS.echo_heart, 0] },
+  { id: 'listener', name: 'Unheard Of', desc: 'Defeat the Listener', icon: () => [ITEM_IDS.hush_shard, 0] },
 ];
 const BIOME_DESCRIPTIONS = {
   ocean: 'Endless water. Sunken ruins rest on the sea floor.', deep_ocean: 'The water grows dark and cold.', plains: 'Rolling grass, wildflowers and the occasional lonely oak.',
@@ -67,6 +70,8 @@ const BIOME_DESCRIPTIONS = {
   spire_woods: 'Thick woods among towering stone pillars, each crowned with its own little forest.',
   tablelands: 'Flat-topped mesas with sheer sides, stepping up out of the plains.',
   glacier: 'An old sheet of packed ice split by crevasses, bristling with spikes of ice.',
+  mossglow_caves: 'Deep under the woods, great caverns carpeted in moss, hung with glowing vines heavy with berries.',
+  the_hush: 'Far below, the stone turns dark and the caves fall silent. Things here listen. Walk softly - and never wake the shriekers.',
   great_isle: 'Far Isles. Pale starstone ringed by obsidian spires, each crowned with a star crystal. Something vast circles overhead.',
   starlit_gulf: 'Far Isles. Nothing at all, for hundreds of blocks: just the void and the stars.',
   drift_isles: 'Far Isles. Islands without number, scattered out across the void beyond the gulf.',

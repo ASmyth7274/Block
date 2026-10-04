@@ -221,7 +221,7 @@ const EFFECTS = {
   weakness: { name: 'Weakness', color: '#484d48', bad: true }, regen: { name: 'Regeneration', color: '#cd5cab' }, poison: { name: 'Poison', color: '#4e9331', bad: true },
   fireRes: { name: 'Fire Resistance', color: '#e49a3a' }, nightVision: { name: 'Night Vision', color: '#1f1fa1' }, invisible: { name: 'Invisibility', color: '#7f8392' },
   waterBreathing: { name: 'Water Breathing', color: '#2e5299' }, jump: { name: 'Jump Boost', color: '#22ff4c' }, hunger: { name: 'Hunger', color: '#587653', bad: true },
-  haste: { name: 'Haste', color: '#d9c043' },
+  haste: { name: 'Haste', color: '#d9c043' }, darkness: { name: 'Darkness', color: '#292721', bad: true },
 };
 function potionOf(d) { return POTIONS[d & 63] || POTIONS[0]; }
 function potionName(d, splash) {
@@ -243,6 +243,11 @@ defItem('glistering_melon', { name: 'Glistering Melon' });
 // ---- the Vaults ----
 defItem('seeker_eye', { name: "Seeker's Eye", rare: true });
 defItem('star_crystal', { name: 'Star Crystal', rare: true });
+defItem('glowberry', { name: 'Glow Berries', food: { hunger: 2, sat: 0.4 } });
+defItem('hush_shard', { name: 'Hush Shard', rare: true });
+defItem('echo_heart', { name: 'Echo Heart', rare: true, maxStack: 1 });
+// strike it and its note rings out wherever you point: a way to lead the Listener astray
+defItem('echo_fork', { name: 'Echo Fork', maxDamage: 48, handheld: true });
 
 // ---------------------------------------------------------------------------
 // Helpers

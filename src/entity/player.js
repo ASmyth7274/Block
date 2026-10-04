@@ -83,7 +83,7 @@ class Player extends Living {
     this.stats.playTime++;
     // discovery: biomes
     if (this.age % 20 === 0) {
-      const b = this.world.biomeAt(Math.floor(this.x), Math.floor(this.z));
+      const b = this.world.biomeAt3(Math.floor(this.x), Math.floor(this.y + 0.5), Math.floor(this.z));
       if (b !== this.lastBiome) { this.lastBiome = b; this.game.onBiomeEnter(b); }
     }
   }
@@ -165,6 +165,7 @@ class Player extends Living {
     if (this.inWater) d = 0;
     if (d > 0) {
       this.hurt(d, { type: 'fall' });
+      this.game.noise(this.x, this.y, this.z, 'land', this);
       this.game.audio.play(d > 4 ? 'fall_big' : 'fall_small', 0.8);
     }
     if (dist > 1.5 && d <= 0 && below) this.game.onFootstep(this, true);

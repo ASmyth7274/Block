@@ -158,6 +158,11 @@ class MusicEngine {
     if (w.dim === 2) return 'isles';
     if (w.dim) return 'underworld';
     if (p && p.creative) return Math.random() < 0.5 ? 'creative' : 'day';
+    if (p && p.y < 72) {
+      const cb = w.biomeAt3(Math.floor(p.x), Math.floor(p.y + 1), Math.floor(p.z));
+      if (cb === HUSH_BIOME) return 'hush';
+      if (cb === MOSSGLOW_BIOME) return 'mossglow';
+    }
     if (p && p.y < 52 && !w.canSeeSky(Math.floor(p.x), Math.floor(p.y + 1), Math.floor(p.z))) return 'underground';
     if (w.skyDarken() >= 6) return 'night';
     return 'day';
@@ -165,6 +170,8 @@ class MusicEngine {
   compose(mood) {
     const R = Math.random, pick = (a) => a[Math.floor(R() * a.length)];
     const MODES = { ionian: [0, 2, 4, 5, 7, 9, 11], lydian: [0, 2, 4, 6, 7, 9, 11], mixolydian: [0, 2, 4, 5, 7, 9, 10], dorian: [0, 2, 3, 5, 7, 9, 10], aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10] };
+    // the deep caves borrow from the others: the Hush is sparser and lower than any cave, mossglow gentler
+    if (mood === 'hush' || mood === 'mossglow') return this.composeCave(mood);
     const under = mood === 'underworld', isles = mood === 'isles', wyrm = mood === 'wyrm', ending = mood === 'ending';
     const modeName = under ? pick(['phrygian', 'aeolian', 'phrygian']) : mood === 'night' ? pick(['dorian', 'aeolian', 'ionian', 'lydian']) : mood === 'underground' ? pick(['aeolian', 'dorian', 'aeolian'])
       : isles ? pick(['lydian', 'dorian', 'lydian', 'ionian']) : wyrm ? pick(['aeolian', 'phrygian', 'aeolian']) : ending ? pick(['ionian', 'lydian'])
@@ -237,6 +244,41 @@ class MusicEngine {
     if (R() < 0.6) add(t + bar * 0.75, deg(14), 0.22, bar * 2);
     ev.sort((a, b) => a.t - b.t);
     return { events: ev, length: t + bar * 3, mood, mode: modeName, bpm: Math.round(bpm) };
+  }
+  // the deep caves: the Hush gets low tolls and far-off notes that echo back softer and
+  // softer, with long silences between; the mossglow caves get slow falling arpeggios like drops
+  composeCave(mood) {
+    const R = Math.random, pick = (a) => a[Math.floor(R() * a.length)];
+    const ev = [];
+    const add = (t, m, v, d) => { if (m >= 28 && m <= 96) ev.push({ t: t + (R() - 0.5) * 0.03, m, v: clamp(v, 0.05, 1), d }); };
+    let t = 0.6;
+    if (mood === 'hush') {
+      const scale = [0, 1, 3, 5, 6, 8, 10], tonic = 36 + Math.floor(R() * 5), bpm = 34 + R() * 8, bar = 60 / bpm * 4;
+      const bars = 9 + Math.floor(R() * 5);
+      for (let b = 0; b < bars; b++) {
+        if (R() < 0.55) add(t, tonic + pick([0, 0, 1, 7, -5 + 12]), 0.42, bar * 1.8);
+        if (R() < 0.4) {
+          const m = tonic + 24 + scale[Math.floor(R() * scale.length)] + (R() < 0.3 ? 12 : 0), at = t + bar * (0.25 + R() * 0.5);
+          for (let k = 0; k < 3; k++) add(at + k * bar * 0.19, m, 0.3 * Math.pow(0.5, k), bar * 0.5);
+        }
+        if (R() < 0.12) add(t + bar * 0.5, tonic + 6, 0.2, bar);
+        t += bar;
+      }
+      return { events: ev.sort((a, b) => a.t - b.t), length: t + bar * 2, mood, mode: 'locrian', bpm: Math.round(bpm) };
+    }
+    const scale = pick([[0, 2, 4, 6, 7, 9, 11], [0, 2, 3, 5, 7, 9, 10]]), tonic = 55 + Math.floor(R() * 6), bpm = 50 + R() * 8, beat = 60 / bpm, bar = beat * 4;
+    const deg = (d) => tonic + scale[((d % 7) + 7) % 7] + 12 * Math.floor(d / 7);
+    const roots = pick([[0, 3, 4, 0], [0, 5, 3, 4], [0, 1, 3, 0]]);
+    for (let ph = 0; ph < 3; ph++) for (const d of roots) {
+      add(t, deg(d) - 12, 0.3, bar * 1.4);
+      // drops: three notes falling, then a pause
+      const top = d + 9 + Math.floor(R() * 3);
+      for (let k = 0; k < 3; k++) add(t + beat * (1 + k * 0.5), deg(top - k * 2), 0.28 - k * 0.05, beat * 2);
+      if (R() < 0.5) add(t + beat * 3, deg(d + 4), 0.22, beat * 1.5);
+      t += bar;
+    }
+    add(t, deg(0) - 12, 0.3, bar * 2); add(t + 0.1, deg(4), 0.24, bar * 2); add(t + 0.2, deg(7), 0.22, bar * 2);
+    return { events: ev.sort((a, b) => a.t - b.t), length: t + bar * 3, mood, mode: 'cave', bpm: Math.round(bpm) };
   }
   makeMotif(meter, R) {
     const rhythms = meter === 3

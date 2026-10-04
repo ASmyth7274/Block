@@ -136,6 +136,22 @@ const MODELS = (() => {
       }
       return m;
     })(),
+    // the Listener: a hunched, blind giant whose face is one great dish of an ear
+    listener: {
+      body: { pivot: [0, 14, 0], boxes: [bx([-8, 0, -4], [16, 18, 8], [0, 0])] },
+      head: { pivot: [0, 31, -3], boxes: [bx([-5, -2, -8], [10, 10, 8], [0, 0])] },
+      rarm: { pivot: [10, 30, 0], boxes: [bx([-2, -24, -3], [5, 26, 5], [24, 0])] },
+      larm: { pivot: [-10, 30, 0], boxes: [bx([-3, -24, -3], [5, 26, 5], [24, 0], { mirror: true })] },
+      rleg: { pivot: [4, 14, 0], boxes: [bx([-3, -14, -3], [6, 14, 6], [0, 0])] },
+      lleg: { pivot: [-4, 14, 0], boxes: [bx([-3, -14, -3], [6, 14, 6], [0, 0], { mirror: true })] },
+    },
+    // the rim of its dish, hinged so it can flare wide open (drawn relative to the head)
+    listenerDish: {
+      dishT: { pivot: [0, 8, -8], boxes: [bx([-9, 0, -3], [18, 3, 3], [0, 18])] },
+      dishB: { pivot: [0, -2, -8], boxes: [bx([-9, -3, -3], [18, 3, 3], [0, 24])] },
+      dishR: { pivot: [5, 3, -8], boxes: [bx([0, -5, -3], [4, 10, 3], [36, 0])] },
+      dishL: { pivot: [-5, 3, -8], boxes: [bx([-4, -5, -3], [4, 10, 3], [36, 0], { mirror: true })] },
+    },
     // the gaunt: a head and body on long, thin limbs, nearly three blocks tall
     gaunt: {
       head: { pivot: [0, 38, 0], boxes: [bx([-4, 0, -4], [8, 8, 8], [0, 0])] },

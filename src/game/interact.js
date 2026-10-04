@@ -169,6 +169,7 @@ class Interaction {
     }
     p.stats.blocksMined++;
     g.onBlockBroken(id, meta, x, y, z);
+    g.noise(x + 0.5, y + 0.5, z + 0.5, 'break', p);
   }
 
   // ---------------------------------------------------------------- combat
@@ -195,6 +196,7 @@ class Interaction {
       p.exhaust(0.3);
       if (e.onAttackedByPlayer) e.onAttackedByPlayer(p);
       rallyWolves(g, e);
+      g.noise(e.x, e.y + e.h / 2, e.z, 'hit', p);
     }
   }
 
@@ -209,10 +211,10 @@ class Interaction {
     }
     if (this.hit) {
       const hit = this.hit;
-      if (!p.sneaking || !held) { if (Behaviors.useBlock(g, p, hit)) { p.swing(); return; } }
+      if (!p.sneaking || !held) { if (Behaviors.useBlock(g, p, hit)) { p.swing(); g.noise(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, 'use', p); return; } }
       if (held) {
-        if (held.id < 256) { if (Behaviors.tryPlace(g, p, held, hit)) { p.swing(); return; } }
-        else if (Behaviors.useItemOnBlock(g, p, held, hit)) { p.swing(); return; }
+        if (held.id < 256) { if (Behaviors.tryPlace(g, p, held, hit)) { p.swing(); g.noise(hit.x + 0.5, hit.y + 1, hit.z + 0.5, 'place', p); return; } }
+        else if (Behaviors.useItemOnBlock(g, p, held, hit)) { p.swing(); g.noise(hit.x + 0.5, hit.y + 1, hit.z + 0.5, 'place', p); return; }
       }
     }
     if (!held) return;
@@ -295,11 +297,32 @@ class Interaction {
     if (held.id === I.message_bottle) { this.noRepeat = true; g.readMessageBottle(); return; }
     if (held.id === I.prospector_rod) { g.useProspectorRod(); return; }
     if (held.id === I.wayfinder) { g.useWayfinder(); return; }
+    if (held.id === I.echo_fork) { this.noRepeat = true; this.strikeFork(); return; }
     if (held.id === I.journal) { g.openJournal(); return; }
     if (held.id === I.map) { g.openMap(); return; }
     if (held.id === I.wisp_essence) { if (g.releaseWisp()) { if (!p.creative) p.inventory.decrementHeld(1); p.swing(); } return; }
     if (held.id === I.spawn_egg && this.hit) return;
     if (p.startUse(held)) return;
+  }
+  // the echo fork: its note rings out wherever you point, and anything listening goes to look
+  strikeFork() {
+    const g = this.game, p = g.player, w = g.world;
+    if ((this.forkCool || 0) > g.ticks) return;
+    this.forkCool = g.ticks + 20;
+    const eye = g.eyePos(1), [dx, dy, dz] = this.lookDir();
+    const h = raycastBlocks(w, eye[0], eye[1], eye[2], dx, dy, dz, 24, {});
+    const t = h ? Math.max(0.5, h.t - 0.3) : 24;
+    const x = eye[0] + dx * t, y = eye[1] + dy * t, z = eye[2] + dz * t;
+    g.audio.play('echo_fork', 0.7, 1);
+    g.audio.play('echo_fork', 1.4, 0.94, x, y, z);
+    if (g.settings.particles !== 'minimal') {
+      const L = g.particles.layer('particle_glint');
+      for (let i = 1.2; i < t; i += 0.6) g.particles.add({ x: eye[0] + dx * i, y: eye[1] + dy * i - 0.15, z: eye[2] + dz * i, vx: 0, vy: 0, vz: 0, size: 0.05, life: 6 + Math.floor(i * 0.6), layer: L, r: 0.3, g: 0.95, b: 0.9, collide: false, bright: true, fade: true });
+      for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; g.particles.add({ x, y, z, vx: Math.cos(a) * 0.12, vy: (Math.random() - 0.5) * 0.04, vz: Math.sin(a) * 0.12, size: 0.07, life: 14, layer: L, r: 0.3, g: 0.95, b: 0.9, collide: false, bright: true, fade: true }); }
+    }
+    Hush.vibrate(g, x, y, z, 'fork', null);
+    if (!p.creative) p.inventory.damageHeld(p, 1);
+    p.swing();
   }
   pickBlock() {
     const g = this.game, p = g.player;
