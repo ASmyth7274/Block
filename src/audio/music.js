@@ -10,6 +10,7 @@ class MusicEngine {
     this.ctx = null;
     this.notes = new Map();          // midi -> AudioBuffer
     this.renderQueue = [];
+    this.pending = new Map();
     this.events = []; this.ei = 0;
     this.playing = false;
     this.pieceStart = 0; this.pieceEnd = 0;
@@ -47,7 +48,7 @@ class MusicEngine {
   renderPiano(midi) {
     const SR = 22050;
     const f0 = 440 * Math.pow(2, (midi - 69) / 12);
-    const dur = clamp(5.8 - (midi - 40) * 0.075, 1.6, 5.8);
+    const dur = clamp(5.2 - (midi - 40) * 0.07, 1.5, 5.2);
     const n = Math.floor(dur * SR);
     const out = new Float32Array(n);
     const Bk = 0.0003 * Math.pow(2, (midi - 60) / 20);
@@ -67,7 +68,9 @@ class MusicEngine {
         let y1 = Math.sin(ph - w), y2 = Math.sin(ph - 2 * w);
         let e1 = 0.55 * amp / strings.length, e2 = 0.45 * amp / strings.length;
         const d1 = Math.exp(-1 / (tShort * SR)), d2 = Math.exp(-1 / (tLong * SR));
-        for (let i = 0; i < n; i++) {
+        // stop once this partial has died away (high partials decay fast)
+        const cut = Math.min(n, Math.ceil(tLong * SR * 7.5));
+        for (let i = 0; i < cut; i++) {
           const y = c2 * y1 - y2; y2 = y1; y1 = y;
           out[i] += y * (e1 + e2);
           e1 *= d1; e2 *= d2;
@@ -91,6 +94,59 @@ class MusicEngine {
     let b = this.notes.get(midi);
     if (!b) { b = this.renderPiano(midi); this.notes.set(midi, b); }
     return b;
+  }
+  // The same piano voice, rendered off the main thread by an OfflineAudioContext.
+  prefetch(midi) {
+    if (this.notes.has(midi) || this.pending.has(midi)) return;
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OAC) return;
+    const SR = 22050;
+    const f0 = 440 * Math.pow(2, (midi - 69) / 12);
+    const dur = clamp(5.2 - (midi - 40) * 0.07, 1.5, 5.2);
+    const n = Math.floor(dur * SR);
+    let oc;
+    try { oc = new OAC(1, n, SR); } catch (e) { return; }
+    const Bk = 0.0003 * Math.pow(2, (midi - 60) / 20);
+    const decay = clamp(3.4 - (midi - 48) * 0.04, 0.7, 4.5);
+    for (let k = 1; k <= 14; k++) {
+      const fk = f0 * k * Math.sqrt(1 + Bk * k * k);
+      if (fk > SR * 0.45) break;
+      let amp = Math.pow(k, -1.25) * (1 / (1 + Math.max(0, fk - 2200) / 1400));
+      if (k === 2) amp *= 0.75;
+      if (k % 7 === 0) amp *= 0.3;
+      const tLong = decay / (1 + (k - 1) * 0.5), tShort = tLong * 0.16;
+      const strings = k <= 3 ? [-0.7, 0.7] : [0];
+      for (const cents of strings) {
+        const o = oc.createOscillator();
+        o.frequency.value = fk * Math.pow(2, cents / 1200);
+        for (const [lvl, tau] of [[0.55, tShort], [0.45, tLong]]) {
+          const g = oc.createGain();
+          g.gain.setValueAtTime(0, 0);
+          g.gain.linearRampToValueAtTime(lvl * amp / strings.length, 0.003);
+          g.gain.setTargetAtTime(0, 0.003, tau);
+          o.connect(g); g.connect(oc.destination);
+        }
+        o.start(Math.random() * 0.0005);
+        o.stop(Math.min(dur, tLong * 7.5 + 0.01));
+      }
+    }
+    // hammer thump
+    const nb = oc.createBuffer(1, Math.floor(SR * 0.03), SR), nd = nb.getChannelData(0);
+    let lp = 0;
+    for (let i = 0; i < nd.length; i++) { lp += ((Math.random() * 2 - 1) - lp) * 0.2; nd[i] = lp * Math.exp(-i / (SR * 0.005)) * 0.12; }
+    const ns = oc.createBufferSource(); ns.buffer = nb; ns.connect(oc.destination); ns.start(0);
+    const p = oc.startRendering().then((buf) => {
+      const d = buf.getChannelData(0);
+      let pk = 0;
+      for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i]));
+      const gn = (pk > 0 ? 0.6 / pk : 1) * (1 + Math.max(0, 60 - midi) * 0.012);
+      for (let i = 0; i < d.length; i++) d[i] *= gn * (i > d.length - 2000 ? (d.length - i) / 2000 : 1);
+      const out = this.ctx.createBuffer(1, d.length, SR);
+      out.getChannelData(0).set(d);
+      this.notes.set(midi, out);
+      this.pending.delete(midi);
+    }).catch(() => { this.pending.delete(midi); });
+    this.pending.set(midi, p);
   }
 
   // ------------------------------------------------------------ composition
@@ -232,10 +288,14 @@ class MusicEngine {
     if (!this.playing) { if (performance.now() >= this.nextStart && this.ctx.state === 'running') this.start(); return; }
     // render a few note buffers ahead of time
     const t0 = performance.now();
-    while (this.renderQueue.length && performance.now() - t0 < 3) { const m = this.renderQueue.shift(); if (!this.notes.has(m)) this.note(m); }
+    while (this.renderQueue.length) this.prefetch(this.renderQueue.shift());
+    void t0;
     const now = this.ctx.currentTime;
     while (this.ei < this.events.length && this.pieceStart + this.events[this.ei].t < now + 1.2) {
-      const e = this.events[this.ei++];
+      const e = this.events[this.ei];
+      // wait for a note still rendering in the background, unless it is due right now
+      if (!this.notes.has(e.m) && this.pending.has(e.m) && this.pieceStart + e.t > now + 0.15) break;
+      this.ei++;
       const when = Math.max(now + 0.01, this.pieceStart + e.t);
       this.playNote(e, when);
     }

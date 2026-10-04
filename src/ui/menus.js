@@ -470,7 +470,7 @@ class PauseScreen extends Screen {
   init() {
     const g = this.game, cx = this.W / 2, y = Math.floor(this.H / 4) + 8;
     this.add(new Button(cx - 100, y, 200, 20, 'Back to Game', () => g.closeScreen()));
-    this.add(new Button(cx - 100, y + 24, 98, 20, "Explorer's Journal", () => g.openScreen(new JournalScreen(g, this))));
+    this.add(new Button(cx - 100, y + 24, 98, 20, 'Journal', () => g.openScreen(new JournalScreen(g, this))));
     this.add(new Button(cx + 2, y + 24, 98, 20, 'Statistics', () => g.openScreen(new StatsScreen(g, this))));
     this.add(new Button(cx - 100, y + 48, 98, 20, 'Options...', () => g.openScreen(new OptionsScreen(g, this))));
     this.add(new Button(cx + 2, y + 48, 98, 20, 'Export World', () => g.exportCurrentWorld()));

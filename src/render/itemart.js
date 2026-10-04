@@ -371,8 +371,9 @@
   (() => {
     const rain = new TexGen.Img(), snow = new TexGen.Img();
     const rng = TexGen.rngFor('rain');
-    for (let k = 0; k < 9; k++) { const x = rng.nextInt(16), y0 = rng.nextInt(16), len = 3 + rng.nextInt(5); for (let j = 0; j < len; j++) rain.setw(x, y0 + j, [200, 215, 255], 150 + rng.nextInt(80)); }
-    for (let k = 0; k < 14; k++) { const x = rng.nextInt(16), y = rng.nextInt(16); snow.setw(x, y, [255, 255, 255], 230); if (rng.nextBool()) snow.setw(x + 1, y, [240, 248, 255], 160); }
+    // sparse drops: the quads tile this vertically many times per column
+    for (let k = 0; k < 4; k++) { const x = k * 4 + rng.nextInt(4), y0 = rng.nextInt(16), len = 3 + rng.nextInt(3); for (let j = 0; j < len; j++) rain.setw(x, y0 + j, [210, 222, 255], 110 + rng.nextInt(60) - j * 10); }
+    for (let k = 0; k < 4; k++) { const x = rng.nextInt(15), y = rng.nextInt(15); snow.setw(x, y, [255, 255, 255], 230); if (k & 1) snow.setw(x + 1, y, [240, 248, 255], 150); }
     TexGen.reg('rain', rain); TexGen.reg('snowfall', snow);
   })();
 })();

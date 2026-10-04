@@ -293,6 +293,13 @@ class Game {
     }
     this.saveWorld();
     this.music.nextStart = performance.now() + 30000 + Math.random() * 60000;
+    if (w.info.hardcoreDead) {
+      // a hardcore world stays lost
+      p.health = 0; p.dead = true; p.deathTime = 20;
+      this.deathMessage = this.settings.username + ' perished in this world';
+      this.deathScreenShown = true;
+      this.openScreen(new DeathScreen(this));
+    }
   }
   placeBonusChest(x, y, z) {
     const w = this.world;
@@ -986,7 +993,7 @@ class Game {
     }
     this.cursorStack = null;
     this.interaction.release(0); this.interaction.release(2);
-    if (w.info.gameMode === 'hardcore') { w.info.hardcoreDead = true; }
+    if (w.info.gameMode === 'hardcore') { w.info.hardcoreDead = true; this.saveWorld(); }
   }
   deathText(src) {
     const n = this.settings.username;
@@ -1019,7 +1026,9 @@ class Game {
     let pos = null;
     if (p.spawnPoint) {
       const s = p.spawnPoint;
-      if (w.isLoaded(s.x, s.z) && w.getBlock(s.x, s.y, s.z) !== B.BED) { p.spawnPoint = null; if (!silent) this.hud.message('Your home bed was missing or obstructed'); }
+      if (Array.isArray(s)) pos = [s[0] + 0.5, s[1], s[2] + 0.5];
+      else if (s.forced) pos = [s.x + 0.5, s.y, s.z + 0.5];
+      else if (w.isLoaded(s.x, s.z) && w.getBlock(s.x, s.y, s.z) !== B.BED) { p.spawnPoint = null; if (!silent) this.hud.message('Your home bed was missing or obstructed'); }
       else pos = [s.x + 0.5, s.y + 0.6, s.z + 0.5];
     }
     if (!pos) { const s = w.spawn || { x: 0, y: 80, z: 0 }; const y = w.isLoaded(s.x, s.z) ? Math.max(s.y, w.topSolidY(s.x, s.z) + 1) : s.y; pos = [s.x + 0.5, y, s.z + 0.5]; }
@@ -1205,7 +1214,8 @@ class Game {
     if (this.wayCooldown > this.ticks) return;
     this.wayCooldown = this.ticks + 40;
     p.swing();
-    const home = p.spawnPoint || w.spawn;
+    const sp = p.spawnPoint && Array.isArray(p.spawnPoint) ? { x: p.spawnPoint[0], z: p.spawnPoint[2] } : p.spawnPoint;
+    const home = sp || w.spawn;
     if (home) {
       const dx = home.x + 0.5 - p.x, dz = home.z + 0.5 - p.z, d = Math.round(Math.hypot(dx, dz));
       this.hud.message('§bWayfinder:§r home is ' + (d < 3 ? 'right here' : d + ' blocks to the ' + compassWord(dx, dz)) + '.');
@@ -1417,15 +1427,17 @@ class Game {
       const ox = -ddz / dl * 0.5, oz = ddx / dl * 0.5;
       const px = x + 0.5 - cam.x, pz = z + 0.5 - cam.z, yb = y0 - cam.y, yt = y1 - cam.y;
       const rnd = ((x * x * 3121 + x * 45238971 + z * z * 418711 + z * 13761) & 31);
-      let v0, v1, u0 = 0, u1 = 1;
+      // the 16px weather tiles repeat 4x across each column for thin streaks / small flakes
+      let v0, v1, u0 = 0, u1 = 4;
       if (snow) {
-        const f = (t + rnd) / 512 * 1.5;
-        v0 = y1 * 0.25 - f * 4; v1 = y0 * 0.25 - f * 4;
-        const drift = Math.sin((t + rnd * 7) * 0.01) * 0.5 + rnd * 0.03;
+        const f = (t + rnd) / 512 * 6;
+        v0 = y1 * 2 - f * 4; v1 = y0 * 2 - f * 4;
+        const drift = Math.sin((t + rnd * 7) * 0.01) * 1.5 + rnd * 0.1;
         u0 += drift; u1 += drift;
       } else {
-        const f = (t + rnd) / 32 * (3 + (rnd & 7) / 8);
-        v0 = y1 * 0.5 - f; v1 = y0 * 0.5 - f;
+        const f = (t + rnd) / 32 * (3 + (rnd & 7) / 8) * 2;
+        v0 = y1 - f; v1 = y0 - f;
+        u0 += rnd * 0.37; u1 += rnd * 0.37;
       }
       const l = w.getLightRaw(x, Math.max(top, cy), z);
       const col = snow ? [255, 255, 255, Math.round(alpha * 255)] : [255, 255, 255, Math.round(alpha * 210)];

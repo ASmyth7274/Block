@@ -595,7 +595,7 @@ const TexGen = (function () {
     const rng = rngFor(name);
     const img = new Img();
     const n = normalize(fnoise(rng, 16, 16, [4, 2, 1], [0.3, 0.3, 0.4]));
-    const p = opts.palette ? pal(opts.palette) : [60, 80, 98, 114, 130, 148, 165].map(gray);
+    const p = opts.palette ? pal(opts.palette) : [72, 92, 112, 130, 148, 166, 184].map(gray);
     for (let i = 0; i < 256; i++) {
       const x = i & 15, y = i >> 4;
       const hole = rng.nextFloat() < (opts.holes === undefined ? 0.22 : opts.holes);

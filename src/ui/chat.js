@@ -114,7 +114,7 @@ const Commands = (() => {
     if (d === undefined) return err(g, 'Usage: /difficulty <peaceful|easy|normal|hard>');
     g.world.difficulty = d; g.world.info.difficulty = d; ok(g, 'Set game difficulty to ' + ['Peaceful', 'Easy', 'Normal', 'Hard'][d]);
   });
-  cmd('spawnpoint', '/spawnpoint', true, (g) => { const p = g.player; p.spawnPoint = [Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)]; ok(g, 'Set spawn point'); });
+  cmd('spawnpoint', '/spawnpoint', true, (g) => { const p = g.player; p.spawnPoint = { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z), forced: true }; ok(g, 'Set spawn point'); });
   cmd('summon', '/summon <creature> [x y z]', true, (g, a) => {
     const p = g.player;
     const t = (a[0] || '').toLowerCase();
