@@ -1098,6 +1098,32 @@ defBlock(145, 'bone_block', {
   hardness: 2, tool: 'pickaxe', needsTool: true, itemMetaMask: 0,
 });
 
+// --- the Vaults and the Far Isles -------------------------------------------
+defBlock(147, 'iron_bars', {
+  name: 'Iron Bars', render: R.MODEL, tex: 'iron_bars', opaque: false, cutout: true, opacity: 0, hardness: 5, resistance: 30,
+  tool: 'pickaxe', needsTool: true, sound: 'metal', itemSprite: 'iron_bars',
+});
+// rift frame: bits 0-1 the side it faces (toward the rift), bit 2 an eye set in it
+function riftFrameBoxes(m) { const out = [{ b: [0, 0, 0, 16, 13, 16] }]; if (m & 4) out.push({ b: [4, 13, 4, 12, 16, 12], tex: 'rift_frame_eye' }); return out; }
+defBlock(148, 'rift_frame', {
+  name: 'Rift Frame', render: R.MODEL, tex: (m, f) => f === 1 ? 'rift_frame_top' : f === 0 ? 'starstone' : 'rift_frame_side', opaque: false, opacity: 15, light: 1,
+  hardness: -1, resistance: 18000000, sound: 'glass', itemMetaMask: 0, itemSprite: 'item_rift_frame',
+  model: (m) => riftFrameBoxes(m), collide: (m) => [(m & 4) ? [0, 0, 0, 1, 1, 1] : [0, 0, 0, 1, 13 / 16, 1]], select: () => [0, 0, 0, 1, 13 / 16, 1],
+  drops: () => [],
+});
+// the rift: a window onto the stars that carries you to the Far Isles
+defBlock(149, 'rift', {
+  name: 'Rift', render: R.MODEL, tex: 'rift', opaque: false, solid: false, opacity: 0, light: 15, hardness: -1, resistance: 18000000,
+  itemMetaMask: 0, drops: () => [], select: () => null, model: () => [{ b: [0, 0, 0, 16, 12, 16], faces: [1] }],
+});
+defBlock(150, 'starstone', { name: 'Starstone', hardness: 3, resistance: 45, tool: 'pickaxe', needsTool: true });
+// infested bricks: something lives inside
+defBlock(151, 'infested_bricks', {
+  name: (m) => ['Stone Bricks', 'Mossy Stone Bricks', 'Cracked Stone Bricks', 'Chiseled Stone Bricks'][m & 3],
+  tex: (m) => ['stone_bricks', 'stone_bricks_mossy', 'stone_bricks_cracked', 'stone_bricks_carved'][m & 3],
+  hardness: 0.75, resistance: 3.75, tool: 'pickaxe', itemMetaMask: 3, drops: () => [],
+});
+
 // -------------------------------------------------------------------------
 // Derived lookup tables for fast access in hot loops
 // -------------------------------------------------------------------------
@@ -1382,6 +1408,8 @@ defItem('potion', { name: (d) => potionName(d, false), tex: (d) => 'potion_' + p
 defItem('splash_potion', { name: (d) => potionName(d, true), tex: (d) => 'splash_' + potionOf(d).key, maxStack: 1, potion: true, splash: true, variants: POTION_VARIANTS });
 defItem('fermented_spider_eye', { name: 'Fermented Spider Eye' });
 defItem('glistering_melon', { name: 'Glistering Melon' });
+// ---- the Vaults ----
+defItem('seeker_eye', { name: "Seeker's Eye", rare: true });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -4008,6 +4036,89 @@ const TexGen = (function () {
     { o: '#3a3a44', g: '#c8d4e4', y: '#ffb03a', s: '#4a4a50', S: '#7a7a82' });
 })();
 
+// ---- src/render/farart.js
+// ---------------------------------------------------------------------------
+// Artwork for the Vaults and the Far Isles: iron bars, the rift frame with its
+// eye sockets, the rift itself (a slowly drifting field of stars), starstone,
+// the Seeker's Eye and the wyrm's egg.
+// ---------------------------------------------------------------------------
+(function () {
+  const { Img, T, ANIM, reg, sprite, rngFor, noiseImg, C, mix } = TexGen;
+  reg('iron_bars', (() => {
+    const img = new Img();
+    const D = C('#4a4c50'), M = C('#8a8d92'), L = C('#c4c7cc');
+    for (const x of [1, 6, 10, 14]) for (let y = 0; y < 16; y++) { img.set(x - 1, y, D); img.set(x, y, (y % 5 === 0) ? L : M); }
+    for (const y of [3, 12]) for (let x = 0; x < 16; x++) { img.set(x, y, M); img.set(x, y + 1, D); }
+    return img;
+  })());
+  reg('starstone', (() => {
+    const img = noiseImg('starstone', ['#cfcfa6', '#d8d8b0', '#dedeb8', '#e4e4c0', '#ebebc8'], { scales: [4, 2, 1], weights: [0.3, 0.3, 0.4] });
+    const rng = rngFor('starstone2');
+    for (let k = 0; k < 7; k++) img.set(rng.nextInt(16), rng.nextInt(16), C('#b8b88e'));
+    for (let k = 0; k < 3; k++) { const x = rng.nextInt(16), y = rng.nextInt(16); img.set(x, y, C('#fffbe0')); }
+    return img;
+  })());
+  reg('rift_frame_side', (() => {
+    const img = T.starstone.copy();
+    for (let x = 0; x < 16; x++) for (let y = 0; y < 4; y++) img.set(x, y, (x + y) % 3 ? C('#3c5a4a') : C('#2a443a'));
+    for (let x = 0; x < 16; x++) img.set(x, 4, C('#9a9a78'));
+    return img;
+  })());
+  reg('rift_frame_top', (() => {
+    const img = new Img();
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) img.set(x, y, (x * 3 + y * 5) % 7 === 0 ? C('#2a443a') : C('#3c5a4a'));
+    // the empty socket
+    for (let y = 4; y < 12; y++) for (let x = 4; x < 12; x++) img.set(x, y, (x === 4 || y === 4) ? C('#122018') : C('#1a2c24'));
+    for (let i = 0; i < 16; i++) { img.set(i, 0, C('#5a7a68')); img.set(0, i, C('#5a7a68')); img.set(i, 15, C('#1e3228')); img.set(15, i, C('#1e3228')); }
+    return img;
+  })());
+  reg('rift_frame_eye', (() => {
+    const img = new Img().fill(C('#2c8a7a'));
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const d = Math.hypot(x - 7.5, y - 7.5);
+      img.set(x, y, d < 2.5 ? C('#0a1a16') : d < 5 ? C('#46c8b0') : d < 7 ? C('#2c8a7a') : C('#1c5a50'));
+    }
+    return img;
+  })());
+  sprite('item_rift_frame', [
+    '................', '................', '................', '................', '..oooooooooooo..', '.ogggggggggggggo',
+    '.ogggoooooogggo.', '.oggo.....ogggo.', '.ogggoooooogggo.', '.ogggggggggggggo', '.ossssssssssssso', '.oSSSSSSSSSSSSSo',
+    '.oSSSSSSSSSSSSSo', '.ooooooooooooooo', '................', '................'],
+    { o: '#1e3228', g: '#3c5a4a', s: '#9a9a78', S: '#d8d8b0' });
+  // the rift: three layers of stars drifting past at different speeds
+  function RiftAnim() {
+    const rng = new Noise.Random(4242);
+    const layers = [0, 1, 2].map((k) => Array.from({ length: 5 + k * 3 }, () => [rng.nextFloat() * 16, rng.nextFloat() * 16, rng.nextFloat()]));
+    let t = 0;
+    this.step = function () { t++; };
+    this.render = function (img) {
+      for (let i = 0; i < 256; i++) {
+        const x = i & 15, y = i >> 4;
+        const v = 6 + ((x * 7 + y * 13 + (t >> 3)) % 5);
+        img.d[i * 4] = v; img.d[i * 4 + 1] = v + 2; img.d[i * 4 + 2] = v * 2 + 10; img.d[i * 4 + 3] = 255;
+      }
+      const cols = [[120, 230, 210], [190, 170, 255], [255, 255, 255]];
+      layers.forEach((stars, k) => {
+        const sp = [0.03, 0.06, 0.11][k];
+        for (const [sx, sy, ph] of stars) {
+          const x = Math.floor(((sx + t * sp) % 16 + 16) % 16), y = Math.floor(((sy + t * sp * 0.6) % 16 + 16) % 16);
+          const tw = 0.6 + 0.4 * Math.sin(t * 0.15 + ph * 20);
+          const c = cols[k], i = (y * 16 + x) * 4;
+          img.d[i] = Math.max(img.d[i], c[0] * tw); img.d[i + 1] = Math.max(img.d[i + 1], c[1] * tw); img.d[i + 2] = Math.max(img.d[i + 2], c[2] * tw);
+        }
+      });
+    };
+  }
+  ANIM.rift = new RiftAnim();
+  { const img = new Img(); ANIM.rift.render(img); reg('rift', img); }
+  // the Seeker's Eye: a wisp of light caught in a ring of flare-brass
+  sprite('seeker_eye', [
+    '................', '................', '.....oooooo.....', '....obbbbbbo....', '...obccccccbo...', '..obccwwwwccbo..',
+    '..obcwgggggcbo..', '..obcwgkkgwcbo..', '..obcwgkkgwcbo..', '..obcwgggggcbo..', '..obccwwwwccbo..', '...obccccccbo...',
+    '....obbbbbbo....', '.....oooooo.....', '................', '................'],
+    { o: '#4a2a10', b: '#c8842a', c: '#5ae0c8', w: '#c0fff0', g: '#2a9a8a', k: '#08201c' });
+})();
+
 // ---- src/world/worldgen.js
 // ---------------------------------------------------------------------------
 // World generation. Self-contained factory (no outer references) so it can be
@@ -4580,10 +4691,195 @@ function WorldGenFactory(Noise, TAB) {
         }
       }
       if (this.structuresOn) this.villages(out);
+      if (this.structuresOn) this.vaults(out);
       this.springs(cx, cz, blocks, meta, out);
       this.freeze(cx, cz, blocks, meta, biomes);
       this.spawnAnimals(out, t);
       return out;
+    }
+
+    // ---- the Vaults: three old stone-brick labyrinths deep underground, one with a rift ----
+    vaultStarts() {
+      if (this._vaults) return this._vaults;
+      const r = new Random(seedHash(this.seed, 1009, 2027));
+      let ang = r.nextFloat() * Math.PI * 2;
+      const out = [];
+      for (let i = 0; i < 3; i++) {
+        const dist = 640 + r.nextFloat() * 480;
+        out.push([Math.round(Math.cos(ang) * dist), Math.round(Math.sin(ang) * dist)]);
+        ang += Math.PI * 2 / 3;
+      }
+      return (this._vaults = out);
+    }
+    vaultAt(i) {
+      if (!this.vaultCache) this.vaultCache = [];
+      if (this.vaultCache[i] !== undefined) return this.vaultCache[i];
+      const [x, z] = this.vaultStarts()[i];
+      const L = this.vaultLayout(x, z, new Random(seedHash(this.seed, x, z, 0x7A17)));
+      this.vaultCache[i] = L;
+      return L;
+    }
+    nearestVault(x, z) {
+      let best = null, bd = Infinity;
+      for (let i = 0; i < 3; i++) { const L = this.vaultAt(i); const d = (L.portal[0] - x) ** 2 + (L.portal[2] - z) ** 2; if (d < bd) { bd = d; best = L; } }
+      return best;
+    }
+    vaultLayout(sx, sz, rng) {
+      const S = 9, DIR = [[0, -1], [0, 1], [-1, 0], [1, 0]], OPP = [1, 0, 3, 2];
+      const F = 20 + rng.nextInt(12);
+      const cells = new Map(), K = (i, j) => i + ',' + j;
+      const put = (i, j, kind) => { const c = { i, j, kind, l: [0, 0, 0, 0], seed: rng.nextInt(0x7fffffff) }; cells.set(K(i, j), c); return c; };
+      const link = (a, b, d) => { a.l[d] = 1; b.l[OPP[d]] = 1; };
+      const free = (i, j) => Math.abs(i) <= 6 && Math.abs(j) <= 6 && !cells.has(K(i, j));
+      const start = put(0, 0, 'cross');
+      const open = [];
+      for (let d = 0; d < 4; d++) if (rng.nextInt(10) < 8 || d === 0) open.push({ c: start, d, depth: 0 });
+      let portal = null;
+      const rooms = ['library', 'store', 'prison', 'fountain', 'store', 'prison', 'library'];
+      while (open.length && cells.size < 48) {
+        const { c, d, depth } = open.splice(rng.nextInt(open.length), 1)[0];
+        let prev = c;
+        for (let k = 0, n = 1 + rng.nextInt(3); k < n; k++) {
+          const i = prev.i + DIR[d][0], j = prev.j + DIR[d][1];
+          if (!free(i, j)) break;
+          const nc = put(i, j, 'corridor'); link(prev, nc, d); prev = nc;
+        }
+        const i = prev.i + DIR[d][0], j = prev.j + DIR[d][1];
+        if (!free(i, j)) continue;
+        if (!portal && depth >= 1 && (depth >= 2 || rng.nextBool())) { portal = put(i, j, 'portal'); link(prev, portal, d); continue; }
+        if (depth < 3 && rng.nextInt(10) < 6) {
+          const jc = put(i, j, 'cross'); link(prev, jc, d);
+          for (let nd = 0; nd < 4; nd++) if (nd !== OPP[d] && rng.nextInt(10) < 6) open.push({ c: jc, d: nd, depth: depth + 1 });
+        } else {
+          const rc = put(i, j, rooms[rng.nextInt(rooms.length)]); link(prev, rc, d);
+        }
+      }
+      // a vault always holds its rift room
+      if (!portal) {
+        for (const c of [...cells.values()]) {
+          if (portal) break;
+          for (let d = 0; d < 4 && !portal; d++) { const i = c.i + DIR[d][0], j = c.j + DIR[d][1]; if (free(i, j) && c.kind !== 'portal') { portal = put(i, j, 'portal'); link(c, portal, d); } }
+        }
+      }
+      const list = [...cells.values()];
+      let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+      for (const c of list) { x0 = Math.min(x0, sx + c.i * S - 4); x1 = Math.max(x1, sx + c.i * S + 4); z0 = Math.min(z0, sz + c.j * S - 4); z1 = Math.max(z1, sz + c.j * S + 4); }
+      return { sx, sz, F, S, cells: list, portal: [sx + portal.i * S, F + 2, sz + portal.j * S], box: [x0 - 1, F - 2, z0 - 1, x1 + 1, F + 7, z1 + 1] };
+    }
+    vaults(out) {
+      const x0 = out.cx * 16, z0 = out.cz * 16;
+      for (let v = 0; v < 3; v++) {
+        const [vx, vz] = this.vaultStarts()[v];
+        if (Math.abs(vx - x0) > 120 || Math.abs(vz - z0) > 120) continue;
+        const L = this.vaultAt(v);
+        if (L.box[3] < x0 || L.box[0] > x0 + 15 || L.box[5] < z0 || L.box[2] > z0 + 15) continue;
+        for (const c of L.cells) {
+          const cx0 = L.sx + c.i * L.S - 4, cz0 = L.sz + c.j * L.S - 4;
+          if (cx0 + 9 < x0 || cx0 - 1 > x0 + 15 || cz0 + 9 < z0 || cz0 - 1 > z0 + 15) continue;
+          this.vaultCell(out, L, c, cx0, cz0);
+        }
+      }
+    }
+    vaultCell(out, L, c, ox, oz) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16, F = L.F;
+      const inC = (x, z) => x >= X0 && x < X0 + 16 && z >= Z0 && z < Z0 + 16;
+      const get = (x, y, z) => (!inC(x, z) || y < 0 || y >= H) ? -1 : blocks[IDX(x - X0, y, z - Z0)];
+      const set = (x, y, z, id, m) => { if (!inC(x, z) || y < 1 || y >= H - 1) return; const i = IDX(x - X0, y, z - Z0); blocks[i] = id; meta[i] = m || 0; };
+      const rng = new Random(c.seed);
+      // old bricks: mossy, cracked, and now and then something living in them
+      const brick = () => { const r = rng.nextInt(100); return r < 3 ? [B.INFESTED_BRICKS, rng.nextInt(3)] : r < 20 ? [B.STONE_BRICKS, 1] : r < 35 ? [B.STONE_BRICKS, 2] : [B.STONE_BRICKS, 0]; };
+      const wall = (x, y, z) => { const b = brick(); set(x, y, z, b[0], b[1]); };
+      const room = c.kind !== 'corridor';
+      // interior extents in cell coords (0..8)
+      const lo = room ? 1 : 3, hi = room ? 7 : 5, top = room ? F + 5 : F + 4;
+      const inside = (u, v) => {
+        if (u >= lo && u <= hi && v >= lo && v <= hi) return true;
+        if (v >= 3 && v <= 5) { if (u < lo && c.l[2]) return true; if (u > hi && c.l[3]) return true; }
+        if (u >= 3 && u <= 5) { if (v < lo && c.l[0]) return true; if (v > hi && c.l[1]) return true; }
+        return false;
+      };
+      for (let u = -1; u <= 9; u++) for (let v = -1; v <= 9; v++) {
+        const x = ox + u, z = oz + v;
+        if (!inC(x, z)) continue;
+        if (u >= 0 && u <= 8 && v >= 0 && v <= 8 && inside(u, v)) {
+          wall(x, F, z);
+          for (let y = F + 1; y < top; y++) set(x, y, z, 0);
+          wall(x, top, z);
+        } else {
+          // walls hug the interior
+          let near = false;
+          for (const [du, dv] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) { const nu = u + du, nv = v + dv; if (nu >= 0 && nu <= 8 && nv >= 0 && nv <= 8 && inside(nu, nv)) near = true; }
+          if (near && u >= 0 && u <= 8 && v >= 0 && v <= 8) for (let y = F; y <= top; y++) wall(x, y, z);
+        }
+      }
+      const at = (u, y, v, id, m) => set(ox + u, y, oz + v, id, m);
+      const alongX = (c.l[2] || c.l[3]) && !(c.l[0] || c.l[1]);
+      if (c.kind === 'corridor') {
+        if (rng.nextInt(3) === 0) at(alongX ? 4 : 3, F + 2, alongX ? 3 : 4, B.TORCH, alongX ? 3 : 1);
+        if (rng.nextInt(4) === 0) at(3 + rng.nextInt(3), F + 3, 3 + rng.nextInt(3), B.COBWEB);
+      } else if (c.kind === 'cross') {
+        at(1, F + 3, 2, B.TORCH, 1); at(7, F + 3, 6, B.TORCH, 2);
+        if (rng.nextBool()) for (let y = F + 1; y < top; y++) { at(4, y, 4, B.STONE_BRICKS, y === F + 2 ? 3 : 0); }
+      } else if (c.kind === 'library') {
+        // shelves round the walls, a reading desk and a chest of old papers
+        for (let u = 1; u <= 7; u++) for (let v = 1; v <= 7; v++) {
+          const edge = u === 1 || u === 7 || v === 1 || v === 7, door = (u >= 3 && u <= 5) || (v >= 3 && v <= 5);
+          if (edge && !door) for (let y = F + 1; y <= F + 3; y++) at(u, y, v, B.BOOKSHELF);
+        }
+        at(4, F + 1, 4, B.PLANKS, 1); at(4, F + 2, 4, B.TORCH, 0);
+        at(2, F + 4, 2, B.COBWEB); at(6, F + 4, 6, B.COBWEB); at(6, F + 4, 2, B.COBWEB);
+        const cx = ox + 4, cz = oz + 5;
+        set(cx, F + 1, cz, B.CHEST, 0);
+        if (inC(cx, cz)) out.tiles.push({ type: 'chest', x: cx, y: F + 1, z: cz, items: this.loot(rng, 'vault_library') });
+      } else if (c.kind === 'store') {
+        for (const [u, v] of [[2, 2], [6, 6]]) {
+          if (!inC(ox + u, oz + v)) continue;
+          set(ox + u, F + 1, oz + v, B.CHEST, u === 2 ? 1 : 0);
+          out.tiles.push({ type: 'chest', x: ox + u, y: F + 1, z: oz + v, items: this.loot(rng, 'vault_store') });
+        }
+        at(1, F + 3, 6, B.TORCH, 1); at(7, F + 3, 2, B.TORCH, 2);
+      } else if (c.kind === 'prison') {
+        // barred cells either side of the walk, each with an iron door
+        for (let k = 1; k <= 7; k++) for (const s of [2, 6]) {
+          const u = alongX ? k : s, v = alongX ? s : k;
+          for (let y = F + 1; y <= F + 3; y++) at(u, y, v, B.IRON_BARS);
+        }
+        for (const s of [2, 6]) for (const k of [2, 6]) {
+          const u = alongX ? k : s, v = alongX ? s : k;
+          const facing = alongX ? (s === 2 ? 0 : 1) : (s === 2 ? 2 : 3);
+          at(u, F + 1, v, B.DOOR_IRON, facing); at(u, F + 2, v, B.DOOR_IRON, facing | 8);
+          at(u, F + 3, v, B.STONE_BRICKS, 0);
+        }
+        // a torch guttering on the back wall of each cell, and the odd web
+        for (const s of [1, 7]) {
+          if (s === 7 && rng.nextInt(5) < 2) continue;
+          if (alongX) at(4, F + 2, s, B.TORCH, s === 1 ? 3 : 4); else at(s, F + 2, 4, B.TORCH, s === 1 ? 1 : 2);
+        }
+        if (rng.nextBool()) { const k = rng.nextBool() ? 1 : 7, s = rng.nextBool() ? 1 : 7; at(alongX ? k : s, F + 3, alongX ? s : k, B.COBWEB); }
+      } else if (c.kind === 'fountain') {
+        for (let u = 2; u <= 6; u++) for (let v = 2; v <= 6; v++) { const rim = u === 2 || u === 6 || v === 2 || v === 6; if (rim) at(u, F + 1, v, B.SLAB, 8); else at(u, F, v, B.WATER); }
+        for (let y = F; y <= F + 3; y++) at(4, y, 4, B.STONE_BRICKS, y === F + 3 ? 3 : 0);
+        at(4, F + 4, 4, B.WATER); if (inC(ox + 4, oz + 4)) out.ticks.push([ox + 4, F + 4, oz + 4]);
+        at(1, F + 3, 2, B.TORCH, 1); at(7, F + 3, 6, B.TORCH, 2);
+      } else if (c.kind === 'portal') {
+        // a raised floor, a pool of lava under the rift frame and a nest of mites
+        for (let u = 1; u <= 7; u++) for (let v = 1; v <= 7; v++) at(u, F + 1, v, B.STONE_BRICKS, rng.nextInt(4) === 0 ? 2 : 0);
+        for (let u = 3; u <= 5; u++) for (let v = 3; v <= 5; v++) { at(u, F + 1, v, B.LAVA); at(u, F + 2, v, 0); }
+        for (let u = 2; u <= 6; u++) for (let v = 2; v <= 6; v++) {
+          const ring = (u === 2 || u === 6 || v === 2 || v === 6) && !((u === 2 || u === 6) && (v === 2 || v === 6));
+          if (!ring) continue;
+          const facing = v === 2 ? 1 : v === 6 ? 0 : u === 2 ? 3 : 2;
+          at(u, F + 2, v, B.RIFT_FRAME, facing | (rng.nextInt(10) === 0 ? 4 : 0));
+        }
+        // steps: up from each doorway onto the floor, and up again to the frame
+        if (c.l[2]) for (let v = 3; v <= 5; v++) at(1, F + 1, v, B.STAIRS, (8 << 3) | 3);
+        if (c.l[3]) for (let v = 3; v <= 5; v++) at(7, F + 1, v, B.STAIRS, (8 << 3) | 2);
+        if (c.l[0]) for (let u = 3; u <= 5; u++) at(u, F + 1, 1, B.STAIRS, (8 << 3) | 1);
+        if (c.l[1]) for (let u = 3; u <= 5; u++) at(u, F + 1, 7, B.STAIRS, (8 << 3) | 0);
+        at(4, F + 2, 1, B.STAIRS, (8 << 3) | 1); at(4, F + 2, 7, B.STAIRS, (8 << 3) | 0);
+        at(1, F + 2, 1, B.MOB_SPAWNER); if (inC(ox + 1, oz + 1)) out.tiles.push({ type: 'spawner', x: ox + 1, y: F + 2, z: oz + 1, mob: 'mite' });
+        at(1, F + 4, 6, B.TORCH, 1); at(7, F + 4, 2, B.TORCH, 2);
+      }
     }
 
     // ---- ores & stone variety ----
@@ -5334,6 +5630,9 @@ function WorldGenFactory(Noise, TAB) {
         ruins: [[I.gold_nugget, 3, 10, 10], [I.fish, 1, 4, 8], [I.jade, 1, 3, 5], [I.diamond, 1, 1, 2], [I.iron_ingot, 1, 3, 6], [I.lumite_shard, 1, 4, 6]],
         smithy: [[I.diamond, 1, 3, 3], [I.iron_ingot, 1, 5, 10], [I.gold_ingot, 1, 3, 5], [I.bread, 1, 3, 15], [I.apple, 1, 3, 15], [I.iron_pickaxe, 1, 1, 5], [I.iron_sword, 1, 1, 5],
           [I.iron_chestplate, 1, 1, 5], [I.iron_helmet, 1, 1, 5], [I.iron_leggings, 1, 1, 5], [I.iron_boots, 1, 1, 5], [B.OBSIDIAN, 3, 7, 5], [B.SAPLING, 3, 7, 5], [I.jade, 1, 3, 4]],
+        vault_store: [[I.iron_ingot, 1, 5, 10], [I.gold_ingot, 1, 3, 5], [I.ember_dust, 4, 9, 5], [I.coal, 3, 8, 10], [I.bread, 1, 3, 15], [I.apple, 1, 3, 15], [I.iron_pickaxe, 1, 1, 5],
+          [I.iron_sword, 1, 1, 5], [I.iron_chestplate, 1, 1, 5], [I.iron_helmet, 1, 1, 5], [I.iron_leggings, 1, 1, 5], [I.iron_boots, 1, 1, 5], [I.seeker_eye, 1, 1, 2], [I.wisp_essence, 1, 1, 3], [I.jade, 1, 3, 4]],
+        vault_library: [[I.book, 1, 3, 20], [I.paper, 2, 7, 20], [I.compass, 1, 1, 5], [I.wisp_essence, 1, 2, 4], [I.jade, 1, 2, 4], [I.dye, 2, 6, 6, 11], [I.glass_bottle, 1, 3, 4], [I.seeker_eye, 1, 1, 1]],
         fortress: [[I.gold_ingot, 1, 3, 15], [I.iron_ingot, 1, 5, 6], [I.diamond, 1, 3, 5], [I.gold_sword, 1, 1, 5], [I.gold_chestplate, 1, 1, 5], [I.gold_pickaxe, 1, 1, 3], [I.flint_and_steel, 1, 1, 5],
           [I.bloodcap, 3, 7, 5], [B.OBSIDIAN, 2, 4, 2], [I.sunstone_dust, 2, 6, 6], [I.smoky_quartz, 2, 8, 6], [I.fire_charge, 1, 3, 4], [I.gold_nugget, 3, 9, 8]],
         mineshaft: [[I.iron_ingot, 1, 5, 10], [I.gold_ingot, 1, 3, 5], [I.ember_dust, 4, 9, 5], [I.dye, 4, 9, 5, 11], [I.diamond, 1, 2, 3], [I.coal, 3, 8, 10], [I.bread, 1, 3, 15],
@@ -8151,7 +8450,7 @@ class Mesher {
           case 4: onEdge = x0 === 0; break; case 5: onEdge = x1 === 16; break;
         }
         if (onEdge && !bx.inset && OPQ[ids[pi + POFF[f]]]) continue;
-        if (onEdge && !bx.inset && ids[pi + POFF[f]] === id && (id === B.GLASS_PANE)) continue;
+        if (onEdge && !bx.inset && ids[pi + POFF[f]] === id && (id === B.GLASS_PANE || id === B.IRON_BARS)) continue;
         const layer = bx.tex ? (typeof bx.tex === 'string' ? atlas.layer(bx.tex) : atlas.layer(bx.tex[f])) : atlas.face(id, meta, f);
         const light = onEdge ? this.flatLight(pi, f) : this.flatLight(pi, f);
         const ins = bx.inset || 0;
@@ -8195,8 +8494,8 @@ class Mesher {
         if (conn(ids[pi + 1])) { out.push({ b: [10, 12, 7, 16, 15, 9] }, { b: [10, 6, 7, 16, 9, 9] }); }
         return out;
       }
-      case B.GLASS_PANE: {
-        const conn = (n) => n === B.GLASS_PANE || n === B.GLASS || n === B.STAINED_GLASS || BT.opaque[n];
+      case B.GLASS_PANE: case B.IRON_BARS: {
+        const conn = id === B.IRON_BARS ? (n) => n === B.IRON_BARS || BT.opaque[n] : (n) => n === B.GLASS_PANE || n === B.GLASS || n === B.STAINED_GLASS || BT.opaque[n];
         const n = conn(ids[pi - PD]), s = conn(ids[pi + PD]), w = conn(ids[pi - 1]), e = conn(ids[pi + 1]);
         const out = [];
         const any = n || s || w || e;
@@ -9706,8 +10005,9 @@ function blockCollisionBoxes(world, x, y, z, id, meta, out) {
     out.push(new AABB(x + 0.375, y, z + z0, x + 0.625, y + 1.5, z + z1));
     return;
   }
-  if (id === B.GLASS_PANE) {
-    const conn = (nx, nz) => { const n = world.getBlock(nx, y, nz); return n === B.GLASS_PANE || n === B.GLASS || BT.opaque[n]; };
+  if (id === B.GLASS_PANE || id === B.IRON_BARS) {
+    const conn = id === B.IRON_BARS ? (nx, nz) => { const n = world.getBlock(nx, y, nz); return n === B.IRON_BARS || BT.opaque[n]; }
+      : (nx, nz) => { const n = world.getBlock(nx, y, nz); return n === B.GLASS_PANE || n === B.GLASS || BT.opaque[n]; };
     const n = conn(x, z - 1), s = conn(x, z + 1), w = conn(x - 1, z), e = conn(x + 1, z);
     if (!n && !s && !w && !e) { out.push(new AABB(x, y, z + 0.4375, x + 1, y + 1, z + 0.5625)); out.push(new AABB(x + 0.4375, y, z, x + 0.5625, y + 1, z + 1)); return; }
     if (n || s) out.push(new AABB(x + 0.4375, y, z + (n ? 0 : 0.4375), x + 0.5625, y + 1, z + (s ? 1 : 0.5625)));
@@ -11650,6 +11950,9 @@ const Recipes = (() => {
   shaped([I.glass_bottle, 3], ['G G', ' G '], { G: B.GLASS });
   shapeless([I.fermented_spider_eye], [I.spider_eye, B.MUSHROOM_BROWN, I.sugar]);
   shaped([I.glistering_melon], ['NNN', 'NMN', 'NNN'], { N: I.gold_nugget, M: I.melon_slice });
+  // ---------------- the Vaults ----------------
+  shapeless([I.seeker_eye], [I.wisp_essence, I.flare_powder]);
+  shaped([B.IRON_BARS, 16], ['###', '###'], { '#': I.iron_ingot });
 
   // ---------------- smelting ----------------
   smelt(B.COBBLESTONE, [B.STONE], 0.1);
@@ -12230,7 +12533,7 @@ const Behaviors = (() => {
     if (BT.opaque[id]) return true;
     if (id === B.SLAB) return (w.getMeta(x, y, z) & 32) !== 0;
     if (id === B.STAIRS) return (w.getMeta(x, y, z) & 4) !== 0;
-    return id === B.FENCE || id === B.BRIMSTONE_FENCE || id === B.GLASS || id === B.STAINED_GLASS || id === B.FARMLAND || id === B.ICE || id === B.PACKED_ICE || id === B.LEAVES || id === B.GLASS_PANE || id === B.HAY_BALE;
+    return id === B.FENCE || id === B.BRIMSTONE_FENCE || id === B.GLASS || id === B.STAINED_GLASS || id === B.FARMLAND || id === B.ICE || id === B.PACKED_ICE || id === B.LEAVES || id === B.GLASS_PANE || id === B.IRON_BARS || id === B.HAY_BALE;
   };
   const playerFacing = (p) => {
     // horizontal facing index (0 N, 1 S, 2 W, 3 E) the player looks toward
@@ -12530,6 +12833,11 @@ const Behaviors = (() => {
       if (!player.creative) player.inventory.setHeld(new ItemStack(I.bucket, 1, 0));
       return true;
     }
+    if (stack.id === I.seeker_eye && target === B.RIFT_FRAME) {
+      if (!Rift.insertEye(game, hit.x, hit.y, hit.z)) return false;
+      if (!player.creative) player.inventory.decrementHeld(1);
+      return true;
+    }
     if (stack.id === I.fire_charge) {
       // a fire charge lights whatever it lands on, once
       if (target === B.TNT) { w.setBlock(hit.x, hit.y, hit.z, 0); game.spawnEntity(new TNTEntity(w, hit.x + 0.5, hit.y, hit.z + 0.5, 80)); }
@@ -12691,6 +12999,7 @@ const Behaviors = (() => {
   // ---------------------------------------------------------------- removal & neighbour updates
   function onBroken(game, x, y, z, id, meta) {
     const w = game.world;
+    if (id === B.INFESTED_BRICKS && !game.player.creative && typeof releaseMite !== 'undefined') releaseMite(game, x, y, z, game.player);
     // two-block structures
     if (id === B.DOOR_WOOD || id === B.DOOR_IRON) {
       const oy = (meta & 8) ? y - 1 : y + 1;
@@ -13101,6 +13410,7 @@ const Behaviors = (() => {
     for (const [bx, by, bz, id] of affected.values()) {
       const meta = w.getMeta(bx, by, bz);
       if (id === B.TNT) { w.setBlock(bx, by, bz, 0); game.spawnEntity(new TNTEntity(w, bx + 0.5, by, bz + 0.5, 10 + rng.nextInt(20))); continue; }
+      if (id === B.INFESTED_BRICKS) { w.setBlock(bx, by, bz, 0, 0); releaseMite(game, bx, by, bz, null); continue; }
       w.setBlock(bx, by, bz, 0, 0);
       if (rng.nextFloat() < 1 / power && !BT.fluid[id]) dropBlock(game, bx, by, bz, id, meta, null);
       if (rng.nextInt(3) === 0) game.particles.smoke(bx + 0.5, by + 0.5, bz + 0.5, 1);
@@ -13168,7 +13478,7 @@ function raycastBlocks(world, ox, oy, oz, dx, dy, dz, maxDist, opts) {
             if (def.select && !sb) { /* not selectable (fire) */ }
             else {
               if (!sb && def.collide) { const cb = []; blockCollisionBoxes(world, x, y, z, id, meta, cb); if (cb.length) { let a = cb[0].copy(); for (const c of cb) { a.x0 = Math.min(a.x0, c.x0); a.y0 = Math.min(a.y0, c.y0); a.z0 = Math.min(a.z0, c.z0); a.x1 = Math.max(a.x1, c.x1); a.y1 = Math.min(Math.max(a.y1, c.y1), y + 1); a.z1 = Math.max(a.z1, c.z1); } boxes.push(a); } }
-              else if (!sb && (id === B.FENCE || id === B.BRIMSTONE_FENCE || id === B.GLASS_PANE)) { const cb = []; blockCollisionBoxes(world, x, y, z, id, meta, cb); for (const c of cb) { c.y1 = Math.min(c.y1, y + 1); boxes.push(c); } }
+              else if (!sb && (id === B.FENCE || id === B.BRIMSTONE_FENCE || id === B.GLASS_PANE || id === B.IRON_BARS)) { const cb = []; blockCollisionBoxes(world, x, y, z, id, meta, cb); for (const c of cb) { c.y1 = Math.min(c.y1, y + 1); boxes.push(c); } }
               else boxes.push(sb ? new AABB(x + sb[0], y + sb[1], z + sb[2], x + sb[3], y + sb[4], z + sb[5]) : new AABB(x, y, z, x + 1, y + 1, z + 1));
             }
           }
@@ -14100,6 +14410,88 @@ const Portals = (() => {
   return { detect, fill, tryLight, intact, remember, forget, nearest, target, arrive, findSite, build, SCALE };
 })();
 
+// ---- src/world/rift.js
+// ---------------------------------------------------------------------------
+// The rift: twelve frames round a pool of lava, deep in a Vault. Set a
+// Seeker's Eye in every one and the rift opens onto the Far Isles.
+// A thrown Seeker's Eye drifts off toward the nearest Vault, then falls back
+// to earth (or, now and then, crumbles away).
+// ---------------------------------------------------------------------------
+const Rift = (() => {
+  // the twelve frame positions round a 3x3 rift centred at (cx, cz)
+  function ring(cx, cz) {
+    const out = [];
+    for (let d = -1; d <= 1; d++) out.push([cx + d, cz - 2], [cx + d, cz + 2], [cx - 2, cz + d], [cx + 2, cz + d]);
+    return out;
+  }
+  function complete(w, cx, y, cz) {
+    for (const [x, z] of ring(cx, cz)) if (w.getBlock(x, y, z) !== B.RIFT_FRAME || !(w.getMeta(x, y, z) & 4)) return false;
+    return true;
+  }
+  // set an eye into a frame; returns true if it took
+  function insertEye(game, x, y, z) {
+    const w = game.world, m = w.getMeta(x, y, z);
+    if (w.getBlock(x, y, z) !== B.RIFT_FRAME || (m & 4)) return false;
+    w.setBlock(x, y, z, B.RIFT_FRAME, m | 4);
+    game.audio.play('eye_set', 0.8, 0.9 + Math.random() * 0.2, x + 0.5, y + 0.5, z + 0.5);
+    for (let i = 0; i < 12; i++) game.particles.sparkle(x + 0.5 + (Math.random() - 0.5) * 0.6, y + 1, z + 0.5 + (Math.random() - 0.5) * 0.6, 0.4, 1, 0.85, 1, 0.8);
+    // does this complete a ring?
+    for (let cx = x - 2; cx <= x + 2; cx++) for (let cz = z - 2; cz <= z + 2; cz++) {
+      if (!complete(w, cx, y, cz)) continue;
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) w.setBlock(cx + dx, y, cz + dz, B.RIFT, 0);
+      game.audio.play('rift_open', 1.5, 1, cx + 0.5, y + 0.5, cz + 0.5);
+      game.achieve('rift');
+      return true;
+    }
+    return true;
+  }
+  return { ring, complete, insertEye };
+})();
+
+class SeekerEye extends Entity {
+  constructor(world, x, y, z, tx, tz) {
+    super(world);
+    this.type = 'seeker_eye';
+    this.w = this.h = 0.25;
+    this.setPos(x, y, z);
+    // head for the vault, or at most twelve blocks toward it
+    const dx = tx - x, dz = tz - z, d = Math.sqrt(dx * dx + dz * dz) || 1;
+    if (d > 12) { this.tx = x + dx / d * 12; this.tz = z + dz / d * 12; this.ty = y + 8; }
+    else { this.tx = tx; this.tz = tz; this.ty = y; }
+    this.life = 0;
+    this.shatter = Math.random() < 0.2;
+  }
+  tick(game) {
+    this.px = this.x; this.py = this.y; this.pz = this.z;
+    this.age++;
+    const dx = this.tx - this.x, dz = this.tz - this.z, hd = Math.sqrt(dx * dx + dz * dz);
+    let sp = Math.sqrt(this.vx * this.vx + this.vz * this.vz);
+    const ang = Math.atan2(dz, dx);
+    sp = sp + (hd > 1 ? 0.0025 : -0.0025) * 10; if (sp > hd * 0.04) sp = hd * 0.04; if (sp < 0) sp = 0;
+    this.vx = Math.cos(ang) * sp; this.vz = Math.sin(ang) * sp;
+    this.vy += ((this.y < this.ty ? 1 : -1) * 0.015 - this.vy) * 0.1;
+    this.x += this.vx; this.y += this.vy; this.z += this.vz;
+    this.updateBox();
+    if (this.age % 2 === 0) game.particles.sparkle(this.x - this.vx * 0.5, this.y - 0.1, this.z - this.vz * 0.5, 0.4, 0.95, 0.85, 1, 0.5);
+    if (++this.life > 80) {
+      this.removed = true;
+      game.audio.play('eye_drop', 0.8, 1, this.x, this.y, this.z);
+      if (this.shatter) { for (let i = 0; i < 16; i++) game.particles.sparkle(this.x, this.y, this.z, 0.4, 1, 0.85, 1, 1.2); }
+      else Behaviors.dropStack(game, this.x, this.y, this.z, new ItemStack(ITEM_IDS.seeker_eye, 1, 0));
+    }
+  }
+  render(er, rx, ry, rz) {
+    const cam = er.game.camera;
+    let m = M3.trans(rx, ry, rz);
+    m = M3.mul(m, M3.ry(cam.yaw));
+    m = M3.mul(m, M3.scale(0.5, 0.5, 0.5));
+    m = M3.mul(m, M3.trans(-0.5, -0.5, 0));
+    er.drawItem(new ItemStack(ITEM_IDS.seeker_eye, 1, 0), m, 1, 1, 255, true);
+    er.glow(rx, ry, rz, 0.4, [120, 255, 220, 90]);
+  }
+  save() { return null; }
+}
+
 // ---- src/game/interact.js
 // ---------------------------------------------------------------------------
 // Player interaction: targeting, mining, placing, attacking, using items
@@ -14336,6 +14728,18 @@ class Interaction {
         else { p.inventory.decrementHeld(1); g.giveItem(full); }
         p.swing();
       }
+      return;
+    }
+    if (held.id === I.seeker_eye) {
+      // off it goes, toward the nearest Vault
+      if (w.dim) { g.hud.showAction('§7The eye trembles, but finds nothing to seek here.'); return; }
+      const L = w.localGen.nearestVault(p.x, p.z);
+      const eye = g.eyePos(1);
+      g.spawnEntity(new SeekerEye(w, eye[0], eye[1] - 0.2, eye[2], L.portal[0] + 0.5, L.portal[2] + 0.5));
+      g.audio.play('eye_throw', 0.6, 0.6 + Math.random() * 0.2);
+      if (!p.creative) p.inventory.decrementHeld(1);
+      p.swing();
+      this.noRepeat = true;
       return;
     }
     if (held.id === I.glass_bottle) {
@@ -15109,6 +15513,16 @@ const Skins = (() => {
   })();
 
   // ------------------------------------------------------------ the Underworld
+  S.mite = (() => {
+    const s = new Skin(); const r = rng('mite');
+    const sz = [[3, 2, 2], [4, 3, 2], [6, 4, 3], [3, 3, 3], [2, 2, 3], [2, 1, 2], [1, 1, 2]];
+    const uv = [[0, 0], [0, 4], [0, 9], [0, 16], [0, 22], [0, 27], [24, 0]];
+    sz.forEach(([w, h, d], i) => s.box(uv[i][0], uv[i][1], w, h, d, (f, x, y) => {
+      if (i === 0 && f === 'front' && y === 0 && (x === 0 || x === w - 1)) return [20, 20, 22];
+      return vary(r, (x + y + i) % 3 === 0 ? C('#5a5a5e') : C('#8a8a8e'), 0.1);
+    }));
+    return s;
+  })();
   // the wailer: a vast pale weeper. Eyes shut and streaming until it sees you.
   function wailerSkin(open) {
     const s = new Skin(); const r = rng('wailer');
@@ -15894,6 +16308,14 @@ const MODELS = (() => {
         const a = i * Math.PI / 4;
         m['t' + i] = { pivot: [Math.cos(a) * 4.5, -7, Math.sin(a) * 4.5], boxes: [bx([-1, -18, -1], [2, 18, 2], [48, 0])] };
       }
+      return m;
+    })(),
+    // a vault mite: seven segments, widest near the head
+    mite: (() => {
+      const m = {}, sz = [[3, 2, 2], [4, 3, 2], [6, 4, 3], [3, 3, 3], [2, 2, 3], [2, 1, 2], [1, 1, 2]];
+      let z = -3.5;
+      const uv = [[0, 0], [0, 4], [0, 9], [0, 16], [0, 22], [0, 27], [24, 0]];
+      sz.forEach(([w, h, d], i) => { m['s' + i] = { pivot: [0, h / 2, z + d / 2], boxes: [bx([-w / 2, -h / 2, -d / 2], [w, h, d], uv[i])] }; z += d; });
       return m;
     })(),
     // the wailer's great body (its tentacles are a second model sharing the pose)
@@ -17155,6 +17577,15 @@ const SOUND_DEFS = (() => {
   };
   S.fuse = () => { const hp = new Biquad('hp', 3500, 0.7); return render(1.4, (t) => hp.p(noise()) * (0.5 + 0.5 * Math.sin(t * 60)) * env(t, 0.05, 0.6)); };
   S.fizz = () => { const hp = new Biquad('hp', 2500, 0.7); return render(0.45, (t) => hp.p(noise()) * env(t, 0.01, 0.12)); };
+  // the vault mite: a dry chittering
+  S.mite_say = () => { const hp = new Biquad('hp', 3000, 0.8); return render(0.5, (t) => { const k = Math.floor(t * 40); return hp.p(noise()) * ((k % 3) ? 1 : 0.2) * Math.sin(Math.PI * t / 0.5); }); };
+  S.mite_hurt = () => { const bp = new Biquad('bp', 3500, 4); return render(0.25, (t) => bp.p(noise()) * env(t, 0.003, 0.06) + Math.sin(2 * Math.PI * 2600 * t) * env(t, 0.003, 0.04) * 0.3); };
+  S.mite_death = () => { const bp = new Biquad('bp', 2800, 3); return render(0.5, (t) => { bp.set(3200 - t * 3000, 3); return bp.p(noise()) * env(t, 0.005, 0.15); }); };
+  // the Seeker's Eye and the rift
+  S.eye_throw = () => { const bp = new Biquad('bp', 1200, 3); return render(0.6, (t) => { bp.set(600 + t * 2400, 3); return bp.p(noise()) * env(t, 0.01, 0.15) + Math.sin(2 * Math.PI * (880 + t * 900) * t) * env(t, 0.01, 0.1) * 0.3; }); };
+  S.eye_drop = () => render(0.5, (t) => Math.sin(2 * Math.PI * (1320 - t * 900) * t) * env(t, 0.005, 0.12) * 0.6 + noise() * env(t, 0.002, 0.02) * 0.3);
+  S.eye_set = () => render(1.0, (t) => { let s = 0; [523, 784, 1047].forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t) * Math.exp(-t / (0.4 - i * 0.1)) * 0.35; }); return s + noise() * env(t, 0.002, 0.03) * 0.4; });
+  S.rift_open = () => { const lp = new Biquad('lp', 600, 0.8); return render(4, (t) => { let s = lp.p(noise()) * env(t, 0.3, 1.2) * 0.6; [130.8, 196, 261.6, 392, 523.3].forEach((f, i) => { const st = i * 0.25; if (t > st) s += Math.sin(2 * Math.PI * f * (t - st)) * Math.exp(-(t - st) / 1.6) * 0.25; }); return s; }); };
   // brewing: a soft bubbling, a bright 'done', glass bursting
   S.brew = () => { const bp = new Biquad('bp', 700, 6); let g = 0, gt = 0; return render(1.2, (t) => { if (t > gt) { g = 1; gt = t + 0.08 + rnd() * 0.15; bp.set(500 + rnd() * 700, 8); } g *= 0.996; return bp.p(noise()) * g * Math.sin(Math.PI * t / 1.2); }); };
   S.brew_done = () => render(0.8, (t) => { let s = 0; [784, 1047, 1319].forEach((f, i) => { const st = i * 0.06; if (t > st) s += Math.sin(2 * Math.PI * f * (t - st)) * Math.exp(-(t - st) / 0.25) * 0.4; }); return s; });
@@ -19043,6 +19474,7 @@ const HOW_TO_PLAY = [
   ['Rails', 'Lay rails on solid ground and they join up by themselves: straights, curves and slopes. Put a minecart on the track, climb in and give it a push - or let gravity do the work.', 'Booster rails speed carts along when powered and stop them dead when not. Detector rails send out an ember signal as a cart rolls over them, and a signal beside a T-junction flips the points.'],
   ['The Underworld', 'Build a frame of obsidian - four wide and five tall, corners optional - and light the inside with flint and steel. Stand in the swirling portal and you will be carried down to the Underworld.', 'Every block travelled below counts for eight up above, so it makes a fast road across the world. Water boils away, beds explode, and a death below wakes you back at home. Bring a way back!'],
   ['Below', 'Lava seas, brimstone that burns forever, sunstone in the roof, smoky quartz in the walls and bone sand that drags at your feet. Four regions to find: the Depths, the Bone Shoals, the Cinder Hollows and the rare, bright Grottos.', 'Charred miners leave you be unless you strike one. Wailers weep over the lava and spit fire - hit the fireball back! Fortresses of dark brick hide treasure, bloodcap gardens and the flares that guard them.'],
+  ['The Vaults', 'Three ancient Vaults lie deep underground, far from where you began. A Seeker\'s Eye - wisp essence bound with flare powder - knows the way: throw one and it drifts toward the nearest Vault before falling back to earth.', 'Deep inside each Vault is a frame of twelve sockets around a pool of lava. Set a Seeker\'s Eye in every socket and the rift opens onto the Far Isles. Mind the mites in the walls.'],
   ['Brewing', 'A brewing stand takes three bottles and one ingredient. Fill glass bottles from any water, then add bloodcap - grown on bone sand below - to make them awkward. Now the ingredient decides: sugar for swiftness, a glistering melon for healing, a wailer tear for regeneration...', 'Ember dust draws a potion out longer, sunstone dust makes it stronger, a fermented spider eye turns it to something nasty and gunpowder makes it a splash potion you can throw. Milk washes every effect away.'],
   ['Mysteries', 'On clear nights, watch the sky. Falling stars leave craters lined with starmetal - the strongest material of all, but you will need a diamond pickaxe.', 'Lights drift over swamps after dark. Some say they lead to buried treasure. On the moors, ancient runestones hum when touched with jade...'],
   ['Creative Mode', 'In Creative mode you can fly (double-tap Space), break blocks instantly and take any block from the creative inventory (E).', 'Worlds with cheats enabled accept commands: open chat with T and type /help.'],
@@ -20029,6 +20461,8 @@ const MILESTONES = [
   { id: 'bottle', name: 'Message Received', desc: 'Read a message in a bottle', icon: () => [ITEM_IDS.message_bottle, 0] },
   { id: 'enchant', name: 'Enchanter', desc: 'Enchant an item at an enchanting table', icon: () => [B.ENCHANTING_TABLE, 0] },
   { id: 'lamp', name: 'Bright Idea', desc: 'Light an ember lamp with a circuit', icon: () => [B.EMBER_LAMP_ON, 0] },
+  { id: 'vault', name: 'Delving Deep', desc: 'Follow a Seeker\'s Eye to an ancient Vault', icon: () => [ITEM_IDS.seeker_eye, 0] },
+  { id: 'rift', name: 'The Rift', desc: 'Open the rift with twelve Seeker\'s Eyes', icon: () => [B.RIFT_FRAME, 0] },
   { id: 'brew', name: 'Local Brewery', desc: 'Brew a potion', icon: () => [ITEM_IDS.potion, 10] },
   { id: 'portal', name: 'Gateway', desc: 'Build and light an Underworld portal', icon: () => [B.OBSIDIAN, 0] },
   { id: 'underworld', name: 'Hot Under the Collar', desc: 'Step into the Underworld', icon: () => [B.BRIMSTONE, 0] },
@@ -21832,7 +22266,7 @@ class Wraith extends Monster {
     if (this.age % 3 === 0) game.particles.sparkle(this.x, this.y + 0.3, this.z, 0.6, 0.75, 0.9, 1, 0.5);
   }
   hurt(amount, src) { if (src && src.type === 'fall') return false; return super.hurt(amount, src); }
-  dropLoot(game, byPlayer) { this.drop(ITEM_IDS.string, 1 + this.rnd(2)); if (byPlayer && Math.random() < 0.15) this.drop(ITEM_IDS.lumite_shard, 1); }
+  dropLoot(game, byPlayer) { this.drop(ITEM_IDS.string, 1 + this.rnd(2)); if (byPlayer && Math.random() < 0.15) this.drop(ITEM_IDS.lumite_shard, 1); if (byPlayer && Math.random() < 0.25 + this.looting * 0.1) this.drop(ITEM_IDS.wisp_essence, 1); }
   soundPitch() { return (Math.random() - Math.random()) * 0.15 + 0.9; }
   render(er, rx, ry, rz, partial) {
     const bob = Math.sin((this.age + partial) * 0.08) * 0.08;
@@ -23524,6 +23958,62 @@ MobSpawner.prototype.tickUnder = function (rd, area) {
   };
 }
 
+// ---- src/entity/farmobs.js
+// ---------------------------------------------------------------------------
+// Creatures of the Vaults (and, beyond the rift, the Far Isles).
+// ---------------------------------------------------------------------------
+MOB_TYPES.push(
+  { key: 'mite', name: 'Vault Mite', egg: ['#6e6e6e', '#3a3a3a'], cat: 'monster', lore: 'A grey burrowing thing that nests in the walls of the old Vaults. Strike one and the bricks around you start to wriggle.' },
+);
+MOB_TYPES.forEach((m, i) => { if (m) { m.index = i; MOB_INDEX[m.key] = m; } });
+
+class Mite extends Monster {
+  constructor(world) {
+    super(world, 'mite');
+    this.arthropod = true;
+    this.maxHealth = this.health = 8;
+    this.w = 0.4; this.h = 0.3; this.eye = 0.13;
+    this.baseSpeed = 0.32; this.damage = 1;
+    this.spotRange = 16; this.followRange = 24;
+    this.callTimer = 0;
+    this.xpValue = 5;
+    this.pathNodes = 160;
+  }
+  meleeReach(t) { return 1.2 + t.w; }
+  onRevenge(e) {
+    super.onRevenge(e);
+    // its kin wake up in the walls around it
+    if (this.callTimer > 0 || !this.game) return;
+    this.callTimer = 20;
+    const w = this.world, bx = Math.floor(this.x), by = Math.floor(this.y), bz = Math.floor(this.z);
+    let n = 0;
+    for (let dy = -2; dy <= 3 && n < 4; dy++) for (let dx = -5; dx <= 5 && n < 4; dx++) for (let dz = -5; dz <= 5 && n < 4; dz++) {
+      if (w.getBlock(bx + dx, by + dy, bz + dz) !== B.INFESTED_BRICKS) continue;
+      w.setBlock(bx + dx, by + dy, bz + dz, 0, 0);
+      releaseMite(this.game, bx + dx, by + dy, bz + dz, e);
+      n++;
+    }
+  }
+  mobTick() { if (this.callTimer > 0) this.callTimer--; }
+  soundVolume() { return 0.6; }
+  dropLoot() {}
+  render(er, rx, ry, rz, partial) {
+    const [sky, blk] = er.lightAt(this.x, this.y + 0.2, this.z);
+    const t = this.limbSwing - this.limbAmount * (1 - partial);
+    const pose = {};
+    for (let i = 0; i < 7; i++) pose['s' + i] = { rot: [0, Math.cos(t * 0.9 + i * 0.15 * Math.PI) * Math.PI * 0.05 * (1 + Math.abs(i - 2)), 0], off: [Math.sin(t * 0.9 + i * 0.15 * Math.PI) * Math.PI * 0.2 * Math.abs(i - 2), 0, 0] };
+    er.drawModel(MODELS.mite, 'mite', er.baseMatrix(this, rx, ry, rz, partial), pose, er.entColor(this), sky, blk);
+  }
+}
+// a mite bursts out of a broken (or disturbed) infested brick
+function releaseMite(game, x, y, z, foe) {
+  const m = game.spawnMob('mite', x + 0.5, y, z + 0.5);
+  if (m && foe && foe.type === 'player') { m.target = foe; m.unseen = 0; }
+  game.particles.burst(x + 0.5, y + 0.5, z + 0.5, 'stone_bricks', 10);
+  return m;
+}
+MOB_CLASSES.mite = Mite;
+
 // ---- src/main.js
 // ---------------------------------------------------------------------------
 // Blocklands: the game shell. Main loop, camera, world lifecycle & saving,
@@ -24208,7 +24698,7 @@ class Game {
     this.renderer.atlas.tickAnimations();
     DynamicItems.update(this);
     this.tickWaterways();
-    if (w.time % 40 === 9) { if (!w.dim) this.checkVillages(); else this.checkFortress(); }
+    if (w.time % 40 === 9) { if (!w.dim) { this.checkVillages(); this.checkVaults(); } else if (w.dim === 1) this.checkFortress(); }
     Circuits.tickPlates(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
@@ -25055,6 +25545,22 @@ class Game {
     return true;
   }
   // walking into a village for the first time puts it on the map
+  // stumbling into one of the old Vaults
+  checkVaults() {
+    const p = this.player, w = this.world;
+    if (!w.localGen.vaultAt || p.y > 50) return;
+    for (let i = 0; i < 3; i++) {
+      const L = w.localGen.vaultAt(i), b = L.box;
+      if (p.x < b[0] || p.x > b[3] || p.z < b[2] || p.z > b[5] || p.y < b[1] || p.y > b[4]) continue;
+      const list = w.info.vaults || (w.info.vaults = []);
+      if (list.includes(i)) return;
+      list.push(i);
+      this.hud.toast('Vault discovered!', 'An ancient Vault', new ItemStack(B.STONE_BRICKS, 1, 3), '#55ffff');
+      this.audio.play('discover', 0.7, 0.7);
+      this.achieve('vault');
+      return;
+    }
+  }
   // walking into the walls of an Underworld fortress
   checkFortress() {
     const p = this.player, w = this.world;

@@ -699,6 +699,32 @@ defBlock(145, 'bone_block', {
   hardness: 2, tool: 'pickaxe', needsTool: true, itemMetaMask: 0,
 });
 
+// --- the Vaults and the Far Isles -------------------------------------------
+defBlock(147, 'iron_bars', {
+  name: 'Iron Bars', render: R.MODEL, tex: 'iron_bars', opaque: false, cutout: true, opacity: 0, hardness: 5, resistance: 30,
+  tool: 'pickaxe', needsTool: true, sound: 'metal', itemSprite: 'iron_bars',
+});
+// rift frame: bits 0-1 the side it faces (toward the rift), bit 2 an eye set in it
+function riftFrameBoxes(m) { const out = [{ b: [0, 0, 0, 16, 13, 16] }]; if (m & 4) out.push({ b: [4, 13, 4, 12, 16, 12], tex: 'rift_frame_eye' }); return out; }
+defBlock(148, 'rift_frame', {
+  name: 'Rift Frame', render: R.MODEL, tex: (m, f) => f === 1 ? 'rift_frame_top' : f === 0 ? 'starstone' : 'rift_frame_side', opaque: false, opacity: 15, light: 1,
+  hardness: -1, resistance: 18000000, sound: 'glass', itemMetaMask: 0, itemSprite: 'item_rift_frame',
+  model: (m) => riftFrameBoxes(m), collide: (m) => [(m & 4) ? [0, 0, 0, 1, 1, 1] : [0, 0, 0, 1, 13 / 16, 1]], select: () => [0, 0, 0, 1, 13 / 16, 1],
+  drops: () => [],
+});
+// the rift: a window onto the stars that carries you to the Far Isles
+defBlock(149, 'rift', {
+  name: 'Rift', render: R.MODEL, tex: 'rift', opaque: false, solid: false, opacity: 0, light: 15, hardness: -1, resistance: 18000000,
+  itemMetaMask: 0, drops: () => [], select: () => null, model: () => [{ b: [0, 0, 0, 16, 12, 16], faces: [1] }],
+});
+defBlock(150, 'starstone', { name: 'Starstone', hardness: 3, resistance: 45, tool: 'pickaxe', needsTool: true });
+// infested bricks: something lives inside
+defBlock(151, 'infested_bricks', {
+  name: (m) => ['Stone Bricks', 'Mossy Stone Bricks', 'Cracked Stone Bricks', 'Chiseled Stone Bricks'][m & 3],
+  tex: (m) => ['stone_bricks', 'stone_bricks_mossy', 'stone_bricks_cracked', 'stone_bricks_carved'][m & 3],
+  hardness: 0.75, resistance: 3.75, tool: 'pickaxe', itemMetaMask: 3, drops: () => [],
+});
+
 // -------------------------------------------------------------------------
 // Derived lookup tables for fast access in hot loops
 // -------------------------------------------------------------------------

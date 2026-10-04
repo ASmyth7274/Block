@@ -570,10 +570,195 @@ function WorldGenFactory(Noise, TAB) {
         }
       }
       if (this.structuresOn) this.villages(out);
+      if (this.structuresOn) this.vaults(out);
       this.springs(cx, cz, blocks, meta, out);
       this.freeze(cx, cz, blocks, meta, biomes);
       this.spawnAnimals(out, t);
       return out;
+    }
+
+    // ---- the Vaults: three old stone-brick labyrinths deep underground, one with a rift ----
+    vaultStarts() {
+      if (this._vaults) return this._vaults;
+      const r = new Random(seedHash(this.seed, 1009, 2027));
+      let ang = r.nextFloat() * Math.PI * 2;
+      const out = [];
+      for (let i = 0; i < 3; i++) {
+        const dist = 640 + r.nextFloat() * 480;
+        out.push([Math.round(Math.cos(ang) * dist), Math.round(Math.sin(ang) * dist)]);
+        ang += Math.PI * 2 / 3;
+      }
+      return (this._vaults = out);
+    }
+    vaultAt(i) {
+      if (!this.vaultCache) this.vaultCache = [];
+      if (this.vaultCache[i] !== undefined) return this.vaultCache[i];
+      const [x, z] = this.vaultStarts()[i];
+      const L = this.vaultLayout(x, z, new Random(seedHash(this.seed, x, z, 0x7A17)));
+      this.vaultCache[i] = L;
+      return L;
+    }
+    nearestVault(x, z) {
+      let best = null, bd = Infinity;
+      for (let i = 0; i < 3; i++) { const L = this.vaultAt(i); const d = (L.portal[0] - x) ** 2 + (L.portal[2] - z) ** 2; if (d < bd) { bd = d; best = L; } }
+      return best;
+    }
+    vaultLayout(sx, sz, rng) {
+      const S = 9, DIR = [[0, -1], [0, 1], [-1, 0], [1, 0]], OPP = [1, 0, 3, 2];
+      const F = 20 + rng.nextInt(12);
+      const cells = new Map(), K = (i, j) => i + ',' + j;
+      const put = (i, j, kind) => { const c = { i, j, kind, l: [0, 0, 0, 0], seed: rng.nextInt(0x7fffffff) }; cells.set(K(i, j), c); return c; };
+      const link = (a, b, d) => { a.l[d] = 1; b.l[OPP[d]] = 1; };
+      const free = (i, j) => Math.abs(i) <= 6 && Math.abs(j) <= 6 && !cells.has(K(i, j));
+      const start = put(0, 0, 'cross');
+      const open = [];
+      for (let d = 0; d < 4; d++) if (rng.nextInt(10) < 8 || d === 0) open.push({ c: start, d, depth: 0 });
+      let portal = null;
+      const rooms = ['library', 'store', 'prison', 'fountain', 'store', 'prison', 'library'];
+      while (open.length && cells.size < 48) {
+        const { c, d, depth } = open.splice(rng.nextInt(open.length), 1)[0];
+        let prev = c;
+        for (let k = 0, n = 1 + rng.nextInt(3); k < n; k++) {
+          const i = prev.i + DIR[d][0], j = prev.j + DIR[d][1];
+          if (!free(i, j)) break;
+          const nc = put(i, j, 'corridor'); link(prev, nc, d); prev = nc;
+        }
+        const i = prev.i + DIR[d][0], j = prev.j + DIR[d][1];
+        if (!free(i, j)) continue;
+        if (!portal && depth >= 1 && (depth >= 2 || rng.nextBool())) { portal = put(i, j, 'portal'); link(prev, portal, d); continue; }
+        if (depth < 3 && rng.nextInt(10) < 6) {
+          const jc = put(i, j, 'cross'); link(prev, jc, d);
+          for (let nd = 0; nd < 4; nd++) if (nd !== OPP[d] && rng.nextInt(10) < 6) open.push({ c: jc, d: nd, depth: depth + 1 });
+        } else {
+          const rc = put(i, j, rooms[rng.nextInt(rooms.length)]); link(prev, rc, d);
+        }
+      }
+      // a vault always holds its rift room
+      if (!portal) {
+        for (const c of [...cells.values()]) {
+          if (portal) break;
+          for (let d = 0; d < 4 && !portal; d++) { const i = c.i + DIR[d][0], j = c.j + DIR[d][1]; if (free(i, j) && c.kind !== 'portal') { portal = put(i, j, 'portal'); link(c, portal, d); } }
+        }
+      }
+      const list = [...cells.values()];
+      let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+      for (const c of list) { x0 = Math.min(x0, sx + c.i * S - 4); x1 = Math.max(x1, sx + c.i * S + 4); z0 = Math.min(z0, sz + c.j * S - 4); z1 = Math.max(z1, sz + c.j * S + 4); }
+      return { sx, sz, F, S, cells: list, portal: [sx + portal.i * S, F + 2, sz + portal.j * S], box: [x0 - 1, F - 2, z0 - 1, x1 + 1, F + 7, z1 + 1] };
+    }
+    vaults(out) {
+      const x0 = out.cx * 16, z0 = out.cz * 16;
+      for (let v = 0; v < 3; v++) {
+        const [vx, vz] = this.vaultStarts()[v];
+        if (Math.abs(vx - x0) > 120 || Math.abs(vz - z0) > 120) continue;
+        const L = this.vaultAt(v);
+        if (L.box[3] < x0 || L.box[0] > x0 + 15 || L.box[5] < z0 || L.box[2] > z0 + 15) continue;
+        for (const c of L.cells) {
+          const cx0 = L.sx + c.i * L.S - 4, cz0 = L.sz + c.j * L.S - 4;
+          if (cx0 + 9 < x0 || cx0 - 1 > x0 + 15 || cz0 + 9 < z0 || cz0 - 1 > z0 + 15) continue;
+          this.vaultCell(out, L, c, cx0, cz0);
+        }
+      }
+    }
+    vaultCell(out, L, c, ox, oz) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16, F = L.F;
+      const inC = (x, z) => x >= X0 && x < X0 + 16 && z >= Z0 && z < Z0 + 16;
+      const get = (x, y, z) => (!inC(x, z) || y < 0 || y >= H) ? -1 : blocks[IDX(x - X0, y, z - Z0)];
+      const set = (x, y, z, id, m) => { if (!inC(x, z) || y < 1 || y >= H - 1) return; const i = IDX(x - X0, y, z - Z0); blocks[i] = id; meta[i] = m || 0; };
+      const rng = new Random(c.seed);
+      // old bricks: mossy, cracked, and now and then something living in them
+      const brick = () => { const r = rng.nextInt(100); return r < 3 ? [B.INFESTED_BRICKS, rng.nextInt(3)] : r < 20 ? [B.STONE_BRICKS, 1] : r < 35 ? [B.STONE_BRICKS, 2] : [B.STONE_BRICKS, 0]; };
+      const wall = (x, y, z) => { const b = brick(); set(x, y, z, b[0], b[1]); };
+      const room = c.kind !== 'corridor';
+      // interior extents in cell coords (0..8)
+      const lo = room ? 1 : 3, hi = room ? 7 : 5, top = room ? F + 5 : F + 4;
+      const inside = (u, v) => {
+        if (u >= lo && u <= hi && v >= lo && v <= hi) return true;
+        if (v >= 3 && v <= 5) { if (u < lo && c.l[2]) return true; if (u > hi && c.l[3]) return true; }
+        if (u >= 3 && u <= 5) { if (v < lo && c.l[0]) return true; if (v > hi && c.l[1]) return true; }
+        return false;
+      };
+      for (let u = -1; u <= 9; u++) for (let v = -1; v <= 9; v++) {
+        const x = ox + u, z = oz + v;
+        if (!inC(x, z)) continue;
+        if (u >= 0 && u <= 8 && v >= 0 && v <= 8 && inside(u, v)) {
+          wall(x, F, z);
+          for (let y = F + 1; y < top; y++) set(x, y, z, 0);
+          wall(x, top, z);
+        } else {
+          // walls hug the interior
+          let near = false;
+          for (const [du, dv] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) { const nu = u + du, nv = v + dv; if (nu >= 0 && nu <= 8 && nv >= 0 && nv <= 8 && inside(nu, nv)) near = true; }
+          if (near && u >= 0 && u <= 8 && v >= 0 && v <= 8) for (let y = F; y <= top; y++) wall(x, y, z);
+        }
+      }
+      const at = (u, y, v, id, m) => set(ox + u, y, oz + v, id, m);
+      const alongX = (c.l[2] || c.l[3]) && !(c.l[0] || c.l[1]);
+      if (c.kind === 'corridor') {
+        if (rng.nextInt(3) === 0) at(alongX ? 4 : 3, F + 2, alongX ? 3 : 4, B.TORCH, alongX ? 3 : 1);
+        if (rng.nextInt(4) === 0) at(3 + rng.nextInt(3), F + 3, 3 + rng.nextInt(3), B.COBWEB);
+      } else if (c.kind === 'cross') {
+        at(1, F + 3, 2, B.TORCH, 1); at(7, F + 3, 6, B.TORCH, 2);
+        if (rng.nextBool()) for (let y = F + 1; y < top; y++) { at(4, y, 4, B.STONE_BRICKS, y === F + 2 ? 3 : 0); }
+      } else if (c.kind === 'library') {
+        // shelves round the walls, a reading desk and a chest of old papers
+        for (let u = 1; u <= 7; u++) for (let v = 1; v <= 7; v++) {
+          const edge = u === 1 || u === 7 || v === 1 || v === 7, door = (u >= 3 && u <= 5) || (v >= 3 && v <= 5);
+          if (edge && !door) for (let y = F + 1; y <= F + 3; y++) at(u, y, v, B.BOOKSHELF);
+        }
+        at(4, F + 1, 4, B.PLANKS, 1); at(4, F + 2, 4, B.TORCH, 0);
+        at(2, F + 4, 2, B.COBWEB); at(6, F + 4, 6, B.COBWEB); at(6, F + 4, 2, B.COBWEB);
+        const cx = ox + 4, cz = oz + 5;
+        set(cx, F + 1, cz, B.CHEST, 0);
+        if (inC(cx, cz)) out.tiles.push({ type: 'chest', x: cx, y: F + 1, z: cz, items: this.loot(rng, 'vault_library') });
+      } else if (c.kind === 'store') {
+        for (const [u, v] of [[2, 2], [6, 6]]) {
+          if (!inC(ox + u, oz + v)) continue;
+          set(ox + u, F + 1, oz + v, B.CHEST, u === 2 ? 1 : 0);
+          out.tiles.push({ type: 'chest', x: ox + u, y: F + 1, z: oz + v, items: this.loot(rng, 'vault_store') });
+        }
+        at(1, F + 3, 6, B.TORCH, 1); at(7, F + 3, 2, B.TORCH, 2);
+      } else if (c.kind === 'prison') {
+        // barred cells either side of the walk, each with an iron door
+        for (let k = 1; k <= 7; k++) for (const s of [2, 6]) {
+          const u = alongX ? k : s, v = alongX ? s : k;
+          for (let y = F + 1; y <= F + 3; y++) at(u, y, v, B.IRON_BARS);
+        }
+        for (const s of [2, 6]) for (const k of [2, 6]) {
+          const u = alongX ? k : s, v = alongX ? s : k;
+          const facing = alongX ? (s === 2 ? 0 : 1) : (s === 2 ? 2 : 3);
+          at(u, F + 1, v, B.DOOR_IRON, facing); at(u, F + 2, v, B.DOOR_IRON, facing | 8);
+          at(u, F + 3, v, B.STONE_BRICKS, 0);
+        }
+        // a torch guttering on the back wall of each cell, and the odd web
+        for (const s of [1, 7]) {
+          if (s === 7 && rng.nextInt(5) < 2) continue;
+          if (alongX) at(4, F + 2, s, B.TORCH, s === 1 ? 3 : 4); else at(s, F + 2, 4, B.TORCH, s === 1 ? 1 : 2);
+        }
+        if (rng.nextBool()) { const k = rng.nextBool() ? 1 : 7, s = rng.nextBool() ? 1 : 7; at(alongX ? k : s, F + 3, alongX ? s : k, B.COBWEB); }
+      } else if (c.kind === 'fountain') {
+        for (let u = 2; u <= 6; u++) for (let v = 2; v <= 6; v++) { const rim = u === 2 || u === 6 || v === 2 || v === 6; if (rim) at(u, F + 1, v, B.SLAB, 8); else at(u, F, v, B.WATER); }
+        for (let y = F; y <= F + 3; y++) at(4, y, 4, B.STONE_BRICKS, y === F + 3 ? 3 : 0);
+        at(4, F + 4, 4, B.WATER); if (inC(ox + 4, oz + 4)) out.ticks.push([ox + 4, F + 4, oz + 4]);
+        at(1, F + 3, 2, B.TORCH, 1); at(7, F + 3, 6, B.TORCH, 2);
+      } else if (c.kind === 'portal') {
+        // a raised floor, a pool of lava under the rift frame and a nest of mites
+        for (let u = 1; u <= 7; u++) for (let v = 1; v <= 7; v++) at(u, F + 1, v, B.STONE_BRICKS, rng.nextInt(4) === 0 ? 2 : 0);
+        for (let u = 3; u <= 5; u++) for (let v = 3; v <= 5; v++) { at(u, F + 1, v, B.LAVA); at(u, F + 2, v, 0); }
+        for (let u = 2; u <= 6; u++) for (let v = 2; v <= 6; v++) {
+          const ring = (u === 2 || u === 6 || v === 2 || v === 6) && !((u === 2 || u === 6) && (v === 2 || v === 6));
+          if (!ring) continue;
+          const facing = v === 2 ? 1 : v === 6 ? 0 : u === 2 ? 3 : 2;
+          at(u, F + 2, v, B.RIFT_FRAME, facing | (rng.nextInt(10) === 0 ? 4 : 0));
+        }
+        // steps: up from each doorway onto the floor, and up again to the frame
+        if (c.l[2]) for (let v = 3; v <= 5; v++) at(1, F + 1, v, B.STAIRS, (8 << 3) | 3);
+        if (c.l[3]) for (let v = 3; v <= 5; v++) at(7, F + 1, v, B.STAIRS, (8 << 3) | 2);
+        if (c.l[0]) for (let u = 3; u <= 5; u++) at(u, F + 1, 1, B.STAIRS, (8 << 3) | 1);
+        if (c.l[1]) for (let u = 3; u <= 5; u++) at(u, F + 1, 7, B.STAIRS, (8 << 3) | 0);
+        at(4, F + 2, 1, B.STAIRS, (8 << 3) | 1); at(4, F + 2, 7, B.STAIRS, (8 << 3) | 0);
+        at(1, F + 2, 1, B.MOB_SPAWNER); if (inC(ox + 1, oz + 1)) out.tiles.push({ type: 'spawner', x: ox + 1, y: F + 2, z: oz + 1, mob: 'mite' });
+        at(1, F + 4, 6, B.TORCH, 1); at(7, F + 4, 2, B.TORCH, 2);
+      }
     }
 
     // ---- ores & stone variety ----
@@ -1324,6 +1509,9 @@ function WorldGenFactory(Noise, TAB) {
         ruins: [[I.gold_nugget, 3, 10, 10], [I.fish, 1, 4, 8], [I.jade, 1, 3, 5], [I.diamond, 1, 1, 2], [I.iron_ingot, 1, 3, 6], [I.lumite_shard, 1, 4, 6]],
         smithy: [[I.diamond, 1, 3, 3], [I.iron_ingot, 1, 5, 10], [I.gold_ingot, 1, 3, 5], [I.bread, 1, 3, 15], [I.apple, 1, 3, 15], [I.iron_pickaxe, 1, 1, 5], [I.iron_sword, 1, 1, 5],
           [I.iron_chestplate, 1, 1, 5], [I.iron_helmet, 1, 1, 5], [I.iron_leggings, 1, 1, 5], [I.iron_boots, 1, 1, 5], [B.OBSIDIAN, 3, 7, 5], [B.SAPLING, 3, 7, 5], [I.jade, 1, 3, 4]],
+        vault_store: [[I.iron_ingot, 1, 5, 10], [I.gold_ingot, 1, 3, 5], [I.ember_dust, 4, 9, 5], [I.coal, 3, 8, 10], [I.bread, 1, 3, 15], [I.apple, 1, 3, 15], [I.iron_pickaxe, 1, 1, 5],
+          [I.iron_sword, 1, 1, 5], [I.iron_chestplate, 1, 1, 5], [I.iron_helmet, 1, 1, 5], [I.iron_leggings, 1, 1, 5], [I.iron_boots, 1, 1, 5], [I.seeker_eye, 1, 1, 2], [I.wisp_essence, 1, 1, 3], [I.jade, 1, 3, 4]],
+        vault_library: [[I.book, 1, 3, 20], [I.paper, 2, 7, 20], [I.compass, 1, 1, 5], [I.wisp_essence, 1, 2, 4], [I.jade, 1, 2, 4], [I.dye, 2, 6, 6, 11], [I.glass_bottle, 1, 3, 4], [I.seeker_eye, 1, 1, 1]],
         fortress: [[I.gold_ingot, 1, 3, 15], [I.iron_ingot, 1, 5, 6], [I.diamond, 1, 3, 5], [I.gold_sword, 1, 1, 5], [I.gold_chestplate, 1, 1, 5], [I.gold_pickaxe, 1, 1, 3], [I.flint_and_steel, 1, 1, 5],
           [I.bloodcap, 3, 7, 5], [B.OBSIDIAN, 2, 4, 2], [I.sunstone_dust, 2, 6, 6], [I.smoky_quartz, 2, 8, 6], [I.fire_charge, 1, 3, 4], [I.gold_nugget, 3, 9, 8]],
         mineshaft: [[I.iron_ingot, 1, 5, 10], [I.gold_ingot, 1, 3, 5], [I.ember_dust, 4, 9, 5], [I.dye, 4, 9, 5, 11], [I.diamond, 1, 2, 3], [I.coal, 3, 8, 10], [I.bread, 1, 3, 15],

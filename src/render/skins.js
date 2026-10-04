@@ -425,6 +425,16 @@ const Skins = (() => {
   })();
 
   // ------------------------------------------------------------ the Underworld
+  S.mite = (() => {
+    const s = new Skin(); const r = rng('mite');
+    const sz = [[3, 2, 2], [4, 3, 2], [6, 4, 3], [3, 3, 3], [2, 2, 3], [2, 1, 2], [1, 1, 2]];
+    const uv = [[0, 0], [0, 4], [0, 9], [0, 16], [0, 22], [0, 27], [24, 0]];
+    sz.forEach(([w, h, d], i) => s.box(uv[i][0], uv[i][1], w, h, d, (f, x, y) => {
+      if (i === 0 && f === 'front' && y === 0 && (x === 0 || x === w - 1)) return [20, 20, 22];
+      return vary(r, (x + y + i) % 3 === 0 ? C('#5a5a5e') : C('#8a8a8e'), 0.1);
+    }));
+    return s;
+  })();
   // the wailer: a vast pale weeper. Eyes shut and streaming until it sees you.
   function wailerSkin(open) {
     const s = new Skin(); const r = rng('wailer');

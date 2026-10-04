@@ -902,7 +902,7 @@ class Wraith extends Monster {
     if (this.age % 3 === 0) game.particles.sparkle(this.x, this.y + 0.3, this.z, 0.6, 0.75, 0.9, 1, 0.5);
   }
   hurt(amount, src) { if (src && src.type === 'fall') return false; return super.hurt(amount, src); }
-  dropLoot(game, byPlayer) { this.drop(ITEM_IDS.string, 1 + this.rnd(2)); if (byPlayer && Math.random() < 0.15) this.drop(ITEM_IDS.lumite_shard, 1); }
+  dropLoot(game, byPlayer) { this.drop(ITEM_IDS.string, 1 + this.rnd(2)); if (byPlayer && Math.random() < 0.15) this.drop(ITEM_IDS.lumite_shard, 1); if (byPlayer && Math.random() < 0.25 + this.looting * 0.1) this.drop(ITEM_IDS.wisp_essence, 1); }
   soundPitch() { return (Math.random() - Math.random()) * 0.15 + 0.9; }
   render(er, rx, ry, rz, partial) {
     const bob = Math.sin((this.age + partial) * 0.08) * 0.08;

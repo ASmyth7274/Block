@@ -195,6 +195,9 @@ const Recipes = (() => {
   shaped([I.glass_bottle, 3], ['G G', ' G '], { G: B.GLASS });
   shapeless([I.fermented_spider_eye], [I.spider_eye, B.MUSHROOM_BROWN, I.sugar]);
   shaped([I.glistering_melon], ['NNN', 'NMN', 'NNN'], { N: I.gold_nugget, M: I.melon_slice });
+  // ---------------- the Vaults ----------------
+  shapeless([I.seeker_eye], [I.wisp_essence, I.flare_powder]);
+  shaped([B.IRON_BARS, 16], ['###', '###'], { '#': I.iron_ingot });
 
   // ---------------- smelting ----------------
   smelt(B.COBBLESTONE, [B.STONE], 0.1);

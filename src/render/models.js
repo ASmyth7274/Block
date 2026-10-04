@@ -136,6 +136,14 @@ const MODELS = (() => {
       }
       return m;
     })(),
+    // a vault mite: seven segments, widest near the head
+    mite: (() => {
+      const m = {}, sz = [[3, 2, 2], [4, 3, 2], [6, 4, 3], [3, 3, 3], [2, 2, 3], [2, 1, 2], [1, 1, 2]];
+      let z = -3.5;
+      const uv = [[0, 0], [0, 4], [0, 9], [0, 16], [0, 22], [0, 27], [24, 0]];
+      sz.forEach(([w, h, d], i) => { m['s' + i] = { pivot: [0, h / 2, z + d / 2], boxes: [bx([-w / 2, -h / 2, -d / 2], [w, h, d], uv[i])] }; z += d; });
+      return m;
+    })(),
     // the wailer's great body (its tentacles are a second model sharing the pose)
     wailer: { body: { pivot: [0, 0, 0], boxes: [bx([-8, 0, -8], [16, 16, 16], [0, 0])] } },
     wailerTentacles: (() => {

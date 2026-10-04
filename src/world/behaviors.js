@@ -10,7 +10,7 @@ const Behaviors = (() => {
     if (BT.opaque[id]) return true;
     if (id === B.SLAB) return (w.getMeta(x, y, z) & 32) !== 0;
     if (id === B.STAIRS) return (w.getMeta(x, y, z) & 4) !== 0;
-    return id === B.FENCE || id === B.BRIMSTONE_FENCE || id === B.GLASS || id === B.STAINED_GLASS || id === B.FARMLAND || id === B.ICE || id === B.PACKED_ICE || id === B.LEAVES || id === B.GLASS_PANE || id === B.HAY_BALE;
+    return id === B.FENCE || id === B.BRIMSTONE_FENCE || id === B.GLASS || id === B.STAINED_GLASS || id === B.FARMLAND || id === B.ICE || id === B.PACKED_ICE || id === B.LEAVES || id === B.GLASS_PANE || id === B.IRON_BARS || id === B.HAY_BALE;
   };
   const playerFacing = (p) => {
     // horizontal facing index (0 N, 1 S, 2 W, 3 E) the player looks toward
@@ -310,6 +310,11 @@ const Behaviors = (() => {
       if (!player.creative) player.inventory.setHeld(new ItemStack(I.bucket, 1, 0));
       return true;
     }
+    if (stack.id === I.seeker_eye && target === B.RIFT_FRAME) {
+      if (!Rift.insertEye(game, hit.x, hit.y, hit.z)) return false;
+      if (!player.creative) player.inventory.decrementHeld(1);
+      return true;
+    }
     if (stack.id === I.fire_charge) {
       // a fire charge lights whatever it lands on, once
       if (target === B.TNT) { w.setBlock(hit.x, hit.y, hit.z, 0); game.spawnEntity(new TNTEntity(w, hit.x + 0.5, hit.y, hit.z + 0.5, 80)); }
@@ -471,6 +476,7 @@ const Behaviors = (() => {
   // ---------------------------------------------------------------- removal & neighbour updates
   function onBroken(game, x, y, z, id, meta) {
     const w = game.world;
+    if (id === B.INFESTED_BRICKS && !game.player.creative && typeof releaseMite !== 'undefined') releaseMite(game, x, y, z, game.player);
     // two-block structures
     if (id === B.DOOR_WOOD || id === B.DOOR_IRON) {
       const oy = (meta & 8) ? y - 1 : y + 1;
@@ -881,6 +887,7 @@ const Behaviors = (() => {
     for (const [bx, by, bz, id] of affected.values()) {
       const meta = w.getMeta(bx, by, bz);
       if (id === B.TNT) { w.setBlock(bx, by, bz, 0); game.spawnEntity(new TNTEntity(w, bx + 0.5, by, bz + 0.5, 10 + rng.nextInt(20))); continue; }
+      if (id === B.INFESTED_BRICKS) { w.setBlock(bx, by, bz, 0, 0); releaseMite(game, bx, by, bz, null); continue; }
       w.setBlock(bx, by, bz, 0, 0);
       if (rng.nextFloat() < 1 / power && !BT.fluid[id]) dropBlock(game, bx, by, bz, id, meta, null);
       if (rng.nextInt(3) === 0) game.particles.smoke(bx + 0.5, by + 0.5, bz + 0.5, 1);
@@ -948,7 +955,7 @@ function raycastBlocks(world, ox, oy, oz, dx, dy, dz, maxDist, opts) {
             if (def.select && !sb) { /* not selectable (fire) */ }
             else {
               if (!sb && def.collide) { const cb = []; blockCollisionBoxes(world, x, y, z, id, meta, cb); if (cb.length) { let a = cb[0].copy(); for (const c of cb) { a.x0 = Math.min(a.x0, c.x0); a.y0 = Math.min(a.y0, c.y0); a.z0 = Math.min(a.z0, c.z0); a.x1 = Math.max(a.x1, c.x1); a.y1 = Math.min(Math.max(a.y1, c.y1), y + 1); a.z1 = Math.max(a.z1, c.z1); } boxes.push(a); } }
-              else if (!sb && (id === B.FENCE || id === B.BRIMSTONE_FENCE || id === B.GLASS_PANE)) { const cb = []; blockCollisionBoxes(world, x, y, z, id, meta, cb); for (const c of cb) { c.y1 = Math.min(c.y1, y + 1); boxes.push(c); } }
+              else if (!sb && (id === B.FENCE || id === B.BRIMSTONE_FENCE || id === B.GLASS_PANE || id === B.IRON_BARS)) { const cb = []; blockCollisionBoxes(world, x, y, z, id, meta, cb); for (const c of cb) { c.y1 = Math.min(c.y1, y + 1); boxes.push(c); } }
               else boxes.push(sb ? new AABB(x + sb[0], y + sb[1], z + sb[2], x + sb[3], y + sb[4], z + sb[5]) : new AABB(x, y, z, x + 1, y + 1, z + 1));
             }
           }

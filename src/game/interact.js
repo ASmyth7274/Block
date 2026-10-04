@@ -236,6 +236,18 @@ class Interaction {
       }
       return;
     }
+    if (held.id === I.seeker_eye) {
+      // off it goes, toward the nearest Vault
+      if (w.dim) { g.hud.showAction('§7The eye trembles, but finds nothing to seek here.'); return; }
+      const L = w.localGen.nearestVault(p.x, p.z);
+      const eye = g.eyePos(1);
+      g.spawnEntity(new SeekerEye(w, eye[0], eye[1] - 0.2, eye[2], L.portal[0] + 0.5, L.portal[2] + 0.5));
+      g.audio.play('eye_throw', 0.6, 0.6 + Math.random() * 0.2);
+      if (!p.creative) p.inventory.decrementHeld(1);
+      p.swing();
+      this.noRepeat = true;
+      return;
+    }
     if (held.id === I.glass_bottle) {
       const eye = g.eyePos(1);
       const [dx, dy, dz] = this.lookDir();

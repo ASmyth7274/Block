@@ -42,8 +42,9 @@ function blockCollisionBoxes(world, x, y, z, id, meta, out) {
     out.push(new AABB(x + 0.375, y, z + z0, x + 0.625, y + 1.5, z + z1));
     return;
   }
-  if (id === B.GLASS_PANE) {
-    const conn = (nx, nz) => { const n = world.getBlock(nx, y, nz); return n === B.GLASS_PANE || n === B.GLASS || BT.opaque[n]; };
+  if (id === B.GLASS_PANE || id === B.IRON_BARS) {
+    const conn = id === B.IRON_BARS ? (nx, nz) => { const n = world.getBlock(nx, y, nz); return n === B.IRON_BARS || BT.opaque[n]; }
+      : (nx, nz) => { const n = world.getBlock(nx, y, nz); return n === B.GLASS_PANE || n === B.GLASS || BT.opaque[n]; };
     const n = conn(x, z - 1), s = conn(x, z + 1), w = conn(x - 1, z), e = conn(x + 1, z);
     if (!n && !s && !w && !e) { out.push(new AABB(x, y, z + 0.4375, x + 1, y + 1, z + 0.5625)); out.push(new AABB(x + 0.4375, y, z, x + 0.5625, y + 1, z + 1)); return; }
     if (n || s) out.push(new AABB(x + 0.4375, y, z + (n ? 0 : 0.4375), x + 0.5625, y + 1, z + (s ? 1 : 0.5625)));

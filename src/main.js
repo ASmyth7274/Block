@@ -682,7 +682,7 @@ class Game {
     this.renderer.atlas.tickAnimations();
     DynamicItems.update(this);
     this.tickWaterways();
-    if (w.time % 40 === 9) { if (!w.dim) this.checkVillages(); else this.checkFortress(); }
+    if (w.time % 40 === 9) { if (!w.dim) { this.checkVillages(); this.checkVaults(); } else if (w.dim === 1) this.checkFortress(); }
     Circuits.tickPlates(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
@@ -1529,6 +1529,22 @@ class Game {
     return true;
   }
   // walking into a village for the first time puts it on the map
+  // stumbling into one of the old Vaults
+  checkVaults() {
+    const p = this.player, w = this.world;
+    if (!w.localGen.vaultAt || p.y > 50) return;
+    for (let i = 0; i < 3; i++) {
+      const L = w.localGen.vaultAt(i), b = L.box;
+      if (p.x < b[0] || p.x > b[3] || p.z < b[2] || p.z > b[5] || p.y < b[1] || p.y > b[4]) continue;
+      const list = w.info.vaults || (w.info.vaults = []);
+      if (list.includes(i)) return;
+      list.push(i);
+      this.hud.toast('Vault discovered!', 'An ancient Vault', new ItemStack(B.STONE_BRICKS, 1, 3), '#55ffff');
+      this.audio.play('discover', 0.7, 0.7);
+      this.achieve('vault');
+      return;
+    }
+  }
   // walking into the walls of an Underworld fortress
   checkFortress() {
     const p = this.player, w = this.world;

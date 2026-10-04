@@ -240,6 +240,8 @@ defItem('potion', { name: (d) => potionName(d, false), tex: (d) => 'potion_' + p
 defItem('splash_potion', { name: (d) => potionName(d, true), tex: (d) => 'splash_' + potionOf(d).key, maxStack: 1, potion: true, splash: true, variants: POTION_VARIANTS });
 defItem('fermented_spider_eye', { name: 'Fermented Spider Eye' });
 defItem('glistering_melon', { name: 'Glistering Melon' });
+// ---- the Vaults ----
+defItem('seeker_eye', { name: "Seeker's Eye", rare: true });
 
 // ---------------------------------------------------------------------------
 // Helpers

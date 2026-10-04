@@ -129,6 +129,15 @@ const SOUND_DEFS = (() => {
   };
   S.fuse = () => { const hp = new Biquad('hp', 3500, 0.7); return render(1.4, (t) => hp.p(noise()) * (0.5 + 0.5 * Math.sin(t * 60)) * env(t, 0.05, 0.6)); };
   S.fizz = () => { const hp = new Biquad('hp', 2500, 0.7); return render(0.45, (t) => hp.p(noise()) * env(t, 0.01, 0.12)); };
+  // the vault mite: a dry chittering
+  S.mite_say = () => { const hp = new Biquad('hp', 3000, 0.8); return render(0.5, (t) => { const k = Math.floor(t * 40); return hp.p(noise()) * ((k % 3) ? 1 : 0.2) * Math.sin(Math.PI * t / 0.5); }); };
+  S.mite_hurt = () => { const bp = new Biquad('bp', 3500, 4); return render(0.25, (t) => bp.p(noise()) * env(t, 0.003, 0.06) + Math.sin(2 * Math.PI * 2600 * t) * env(t, 0.003, 0.04) * 0.3); };
+  S.mite_death = () => { const bp = new Biquad('bp', 2800, 3); return render(0.5, (t) => { bp.set(3200 - t * 3000, 3); return bp.p(noise()) * env(t, 0.005, 0.15); }); };
+  // the Seeker's Eye and the rift
+  S.eye_throw = () => { const bp = new Biquad('bp', 1200, 3); return render(0.6, (t) => { bp.set(600 + t * 2400, 3); return bp.p(noise()) * env(t, 0.01, 0.15) + Math.sin(2 * Math.PI * (880 + t * 900) * t) * env(t, 0.01, 0.1) * 0.3; }); };
+  S.eye_drop = () => render(0.5, (t) => Math.sin(2 * Math.PI * (1320 - t * 900) * t) * env(t, 0.005, 0.12) * 0.6 + noise() * env(t, 0.002, 0.02) * 0.3);
+  S.eye_set = () => render(1.0, (t) => { let s = 0; [523, 784, 1047].forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t) * Math.exp(-t / (0.4 - i * 0.1)) * 0.35; }); return s + noise() * env(t, 0.002, 0.03) * 0.4; });
+  S.rift_open = () => { const lp = new Biquad('lp', 600, 0.8); return render(4, (t) => { let s = lp.p(noise()) * env(t, 0.3, 1.2) * 0.6; [130.8, 196, 261.6, 392, 523.3].forEach((f, i) => { const st = i * 0.25; if (t > st) s += Math.sin(2 * Math.PI * f * (t - st)) * Math.exp(-(t - st) / 1.6) * 0.25; }); return s; }); };
   // brewing: a soft bubbling, a bright 'done', glass bursting
   S.brew = () => { const bp = new Biquad('bp', 700, 6); let g = 0, gt = 0; return render(1.2, (t) => { if (t > gt) { g = 1; gt = t + 0.08 + rnd() * 0.15; bp.set(500 + rnd() * 700, 8); } g *= 0.996; return bp.p(noise()) * g * Math.sin(Math.PI * t / 1.2); }); };
   S.brew_done = () => render(0.8, (t) => { let s = 0; [784, 1047, 1319].forEach((f, i) => { const st = i * 0.06; if (t > st) s += Math.sin(2 * Math.PI * f * (t - st)) * Math.exp(-(t - st) / 0.25) * 0.4; }); return s; });

@@ -616,7 +616,7 @@ class Mesher {
           case 4: onEdge = x0 === 0; break; case 5: onEdge = x1 === 16; break;
         }
         if (onEdge && !bx.inset && OPQ[ids[pi + POFF[f]]]) continue;
-        if (onEdge && !bx.inset && ids[pi + POFF[f]] === id && (id === B.GLASS_PANE)) continue;
+        if (onEdge && !bx.inset && ids[pi + POFF[f]] === id && (id === B.GLASS_PANE || id === B.IRON_BARS)) continue;
         const layer = bx.tex ? (typeof bx.tex === 'string' ? atlas.layer(bx.tex) : atlas.layer(bx.tex[f])) : atlas.face(id, meta, f);
         const light = onEdge ? this.flatLight(pi, f) : this.flatLight(pi, f);
         const ins = bx.inset || 0;
@@ -660,8 +660,8 @@ class Mesher {
         if (conn(ids[pi + 1])) { out.push({ b: [10, 12, 7, 16, 15, 9] }, { b: [10, 6, 7, 16, 9, 9] }); }
         return out;
       }
-      case B.GLASS_PANE: {
-        const conn = (n) => n === B.GLASS_PANE || n === B.GLASS || n === B.STAINED_GLASS || BT.opaque[n];
+      case B.GLASS_PANE: case B.IRON_BARS: {
+        const conn = id === B.IRON_BARS ? (n) => n === B.IRON_BARS || BT.opaque[n] : (n) => n === B.GLASS_PANE || n === B.GLASS || n === B.STAINED_GLASS || BT.opaque[n];
         const n = conn(ids[pi - PD]), s = conn(ids[pi + PD]), w = conn(ids[pi - 1]), e = conn(ids[pi + 1]);
         const out = [];
         const any = n || s || w || e;
