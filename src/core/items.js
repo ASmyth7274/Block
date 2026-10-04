@@ -183,6 +183,8 @@ defItem('boat', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Boat', tex: (d) => '
 defItem('sign', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Sign', tex: (d) => 'sign_' + (WOOD[d] || 'oak'), maxStack: 16, variants: [0, 1, 2, 3, 4, 5], fuel: 200, places: 'sign' });
 defItem('painting', { name: 'Painting' });
 defItem('relay', { name: 'Ember Relay', tex: 'item_relay', places: 'relay' });
+defItem('minecart', { name: 'Minecart', maxStack: 1 });
+defItem('chest_minecart', { name: 'Minecart with Chest', maxStack: 1 });
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -285,6 +285,7 @@ class EntityRenderer {
       case 'thrown': return this.drawThrown(e, rx, ry, rz, partial);
       case 'lightning': return this.drawLightning(e, rx, ry, rz);
       case 'boat': return this.drawBoat(e, rx, ry, rz, partial);
+      case 'minecart': return this.drawMinecart(e, rx, ry, rz, partial);
       case 'fishhook': return this.drawHook(e, rx, ry, rz, partial);
       case 'painting': return this.drawPainting(e, rx, ry, rz);
       case 'moving_block': return this.drawMovingBlock(e, rx, ry, rz);
@@ -439,6 +440,33 @@ class EntityRenderer {
     this.texBox(b, m, [8, 1, -10, 10, 7, 10], layer, sky, blk);
     this.texBox(b, m, [-10, 1, -12, 10, 7, -10], layer, sky, blk);
     this.texBox(b, m, [-10, 1, 10, 10, 7, 12], layer, sky, blk);
+  }
+  // a minecart sits on the track and tilts with slopes (the classic way: sample the rail either side)
+  drawMinecart(e, rx, ry, rz, partial) {
+    const w = this.game.world;
+    const [ex, ey, ez] = e.lerpPos(partial);
+    const ox = rx - ex, oy = ry - ey, oz = rz - ez;
+    let px = ex, py = ey, pz = ez, theta = -e.lerpYaw(partial), phi = 0;
+    const on = Rails.posOnTrack(w, ex, ey, ez);
+    if (on) {
+      const a = Rails.posOffset(w, ex, ey, ez, 0.3) || on, b = Rails.posOffset(w, ex, ey, ez, -0.3) || on;
+      px = on[0]; py = (a[1] + b[1]) / 2; pz = on[2];
+      const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], h = Math.hypot(dx, dz);
+      if (h > 1e-6) { theta = Math.atan2(-dz, dx); phi = Math.atan2(dy, h); }
+    }
+    let base = M3.mul(M3.trans(px + ox, py + oy + 0.375, pz + oz), M3.ry(theta));
+    if (phi) base = M3.mul(base, M3.rz(phi));
+    const ht = e.hitTime - partial, dmg = Math.max(0, e.damage - partial);
+    if (ht > 0) base = M3.mul(base, M3.rx(Math.sin(ht) * ht * dmg / 10 * e.hitDir * DEG));
+    const m = M3.mul(base, M3.scale(1 / 16, 1 / 16, 1 / 16));
+    const [sky, blk] = this.lightAt(px, py + 0.5, pz);
+    const hull = this.r.atlas.layer('minecart_hull'), floor = this.r.atlas.layer('minecart_floor'), b = this.r.batch;
+    this.texBox(b, m, [-10, -5, -8, 10, -3, 8], floor, sky, blk);
+    this.texBox(b, m, [-10, -3, -8, -8, 5, 8], hull, sky, blk);
+    this.texBox(b, m, [8, -3, -8, 10, 5, 8], hull, sky, blk);
+    this.texBox(b, m, [-8, -3, -8, 8, 5, -6], hull, sky, blk);
+    this.texBox(b, m, [-8, -3, 6, 8, 5, 8], hull, sky, blk);
+    if (e.kind === 1) this.drawItem(new ItemStack(B.CHEST, 1, 0), M3.mul(M3.mul(base, M3.trans(0, 0.375, 0)), M3.scale(0.75, 0.75, 0.75)), sky, blk);
   }
   // where the line leaves the rod
   rodTip(p, partial) {

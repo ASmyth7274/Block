@@ -50,7 +50,7 @@ const PISTON_TF = [
 ];
 // what ember wire visibly links up with
 const WIRE_LINK = new Uint8Array(256);
-for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK]) WIRE_LINK[id] = 1;
+for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK, B.DETECTOR_RAIL]) WIRE_LINK[id] = 1;
 const FIXED_TINT = {
   spruce: [97, 153, 97], birch: [128, 167, 85], redwood: [86, 128, 70], lily: [32, 128, 48], white: [255, 255, 255],
 };
@@ -107,6 +107,7 @@ class Mesher {
             case 9: this.lily(pi, id, meta, x, y, z); break;
             case 10: this.vine(pi, id, meta, x, y, z); break;
             case 11: this.circuit(pi, id, meta, x, y, z); break;
+            case 12: this.rail(pi, id, meta, x, y, z); break;
           }
         }
       }
@@ -530,6 +531,30 @@ class Mesher {
       const delay = (meta >> 2) & 3;
       for (const pz of [2, 6 + delay * 2]) this.lbox(xb, yb, zb, tf, [7, 2, pz, 9, 7, pz + 2], tl, light, W, [post, cap, post, post, post, post]);
     }
+  }
+  // rails: a flat (or sloping) double-sided track 1px above the ground
+  rail(pi, id, meta, x, y, z) {
+    const xb = x * 16, zb = z * 16, yb = (this.sy * 16 + y) * 16;
+    const shape = id === B.RAIL ? meta & 15 : meta & 7;
+    const layer = this.atlas.face(id, meta, 1);
+    const light = this.lts[pi], buf = this.out[1], W = FIXED_TINT.white;
+    let p, uv;
+    // texture rails run along v; a curve joins the bottom edge to the right edge
+    const along = [[0, 0], [0, 16], [16, 16], [16, 0]];
+    switch (shape) {
+      case 0: p = [[0, 1, 0], [0, 1, 16], [16, 1, 16], [16, 1, 0]]; uv = [[0, 0], [0, 16], [16, 16], [16, 0]]; break;
+      case 1: p = [[0, 1, 0], [0, 1, 16], [16, 1, 16], [16, 1, 0]]; uv = [[0, 0], [16, 0], [16, 16], [0, 16]]; break;
+      case 2: p = [[0, 1, 0], [0, 1, 16], [16, 17, 16], [16, 17, 0]]; uv = [[0, 0], [16, 0], [16, 16], [0, 16]]; break;
+      case 3: p = [[0, 17, 0], [0, 17, 16], [16, 1, 16], [16, 1, 0]]; uv = [[0, 0], [16, 0], [16, 16], [0, 16]]; break;
+      case 4: p = [[0, 17, 0], [0, 1, 16], [16, 1, 16], [16, 17, 0]]; uv = along; break;
+      case 5: p = [[0, 1, 0], [0, 17, 16], [16, 17, 16], [16, 1, 0]]; uv = along; break;
+      default: {
+        p = [[0, 1, 0], [0, 1, 16], [16, 1, 16], [16, 1, 0]];
+        const fx = shape === 7 || shape === 8, fz = shape === 8 || shape === 9;
+        uv = p.map((q) => [fx ? 16 - q[0] : q[0], fz ? 16 - q[2] : q[2]]);
+      }
+    }
+    this.quad2(buf, p.map((q) => [xb + q[0], yb + q[1], zb + q[2]]), uv, layer, light, W, 1);
   }
   wire(pi, meta, xb, yb, zb, light) {
     const ids = this.ids, metas = this.metas, OPQ = BT.opaque, Wr = B.EMBER_WIRE;

@@ -81,6 +81,11 @@ const Recipes = (() => {
   shaped([B.NOTE_BLOCK, 1], ['PPP', 'PEP', 'PPP'], { P: B.PLANKS, E: I.ember_dust });
   shaped([B.PISTON, 1], ['PPP', 'CIC', 'CEC'], { P: B.PLANKS, C: B.COBBLESTONE, I: I.iron_ingot, E: I.ember_dust });
   shapeless([B.STICKY_PISTON, 1], [I.slimeball, B.PISTON]);
+  shaped([B.RAIL, 16], ['I I', 'ISI', 'I I'], { I: I.iron_ingot, S: I.stick });
+  shaped([B.BOOSTER_RAIL, 6], ['G G', 'GSG', 'GEG'], { G: I.gold_ingot, S: I.stick, E: I.ember_dust });
+  shaped([B.DETECTOR_RAIL, 6], ['I I', 'IPI', 'IEI'], { I: I.iron_ingot, P: B.STONE_PLATE, E: I.ember_dust });
+  shaped([I.minecart], ['I I', 'III'], { I: I.iron_ingot });
+  shapeless([I.chest_minecart], [B.CHEST, I.minecart]);
   shaped([B.ENCHANTING_TABLE, 1], [' B ', 'DOD', 'OOO'], { B: I.book, D: I.diamond, O: B.OBSIDIAN });
   shaped([I.compass], [' I ', 'IEI', ' I '], { I: I.iron_ingot, E: I.ember_dust });
   shaped([I.clock], [' G ', 'GEG', ' G '], { G: I.gold_ingot, E: I.ember_dust });

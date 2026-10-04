@@ -1291,6 +1291,7 @@ class Wolf extends Animal {
   inheritFrom(a, b) { this.setTamed(true); this.health = this.maxHealth; this.collar = Math.random() < 0.5 ? a.collar : b.collar; }
   // keep up with the owner: hop to a free spot next to them when too far behind
   teleportTo(p) {
+    if (this.riding) return false;
     const w = this.world, bx = Math.floor(p.x) - 2, bz = Math.floor(p.z) - 2, by = Math.floor(p.y);
     for (let l = 0; l <= 4; l++) for (let m = 0; m <= 4; m++) {
       if (l >= 1 && m >= 1 && l <= 3 && m <= 3) continue;
@@ -1706,6 +1707,7 @@ function entityFromData(world, d) {
   if (d.type === 'item') { const s = ItemStack.fromJSON(d.stack); if (!s) return null; e = new ItemEntity(world, d.x, d.y, d.z, s); }
   else if (d.type === 'xp') e = new XPOrb(world, d.x, d.y, d.z, d.value || 1);
   else if (d.type === 'boat') e = new Boat(world, d.x, d.y, d.z, d.wood || 0);
+  else if (d.type === 'minecart') e = new Minecart(world, d.x, d.y, d.z, d.kind || 0);
   else if (d.type === 'painting') e = new Painting(world, d.bx | 0, d.by | 0, d.bz | 0, d.facing || 0, d.art);
   else if (MOB_CLASSES[d.type]) e = new MOB_CLASSES[d.type](world);
   if (!e) return null;

@@ -64,6 +64,7 @@ const Behaviors = (() => {
       case B.SIGN: return BT.solid[below];
       case B.EMBER_TORCH: case B.EMBER_TORCH_OFF: return canStay(w, x, y, z, B.TORCH, meta);
       case B.EMBER_WIRE: case B.RELAY: case B.RELAY_ON: return isSolidTop(w, x, y - 1, z);
+      case B.RAIL: case B.BOOSTER_RAIL: case B.DETECTOR_RAIL: return Rails.canStay(w, x, y, z, id, meta);
       case B.STONE_PLATE: case B.WOOD_PLATE: return isSolidTop(w, x, y - 1, z) || below === B.FENCE;
       case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: {
         const a = CIRCUIT_ATT[meta & 7] || CIRCUIT_ATT[0];
@@ -191,6 +192,7 @@ const Behaviors = (() => {
     const w = game.world;
     w.setBlock(x, y, z, id, meta);
     if (id === B.WATER || id === B.LAVA) w.scheduleTick(x, y, z, tickRate(id));
+    if (Rails.isRail(id)) Rails.placed(w, x, y, z);
     const d = BLOCKS[id];
     game.audio.playBlock(d.sound, 'place', x + 0.5, y + 0.5, z + 0.5);
     if (!player.creative) player.inventory.decrementHeld(1);
@@ -497,6 +499,7 @@ const Behaviors = (() => {
     if (BLOCKS[id].gravity) w.scheduleTick(x, y, z, 2);
     if (id === B.WATER || id === B.LAVA) { if (!mixLiquids(w, x, y, z, id, meta)) w.scheduleTick(x, y, z, tickRate(id)); }
     if (typeof Circuits !== 'undefined' && Circuits.IS[id] && !w.menu) Circuits.changed(w, x, y, z);
+    if (id === B.RAIL && !w.menu) Rails.neighbourChanged(w, x, y, z, id);
     if (id === B.FARMLAND && BT.solid[w.getBlock(x, y + 1, z)] && BT.opaque[w.getBlock(x, y + 1, z)]) w.setBlock(x, y, z, B.DIRT, 0);
   }
 

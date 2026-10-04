@@ -257,6 +257,7 @@ class Interaction {
       return;
     }
     if (held.id === I.boat) { this.noRepeat = true; if (g.placeBoat(held)) p.swing(); return; }
+    if ((held.id === I.minecart || held.id === I.chest_minecart) && this.hit && Rails.isRail(this.hit.id)) { this.noRepeat = true; if (g.placeMinecart(held, this.hit)) p.swing(); return; }
     if (held.id === I.message_bottle) { this.noRepeat = true; g.readMessageBottle(); return; }
     if (held.id === I.prospector_rod) { g.useProspectorRod(); return; }
     if (held.id === I.wayfinder) { g.useWayfinder(); return; }
@@ -270,6 +271,7 @@ class Interaction {
     const g = this.game, p = g.player;
     let pk = null;
     if (this.entity && this.entity.type === 'boat') pk = [ITEM_IDS.boat, this.entity.wood];
+    if (this.entity && this.entity.type === 'minecart') pk = [this.entity.kind === 1 ? ITEM_IDS.chest_minecart : ITEM_IDS.minecart, 0];
     else if (this.entity && this.entity.type === 'painting') pk = [ITEM_IDS.painting, 0];
     else if (this.entity && p.creative) {
       const mt = MOB_TYPES.findIndex((m) => m && m.key === this.entity.type);

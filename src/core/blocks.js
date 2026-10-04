@@ -14,7 +14,7 @@ const HFACE_DIR = [[0, -1], [0, 1], [-1, 0], [1, 0]];
 const HFACE_OPP = [1, 0, 3, 2];
 
 // Render types
-const R = { NONE: 0, CUBE: 1, CROSS: 2, LIQUID: 3, TORCH: 4, MODEL: 5, CROP: 6, LADDER: 7, FIRE: 8, LILY: 9, VINE: 10, CIRCUIT: 11 };
+const R = { NONE: 0, CUBE: 1, CROSS: 2, LIQUID: 3, TORCH: 4, MODEL: 5, CROP: 6, LADDER: 7, FIRE: 8, LILY: 9, VINE: 10, CIRCUIT: 11, RAIL: 12 };
 
 const WOOD = ['oak', 'spruce', 'birch', 'jungle', 'maple', 'redwood'];
 const WOOD_NAMES = ['Oak', 'Spruce', 'Birch', 'Jungle', 'Maple', 'Redwood'];
@@ -630,6 +630,12 @@ defBlock(132, 'enchanting_table', {
   hardness: 5, resistance: 2000, tool: 'pickaxe', needsTool: true, tileEntity: 'enchanting', light: 0,
   model: () => [{ b: [0, 0, 0, 16, 12, 16] }], collide: () => [box16(0, 0, 0, 16, 12, 16)], select: () => box16(0, 0, 0, 16, 12, 16),
 });
+// rails: shape in the low bits (0-9 for plain rail; 0-5 plus a powered bit 8 for booster and detector rails)
+const railSelect = (shape) => shape >= 2 && shape <= 5 ? box16(0, 0, 0, 16, 10, 16) : box16(0, 0, 0, 16, 2, 16);
+const railBase = { opaque: false, solid: false, opacity: 0, hardness: 0.7, cutout: true, render: R.RAIL, sound: 'metal', tool: 'pickaxe', itemMetaMask: 0 };
+defBlock(133, 'rail', Object.assign({}, railBase, { name: 'Rail', tex: (m) => (m & 15) >= 6 ? 'rail_turn' : 'rail', itemSprite: 'rail', select: (m) => railSelect(m & 15), drops: () => [[B.RAIL, 1, 0]] }));
+defBlock(134, 'booster_rail', Object.assign({}, railBase, { name: 'Booster Rail', tex: (m) => (m & 8) ? 'booster_rail_on' : 'booster_rail', itemSprite: 'booster_rail', select: (m) => railSelect(m & 7), drops: () => [[B.BOOSTER_RAIL, 1, 0]] }));
+defBlock(135, 'detector_rail', Object.assign({}, railBase, { name: 'Detector Rail', tex: (m) => (m & 8) ? 'detector_rail_on' : 'detector_rail', itemSprite: 'detector_rail', select: (m) => railSelect(m & 7), drops: () => [[B.DETECTOR_RAIL, 1, 0]] }));
 defBlock(127, 'note_block', { name: 'Note Block', tex: 'note_block', hardness: 0.8, tool: 'axe', sound: 'wood', flammable: 5, burnSpeed: 5, drops: () => [[B.NOTE_BLOCK, 1, 0]] });
 
 // -------------------------------------------------------------------------

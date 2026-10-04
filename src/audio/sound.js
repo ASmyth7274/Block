@@ -109,6 +109,19 @@ const SOUND_DEFS = (() => {
   S.arrow_hit = () => { const lp = new Biquad('lp', 1200, 1); return render(0.15, (t) => (lp.p(noise()) + Math.sin(2 * Math.PI * 180 * t) * 0.5) * env(t, 0.001, 0.03)); };
   const creak = (f0, f1, dur) => () => { const bp = new Biquad('bp', 600, 6); let ph = 0; return render(dur, (t) => { const f = f0 + (f1 - f0) * (t / dur); ph += 2 * Math.PI * f / DSP.SR; const s = (((ph / (2 * Math.PI)) % 1) < 0.15 ? 1 : 0) - 0.15; return (bp.p(s + noise() * 0.2) + (t > dur - 0.08 ? noise() * Math.exp(-(t - dur + 0.08) / 0.02) * 0.5 : 0)) * env(t, 0.02, dur * 0.6); }); };
   S.door_open = creak(55, 75, 0.45); S.door_close = creak(70, 50, 0.35);
+  // minecarts: a clack at every rail joint and the rumble of iron wheels
+  S.rail_clack = () => {
+    const bp = new Biquad('bp', 1900, 5), lp = new Biquad('lp', 900, 0.8);
+    return render(0.22, (t) => {
+      let s = 0;
+      for (const st of [0, 0.075]) if (t > st) { const tt = t - st; s += (bp.p(noise()) * 0.8 + Math.sin(2 * Math.PI * 1150 * tt) * 0.35) * Math.exp(-tt / 0.018) + lp.p(noise()) * Math.exp(-tt / 0.03) * 0.5; }
+      return s;
+    });
+  };
+  S.minecart_roll = () => {
+    const lp = new Biquad('lp', 420, 0.9), bp = new Biquad('bp', 1300, 3);
+    return render(0.55, (t) => (lp.p(noise()) * 1.2 * (0.75 + 0.25 * Math.sin(t * 2 * Math.PI * 23)) + bp.p(noise()) * 0.12) * Math.sin(Math.PI * t / 0.55));
+  };
   S.chest_open = creak(40, 55, 0.5); S.chest_close = creak(50, 38, 0.4);
   S.explode = () => {
     const lp = new Biquad('lp', 500, 0.8), lp2 = new Biquad('lp', 120, 0.8);

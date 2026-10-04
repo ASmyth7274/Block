@@ -440,7 +440,7 @@ class ChestScreen extends ContainerScreen {
     this.inv = new Inventory(27, te.items);
     this.inv.listeners.push(() => this.game.world.markTileChanged(te.x, te.z));
     for (let r = 0; r < rows; r++) for (let c = 0; c < 9; c++) this.slots.push(new Slot(this.inv, r * 9 + c, 8 + c * 18, 18 + r * 18, { group: 'chest' }));
-    this.addPlayerSlots(103 + (rows - 4) * 18 + 18);
+    this.addPlayerSlots(103 + (rows - 4) * 18);
     te.open++;
     game.audio.play('chest_open', 0.5, 0.9 + Math.random() * 0.1, te.x + 0.5, te.y + 0.5, te.z + 0.5);
     if (te.buried) { te.buried = false; game.onTreasureFound(te); }
@@ -465,6 +465,19 @@ class ChestScreen extends ContainerScreen {
   }
 }
 
+// a chest riding on a minecart
+class CartChestScreen extends ChestScreen {
+  constructor(game, cart) {
+    super(game, { x: Math.floor(cart.x), y: Math.floor(cart.y), z: Math.floor(cart.z), items: cart.items, open: 0, buried: false });
+    this.cart = cart;
+  }
+  drawForeground(gui) {
+    this.label(gui, 'Minecart with Chest', 8, 6);
+    this.label(gui, 'Inventory', 8, this.ph - 96 + 2);
+  }
+  tick() { const c = this.cart; if (c.removed || this.player.distanceSq(c.x, c.y, c.z) > 64) this.game.closeScreen(); }
+}
+
 // ---------------------------------------------------------------- creative inventory
 const CREATIVE_TABS = (() => {
   const blk = (id, d) => [id, d || 0];
@@ -485,12 +498,12 @@ const CREATIVE_TABS = (() => {
     blk(B.LILY_PAD), blk(B.CATTAIL), blk(B.BRAMBLE), blk(B.LEAF_LITTER), ...all(B.FENCE), blk(B.FENCE_GATE), blk(B.TRAPDOOR), blk(B.GLASS_PANE), ...all(B.CARPET), blk(B.LUMITE_LAMP), blk(B.MOB_SPAWNER),
     [I.door_wood, 0], [I.door_iron, 0], [I.bed, 0], ...WOOD.map((w, i) => [I.sign, i]), [I.painting, 0]] });
   T.push({ name: 'Tools', icon: [I.iron_axe, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ['shovel', 'pickaxe', 'axe', 'hoe'].map((k) => [I[m + '_' + k], 0])),
-    ...items(['flint_and_steel', 'shears', 'fishing_rod', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'compass', 'clock', 'map', 'prospector_rod', 'wayfinder', 'journal', 'message_bottle']),
-    ...WOOD.map((w, i) => [I.boat, i])] });
+    ...items(['flint_and_steel', 'shears', 'fishing_rod', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'compass', 'clock', 'map', 'prospector_rod', 'wayfinder', 'journal', 'message_bottle'])] });
   T.push({ name: 'Combat', icon: [I.gold_sword, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].map((m) => [I[m + '_sword'], 0]), [I.bow, 0], [I.arrow, 0],
     ...['leather', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ARMOR_SLOTS.map((s) => [I[m + '_' + s], 0])), [I.snowball, 0], [I.egg, 0]] });
   T.push({ name: 'Ember Circuits', icon: [I.ember_dust, 0], list: [[I.ember_dust, 0], blk(B.EMBER_TORCH), blk(B.LEVER), blk(B.STONE_BUTTON), blk(B.WOOD_BUTTON), blk(B.STONE_PLATE), blk(B.WOOD_PLATE),
-    [I.relay, 0], blk(B.PISTON), blk(B.STICKY_PISTON), blk(B.EMBER_LAMP), blk(B.NOTE_BLOCK), blk(B.EMBER_BLOCK), blk(B.TNT), [I.door_wood, 0], [I.door_iron, 0], blk(B.TRAPDOOR), blk(B.FENCE_GATE)] });
+    [I.relay, 0], blk(B.PISTON), blk(B.STICKY_PISTON), blk(B.EMBER_LAMP), blk(B.NOTE_BLOCK), blk(B.EMBER_BLOCK), blk(B.TNT), [I.door_wood, 0], [I.door_iron, 0], blk(B.TRAPDOOR), blk(B.FENCE_GATE), blk(B.DETECTOR_RAIL)] });
+  T.push({ name: 'Transportation', icon: [B.BOOSTER_RAIL, 0], list: [blk(B.RAIL), blk(B.BOOSTER_RAIL), blk(B.DETECTOR_RAIL), [I.minecart, 0], [I.chest_minecart, 0], ...WOOD.map((w, i) => [I.boat, i])] });
   T.push({ name: 'Foodstuffs', icon: [I.apple, 0], list: items(['apple', 'golden_apple', 'bread', 'porkchop', 'cooked_porkchop', 'beef', 'steak', 'chicken', 'cooked_chicken', 'mutton', 'cooked_mutton', 'venison', 'cooked_venison', 'jerky',
     'fish', 'cooked_fish', 'salmon', 'cooked_salmon', 'sunfish', 'pufferfish', 'glimmerfin', 'carrot', 'potato', 'baked_potato', 'poison_potato', 'cookie', 'melon_slice', 'mushroom_stew', 'glow_berries', 'pumpkin_pie', 'berry_pie', 'berries', 'rotten_flesh', 'spider_eye']) });
   T.push({ name: 'Materials', icon: [I.stick, 0], list: [...items(['coal']), [I.coal, 1], ...items(['diamond', 'iron_ingot', 'gold_ingot', 'gold_nugget', 'cobalt_ingot', 'starmetal_ingot', 'jade', 'ember_dust', 'sulfur', 'lumite_shard', 'salt',
@@ -558,8 +571,8 @@ class CreativeScreen extends ContainerScreen {
   }
   setTab(i) { this.tab = i; this.scroll = 0; this.buildSlots(); this.layout(); }
   tabRect(i) {
-    const top = i < 5;
-    const col = top ? i : i - 5;
+    const top = i < 6;
+    const col = top ? i : i - 6;
     return [this.left + col * 29, top ? this.top - 28 : this.top + this.ph - 4, 28, 32, top];
   }
   isInsideExtra(mx, my) { for (let i = 0; i < CREATIVE_TABS.length; i++) { const [x, y, w, h] = this.tabRect(i); if (mx >= x && my >= y && mx < x + w && my < y + h) return true; } return false; }

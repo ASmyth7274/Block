@@ -363,7 +363,7 @@ class Game {
   }
 
   // ------------------------------------------------------------ entity persistence
-  persistable(e) { return e.type === 'item' || e.type === 'xp' || e.type === 'boat' || e.type === 'painting' || (e.category && e.category !== 'special' && (e.persistent || e.category === 'creature')); }
+  persistable(e) { return e.type === 'item' || e.type === 'xp' || e.type === 'boat' || e.type === 'minecart' || e.type === 'painting' || (e.category && e.category !== 'special' && (e.persistent || e.category === 'creature')); }
   onChunkEntities(c, m, fromSave) {
     const w = this.world, key = c.key;
     if (this.entityKeys.has(key)) {
@@ -679,7 +679,7 @@ class Game {
     }
     // gentle pushing between creatures, boats (and the player)
     const p = this.player;
-    const living = list.filter((e) => !e.removed && (e.category || e.type === 'boat') && !e.dead && !e.noClip && e.type !== 'wisp' && e.type !== 'stranger');
+    const living = list.filter((e) => !e.removed && (e.category || e.type === 'boat' || e.type === 'minecart') && !e.dead && !e.noClip && e.type !== 'wisp' && e.type !== 'stranger');
     w.solids = living.filter((e) => e.solid);
     if (p && !p.dead) living.push(p);
     for (let i = 0; i < living.length; i++) {
@@ -1326,6 +1326,17 @@ class Game {
     if (!p.creative) p.inventory.decrementHeld(1);
     return true;
   }
+  // a minecart goes onto the rail you click (a little higher on a slope)
+  placeMinecart(held, hit) {
+    const p = this.player, w = this.world;
+    const s = Rails.shapeOf(hit.id, hit.meta);
+    const c = new Minecart(w, hit.x + 0.5, hit.y + 0.0625 + (Rails.ascending(s) ? 0.5 : 0), hit.z + 0.5, held.id === ITEM_IDS.chest_minecart ? 1 : 0);
+    c.yaw = c.pyaw = (s === 1 || s === 2 || s === 3) ? 0 : Math.PI / 2;
+    this.spawnEntity(c);
+    this.audio.playBlock('metal', 'place', c.x, c.y, c.z);
+    if (!p.creative) p.inventory.decrementHeld(1);
+    return true;
+  }
   openSignEditor(te) { if (this.player && !this.player.dead) this.openScreen(new SignEditScreen(this, te)); }
   onFished(stack) {
     const p = this.player, I = ITEM_IDS;
@@ -1402,14 +1413,14 @@ class Game {
     // climb back into the boat you saved the game in
     const m = p.pendingMount;
     if (m) {
-      const b = w.entities.find((e) => e.type === 'boat' && !e.removed && !e.rider && Math.abs(e.x - m.x) < 1.5 && Math.abs(e.z - m.z) < 1.5 && Math.abs(e.y - m.y) < 2);
+      const b = w.entities.find((e) => (e.type === 'boat' || (e.type === 'minecart' && e.kind === 0)) && !e.removed && !e.rider && Math.abs(e.x - m.x) < 1.5 && Math.abs(e.z - m.z) < 1.5 && Math.abs(e.y - m.y) < 2);
       if (b) { b.mount(p); p.pendingMount = null; }
       else if (--m.t <= 0) p.pendingMount = null;
     }
     if (p.riding) {
       const v = p.riding, d = Math.hypot(v.x - v.px, v.z - v.pz);
-      p.stats.sailed = (p.stats.sailed || 0) + d;
-      if (p.stats.sailed >= 500) this.achieve('sail');
+      if (v.type === 'minecart') { p.stats.carted = (p.stats.carted || 0) + d; if (p.stats.carted >= 1000) this.achieve('rails'); }
+      else { p.stats.sailed = (p.stats.sailed || 0) + d; if (p.stats.sailed >= 500) this.achieve('sail'); }
     }
   }
 

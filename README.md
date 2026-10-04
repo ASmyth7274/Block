@@ -109,6 +109,10 @@ splash text and a slowly turning live panorama.
   they flicker too fast), relays with four delays, lamps, note blocks with
   five instruments, and pistons and sticky pistons that drive doors, TNT and
   hidden machines.
+- Rails and minecarts that follow the classic rules: track that joins itself
+  into curves and slopes, junctions switched by a signal, booster rails that
+  speed carts up (or brake them), detector rails that send out a signal, carts
+  that coast downhill, scoop up stray animals, and chest minecarts for cargo.
 - Enchanting the classic way: an enchanting table, bookshelves for power,
   three runic offers paid for in levels and lapis, and the familiar purple
   shimmer — Sharpness, Efficiency, Fortune, Silk Touch, Protection, Infinity,

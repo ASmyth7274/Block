@@ -413,7 +413,7 @@ const HFACE_DIR = [[0, -1], [0, 1], [-1, 0], [1, 0]];
 const HFACE_OPP = [1, 0, 3, 2];
 
 // Render types
-const R = { NONE: 0, CUBE: 1, CROSS: 2, LIQUID: 3, TORCH: 4, MODEL: 5, CROP: 6, LADDER: 7, FIRE: 8, LILY: 9, VINE: 10, CIRCUIT: 11 };
+const R = { NONE: 0, CUBE: 1, CROSS: 2, LIQUID: 3, TORCH: 4, MODEL: 5, CROP: 6, LADDER: 7, FIRE: 8, LILY: 9, VINE: 10, CIRCUIT: 11, RAIL: 12 };
 
 const WOOD = ['oak', 'spruce', 'birch', 'jungle', 'maple', 'redwood'];
 const WOOD_NAMES = ['Oak', 'Spruce', 'Birch', 'Jungle', 'Maple', 'Redwood'];
@@ -1029,6 +1029,12 @@ defBlock(132, 'enchanting_table', {
   hardness: 5, resistance: 2000, tool: 'pickaxe', needsTool: true, tileEntity: 'enchanting', light: 0,
   model: () => [{ b: [0, 0, 0, 16, 12, 16] }], collide: () => [box16(0, 0, 0, 16, 12, 16)], select: () => box16(0, 0, 0, 16, 12, 16),
 });
+// rails: shape in the low bits (0-9 for plain rail; 0-5 plus a powered bit 8 for booster and detector rails)
+const railSelect = (shape) => shape >= 2 && shape <= 5 ? box16(0, 0, 0, 16, 10, 16) : box16(0, 0, 0, 16, 2, 16);
+const railBase = { opaque: false, solid: false, opacity: 0, hardness: 0.7, cutout: true, render: R.RAIL, sound: 'metal', tool: 'pickaxe', itemMetaMask: 0 };
+defBlock(133, 'rail', Object.assign({}, railBase, { name: 'Rail', tex: (m) => (m & 15) >= 6 ? 'rail_turn' : 'rail', itemSprite: 'rail', select: (m) => railSelect(m & 15), drops: () => [[B.RAIL, 1, 0]] }));
+defBlock(134, 'booster_rail', Object.assign({}, railBase, { name: 'Booster Rail', tex: (m) => (m & 8) ? 'booster_rail_on' : 'booster_rail', itemSprite: 'booster_rail', select: (m) => railSelect(m & 7), drops: () => [[B.BOOSTER_RAIL, 1, 0]] }));
+defBlock(135, 'detector_rail', Object.assign({}, railBase, { name: 'Detector Rail', tex: (m) => (m & 8) ? 'detector_rail_on' : 'detector_rail', itemSprite: 'detector_rail', select: (m) => railSelect(m & 7), drops: () => [[B.DETECTOR_RAIL, 1, 0]] }));
 defBlock(127, 'note_block', { name: 'Note Block', tex: 'note_block', hardness: 0.8, tool: 'axe', sound: 'wood', flammable: 5, burnSpeed: 5, drops: () => [[B.NOTE_BLOCK, 1, 0]] });
 
 // -------------------------------------------------------------------------
@@ -1258,6 +1264,8 @@ defItem('boat', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Boat', tex: (d) => '
 defItem('sign', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Sign', tex: (d) => 'sign_' + (WOOD[d] || 'oak'), maxStack: 16, variants: [0, 1, 2, 3, 4, 5], fuel: 200, places: 'sign' });
 defItem('painting', { name: 'Painting' });
 defItem('relay', { name: 'Ember Relay', tex: 'item_relay', places: 'relay' });
+defItem('minecart', { name: 'Minecart', maxStack: 1 });
+defItem('chest_minecart', { name: 'Minecart with Chest', maxStack: 1 });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -3481,6 +3489,95 @@ const TexGen = (function () {
     const full = pad.concat(rows.map((r) => '......' + r.replace(/#/g, 'o') + '.'.repeat(10 - r.length)));
     sprite('particle_glyph' + i, full, { o: [255, 255, 255] });
   });
+})();
+
+// ---- src/render/railart.js
+// ---------------------------------------------------------------------------
+// Textures for rails and minecarts: iron rails on wooden sleepers, a curve,
+// booster rails with an ember strip, detector rails with a pressure plate,
+// and the riveted iron of the carts themselves.
+// ---------------------------------------------------------------------------
+(function () {
+  const { Img, reg, pal, rngFor, sprite, C } = TexGen;
+  const IRON = pal(['#4a4a4a', '#7a7a7a', '#a8a8a8', '#d0d0d0']);
+  const GOLD = pal(['#6a4a08', '#b88a18', '#e8c040', '#fff090']);
+  const WOOD = pal(['#3a2810', '#5a4020', '#6e5028', '#86643a']);
+  // sleepers across the track every few pixels
+  const sleepers = (img, rng) => {
+    for (const y0 of [1, 5, 9, 13]) for (let y = y0; y < y0 + 2; y++) for (let x = 1; x < 15; x++) {
+      const c = WOOD[(y === y0 ? 2 : 1) + (rng.nextInt(5) === 0 ? 1 : 0) - (x === 1 || x === 14 ? 1 : 0)];
+      img.set(x, y, c);
+    }
+  };
+  // two rails running along v (top to bottom)
+  const railsAlong = (img, P) => {
+    for (let y = 0; y < 16; y++) for (const x0 of [2, 12]) {
+      img.set(x0, y, P[1]); img.set(x0 + 1, y, (y % 4 === 1) ? P[3] : P[2]);
+      if (y % 8 === 3) img.set(x0, y, P[0]);
+    }
+  };
+  const straight = (name, P, mid) => {
+    const img = new Img(), rng = rngFor(name);
+    sleepers(img, rng);
+    if (mid) for (let y = 0; y < 16; y++) for (let x = 6; x < 10; x++) { const c = mid(x, y); if (c) img.set(x, y, c); }
+    railsAlong(img, P);
+    return reg(name, img);
+  };
+  straight('rail', IRON);
+  // booster rail: gold rails over an ember strip that glows when powered
+  straight('booster_rail', GOLD, (x, y) => (x === 6 || x === 9) ? null : ((y + x) % 3 === 0 ? C('#4a1a10') : C('#3a120a')));
+  straight('booster_rail_on', GOLD, (x, y) => (x === 6 || x === 9) ? null : ((y + x) % 3 === 0 ? C('#ffb060') : C('#ff6a20')));
+  // detector rail: a little stone plate between the rails
+  straight('detector_rail', IRON, (x, y) => (y >= 3 && y <= 12) ? ((x === 6 || x === 9 || y === 3 || y === 12) ? C('#5a5a5a') : C('#8a8a8a')) : null);
+  straight('detector_rail_on', IRON, (x, y) => (y >= 3 && y <= 12) ? ((x === 6 || x === 9 || y === 3 || y === 12) ? C('#5a5a5a') : ((x + y) % 2 ? C('#ff7a30') : C('#d8501c'))) : null);
+  // the curve: joins the bottom edge (v = 16) to the right edge (u = 16)
+  (() => {
+    const name = 'rail_turn', img = new Img(), rng = rngFor(name);
+    // sleepers fanning round the bend
+    for (let k = 0; k < 4; k++) {
+      const a = (k + 0.5) / 4 * Math.PI / 2;
+      for (let r = 1.5; r < 15.5; r += 0.25) {
+        for (const da of [-0.06, 0.06]) {
+          const x = Math.floor(16 - Math.cos(a + da) * r), y = Math.floor(16 - Math.sin(a + da) * r);
+          if (x >= 0 && y >= 0 && x < 16 && y < 16) img.set(x, y, WOOD[1 + (rng.nextInt(5) === 0 ? 1 : 0)]);
+        }
+      }
+    }
+    // the two rails (inner and outer)
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const r = Math.hypot(16 - (x + 0.5), 16 - (y + 0.5));
+      if ((r >= 2.6 && r < 4.4) || (r >= 12.6 && r < 14.4)) {
+        const outer = (r >= 3.5 && r < 4.4) || (r >= 13.5);
+        img.set(x, y, outer ? IRON[2] : IRON[1]);
+      }
+    }
+    reg(name, img);
+  })();
+  // minecart hull plates
+  const plate = (name, P, rivets) => {
+    const img = new Img(), rng = rngFor(name);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const edge = x === 0 || y === 0 || x === 15 || y === 15;
+      let c = P[edge ? 0 : 1 + (rng.nextInt(6) === 0 ? 1 : 0)];
+      if (rivets && (x === 2 || x === 13) && (y === 2 || y === 13)) c = P[3];
+      if (!edge && (y === 7 || y === 8) && rng.nextInt(4) === 0) c = P[0];
+      img.set(x, y, c);
+    }
+    return reg(name, img);
+  };
+  plate('minecart_hull', pal(['#3e3e44', '#6a6a72', '#7e7e86', '#b8b8c0']), true);
+  plate('minecart_floor', pal(['#2a2a2e', '#424248', '#4a4a50', '#6a6a70']), false);
+  // inventory sprites
+  sprite('minecart', [
+    '................', '................', '................', '................', '................', 'o..............o',
+    'oaoooooooooooaao', 'oabbbbbbbbbbbbao', 'oabcbbbbbbbbcbao', 'oabbbbbbbbbbbbao', '.oaaaaaaaaaaaao.', '..oooooooooooo..',
+    '...ooo....ooo...', '..oddo....oddo..', '...oo......oo...', '................'],
+    { o: '#202024', a: '#5a5a62', b: '#7e7e86', c: '#b8b8c0', d: '#3a3a40' });
+  sprite('chest_minecart', [
+    '................', '................', '.....oooooo.....', '....ohhhhhho....', '....ohkkkkho....', 'o...ohhghhho...o',
+    'oaoooooooooooaao', 'oabbbbbbbbbbbbao', 'oabcbbbbbbbbcbao', 'oabbbbbbbbbbbbao', '.oaaaaaaaaaaaao.', '..oooooooooooo..',
+    '...ooo....ooo...', '..oddo....oddo..', '...oo......oo...', '................'],
+    { o: '#202024', a: '#5a5a62', b: '#7e7e86', c: '#b8b8c0', d: '#3a3a40', h: '#8a5e28', k: '#6a4420', g: '#d8c040' });
 })();
 
 // ---- src/world/worldgen.js
@@ -6117,7 +6214,7 @@ const PISTON_TF = [
 ];
 // what ember wire visibly links up with
 const WIRE_LINK = new Uint8Array(256);
-for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK]) WIRE_LINK[id] = 1;
+for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK, B.DETECTOR_RAIL]) WIRE_LINK[id] = 1;
 const FIXED_TINT = {
   spruce: [97, 153, 97], birch: [128, 167, 85], redwood: [86, 128, 70], lily: [32, 128, 48], white: [255, 255, 255],
 };
@@ -6174,6 +6271,7 @@ class Mesher {
             case 9: this.lily(pi, id, meta, x, y, z); break;
             case 10: this.vine(pi, id, meta, x, y, z); break;
             case 11: this.circuit(pi, id, meta, x, y, z); break;
+            case 12: this.rail(pi, id, meta, x, y, z); break;
           }
         }
       }
@@ -6597,6 +6695,30 @@ class Mesher {
       const delay = (meta >> 2) & 3;
       for (const pz of [2, 6 + delay * 2]) this.lbox(xb, yb, zb, tf, [7, 2, pz, 9, 7, pz + 2], tl, light, W, [post, cap, post, post, post, post]);
     }
+  }
+  // rails: a flat (or sloping) double-sided track 1px above the ground
+  rail(pi, id, meta, x, y, z) {
+    const xb = x * 16, zb = z * 16, yb = (this.sy * 16 + y) * 16;
+    const shape = id === B.RAIL ? meta & 15 : meta & 7;
+    const layer = this.atlas.face(id, meta, 1);
+    const light = this.lts[pi], buf = this.out[1], W = FIXED_TINT.white;
+    let p, uv;
+    // texture rails run along v; a curve joins the bottom edge to the right edge
+    const along = [[0, 0], [0, 16], [16, 16], [16, 0]];
+    switch (shape) {
+      case 0: p = [[0, 1, 0], [0, 1, 16], [16, 1, 16], [16, 1, 0]]; uv = [[0, 0], [0, 16], [16, 16], [16, 0]]; break;
+      case 1: p = [[0, 1, 0], [0, 1, 16], [16, 1, 16], [16, 1, 0]]; uv = [[0, 0], [16, 0], [16, 16], [0, 16]]; break;
+      case 2: p = [[0, 1, 0], [0, 1, 16], [16, 17, 16], [16, 17, 0]]; uv = [[0, 0], [16, 0], [16, 16], [0, 16]]; break;
+      case 3: p = [[0, 17, 0], [0, 17, 16], [16, 1, 16], [16, 1, 0]]; uv = [[0, 0], [16, 0], [16, 16], [0, 16]]; break;
+      case 4: p = [[0, 17, 0], [0, 1, 16], [16, 1, 16], [16, 17, 0]]; uv = along; break;
+      case 5: p = [[0, 1, 0], [0, 17, 16], [16, 17, 16], [16, 1, 0]]; uv = along; break;
+      default: {
+        p = [[0, 1, 0], [0, 1, 16], [16, 1, 16], [16, 1, 0]];
+        const fx = shape === 7 || shape === 8, fz = shape === 8 || shape === 9;
+        uv = p.map((q) => [fx ? 16 - q[0] : q[0], fz ? 16 - q[2] : q[2]]);
+      }
+    }
+    this.quad2(buf, p.map((q) => [xb + q[0], yb + q[1], zb + q[2]]), uv, layer, light, W, 1);
   }
   wire(pi, meta, xb, yb, zb, light) {
     const ids = this.ids, metas = this.metas, OPQ = BT.opaque, Wr = B.EMBER_WIRE;
@@ -9263,6 +9385,217 @@ class Boat extends Entity {
   load(d) { super.load(d); this.wood = d.wood || 0; this.pyaw = this.yaw; }
 }
 
+// ---- src/entity/minecart.js
+// ---------------------------------------------------------------------------
+// Minecarts, rolling by the classic rules: they hug the track, coast down
+// slopes, take a shove from a powered booster rail and brake on an unpowered
+// one, trip detector rails and scoop up any creature they bump into.
+// A chest minecart carries 27 slots of cargo.
+// ---------------------------------------------------------------------------
+class Minecart extends Entity {
+  constructor(world, x, y, z, kind) {
+    super(world);
+    this.type = 'minecart';
+    this.kind = kind || 0;             // 0 rideable, 1 chest
+    this.w = 0.98; this.h = 0.7;
+    this.setPos(x, y, z);
+    this.rider = null;
+    this.damage = 0; this.hitTime = 0; this.hitDir = 1;
+    this.persistent = true;
+    this.reverse = false;
+    this.items = this.kind === 1 ? new Array(27).fill(null) : null;
+    this.rumble = 0; this.lastCell = '';
+  }
+  get speed() { return Math.sqrt(this.vx * this.vx + this.vz * this.vz); }
+  seat() { return [this.x, this.y - 0.5, this.z]; }
+  tick(game) {
+    this.baseTick();
+    if (this.hitTime > 0) this.hitTime--;
+    if (this.damage > 0) this.damage = Math.max(0, this.damage - 1);
+    if (this.y < -64) { this.removed = true; return; }
+    const w = this.world;
+    const r = this.rider;
+    if (r && (r.removed || r.dead || r.riding !== this)) this.rider = null;
+    this.vy -= 0.04;
+    const bx = Math.floor(this.x), bz = Math.floor(this.z);
+    let by = Math.floor(this.y);
+    if (Rails.isRail(w.getBlock(bx, by - 1, bz))) by--;
+    const id = w.getBlock(bx, by, bz);
+    if (Rails.isRail(id)) {
+      this.onRail(game, bx, by, bz, id, w.getMeta(bx, by, bz));
+      if (id === B.DETECTOR_RAIL) Rails.detect(w, bx, by, bz);
+    } else this.offRail();
+    // face the way it rolls (a cart is the same at both ends)
+    const dx = this.px - this.x, dz = this.pz - this.z;
+    if (dx * dx + dz * dz > 0.001) { this.yaw = Math.atan2(dz, dx); if (this.reverse) this.yaw += Math.PI; }
+    const d = wrapRadians(this.yaw - this.pyaw);
+    if (d < -170 * DEG || d >= 170 * DEG) { this.yaw += Math.PI; this.reverse = !this.reverse; }
+    this.bump(game);
+    if (this.rider) {
+      const [sx, sy, sz] = this.seat(), rr = this.rider;
+      rr.x = sx; rr.y = sy; rr.z = sz; rr.updateBox();
+      rr.vx = rr.vy = rr.vz = 0; rr.fallDistance = 0; rr.onGround = true;
+    }
+    // the rumble of wheels on iron
+    const sp = this.speed;
+    if (sp > 0.03 && Rails.isRail(id)) {
+      const cell = bx + ',' + bz;
+      if (cell !== this.lastCell) { this.lastCell = cell; game.audio.play('rail_clack', Math.min(0.6, sp * 1.4), 0.9 + sp * 0.4, this.x, this.y, this.z); }
+      if (--this.rumble <= 0) { this.rumble = 9; game.audio.play('minecart_roll', Math.min(0.7, sp * 1.6), 0.7 + sp * 0.8, this.x, this.y, this.z); }
+    }
+  }
+  // classic rail following
+  onRail(game, bx, by, bz, id, m) {
+    const w = this.world;
+    this.fallDistance = 0;
+    const before = Rails.posOnTrack(w, this.x, this.y, this.z);
+    this.y = by;
+    let boost = false, brake = false;
+    if (id === B.BOOSTER_RAIL) { boost = (m & 8) !== 0; brake = !boost; }
+    const shape = Rails.shapeOf(id, m);
+    const slope = 0.0078125;
+    switch (shape) {
+      case 2: this.vx -= slope; this.y++; break;
+      case 3: this.vx += slope; this.y++; break;
+      case 4: this.vz += slope; this.y++; break;
+      case 5: this.vz -= slope; this.y++; break;
+    }
+    const t = Rails.TRACK[shape];
+    let lx = t[1][0] - t[0][0], lz = t[1][2] - t[0][2];
+    const ll = Math.sqrt(lx * lx + lz * lz);
+    if (this.vx * lx + this.vz * lz < 0) { lx = -lx; lz = -lz; }
+    let sp = this.speed;
+    if (sp > 2) sp = 2;
+    this.vx = sp * lx / ll; this.vz = sp * lz / ll;
+    // a rider can nudge a stopped cart along
+    const r = this.rider;
+    if (r && r.forward > 0 && this.vx * this.vx + this.vz * this.vz < 0.01) {
+      this.vx += -Math.sin(r.yaw) * 0.1; this.vz += -Math.cos(r.yaw) * 0.1;
+      brake = false;
+    }
+    if (brake) {
+      if (this.speed < 0.03) { this.vx = 0; this.vy = 0; this.vz = 0; }
+      else { this.vx *= 0.5; this.vy = 0; this.vz *= 0.5; }
+    }
+    // snap onto the line of the rail
+    const x0 = bx + 0.5 + t[0][0] * 0.5, z0 = bz + 0.5 + t[0][2] * 0.5, x1 = bx + 0.5 + t[1][0] * 0.5, z1 = bz + 0.5 + t[1][2] * 0.5;
+    const ax = x1 - x0, az = z1 - z0;
+    let f;
+    if (ax === 0) { this.x = bx + 0.5; f = this.z - bz; }
+    else if (az === 0) { this.z = bz + 0.5; f = this.x - bx; }
+    else f = ((this.x - x0) * ax + (this.z - z0) * az) * 2;
+    this.x = x0 + ax * f; this.z = z0 + az * f;
+    this.updateBox();
+    let mx = this.vx, mz = this.vz;
+    if (this.rider) { mx *= 0.75; mz *= 0.75; }
+    mx = clamp(mx, -0.4, 0.4); mz = clamp(mz, -0.4, 0.4);
+    const keepX = this.vx, keepZ = this.vz;
+    this.move(mx, 0, mz);
+    if (!this.collidedH) { this.vx = keepX; this.vz = keepZ; }
+    if (t[0][1] !== 0 && Math.floor(this.x) - bx === t[0][0] && Math.floor(this.z) - bz === t[0][2]) { this.y += t[0][1]; this.updateBox(); }
+    else if (t[1][1] !== 0 && Math.floor(this.x) - bx === t[1][0] && Math.floor(this.z) - bz === t[1][2]) { this.y += t[1][1]; this.updateBox(); }
+    const drag = this.rider ? 0.997 : 0.96;
+    this.vx *= drag; this.vy = 0; this.vz *= drag;
+    const after = Rails.posOnTrack(w, this.x, this.y, this.z);
+    if (after && before) {
+      // rolling downhill speeds a cart up, uphill slows it
+      const dy = (before[1] - after[1]) * 0.05, s = this.speed;
+      if (s > 0) { this.vx = this.vx / s * (s + dy); this.vz = this.vz / s * (s + dy); }
+      this.y = after[1]; this.updateBox();
+    }
+    const nx = Math.floor(this.x), nz = Math.floor(this.z);
+    if (nx !== bx || nz !== bz) { const s = this.speed; this.vx = s * (nx - bx); this.vz = s * (nz - bz); }
+    if (boost) {
+      const s = this.speed;
+      if (s > 0.01) { this.vx += this.vx / s * 0.06; this.vz += this.vz / s * 0.06; }
+      else if (shape === 1) { if (BT.opaque[w.getBlock(bx - 1, by, bz)]) this.vx = 0.02; else if (BT.opaque[w.getBlock(bx + 1, by, bz)]) this.vx = -0.02; }
+      else if (shape === 0) { if (BT.opaque[w.getBlock(bx, by, bz - 1)]) this.vz = 0.02; else if (BT.opaque[w.getBlock(bx, by, bz + 1)]) this.vz = -0.02; }
+    }
+  }
+  offRail() {
+    this.vx = clamp(this.vx, -0.4, 0.4); this.vz = clamp(this.vz, -0.4, 0.4);
+    if (this.onGround) { this.vx *= 0.5; this.vy *= 0.5; this.vz *= 0.5; }
+    if (this.inWater) { this.vy *= 0.6; this.vy += 0.02; }
+    this.move(this.vx, this.vy, this.vz);
+    if (!this.onGround) { this.vx *= 0.95; this.vy *= 0.95; this.vz *= 0.95; }
+  }
+  // an empty rolling cart scoops up a creature it runs into; carts nudge carts
+  bump(game) {
+    const w = this.world, b = this.box;
+    for (const e of w.entitiesInBox(b.x0 - 0.2, b.y0, b.z0 - 0.2, b.x1 + 0.2, b.y1, b.z1 + 0.2)) {
+      if (e === this || e === this.rider || e.removed || e.dead) continue;
+      if (this.kind === 0 && !this.rider && !e.riding && e.category && e.category !== 'ambient' && e.category !== 'water' && e.type !== 'wisp' && e.type !== 'stranger' && this.vx * this.vx + this.vz * this.vz > 0.01) { this.mount(e); continue; }
+      if (e.type === 'minecart') {
+        let dx = e.x - this.x, dz = e.z - this.z;
+        const dd = dx * dx + dz * dz;
+        if (dd < 1e-4) continue;
+        const l = Math.sqrt(dd); dx /= l; dz /= l;
+        const k = Math.min(1, 1 / l) * 0.05;
+        // trade momentum, roughly like the classic carts do
+        const avx = (this.vx + e.vx) / 2, avz = (this.vz + e.vz) / 2;
+        this.vx = avx - dx * k; this.vz = avz - dz * k;
+        e.vx = avx + dx * k; e.vz = avz + dz * k;
+      }
+    }
+  }
+  mount(e) {
+    if (this.rider || e.riding || this.kind !== 0) return false;
+    this.rider = e; e.riding = this;
+    e.sprinting = false; e.sneaking = false;
+    if (e.clearPath) e.clearPath();
+    const [sx, sy, sz] = this.seat();
+    e.setPos(sx, sy, sz);
+    return true;
+  }
+  dismount() {
+    const p = this.rider;
+    if (!p) return;
+    this.rider = null; p.riding = null;
+    p.setPos(this.x, this.y + this.h + 0.01, this.z);
+    p.vx = p.vy = p.vz = 0;
+  }
+  interact(p) {
+    if (this.kind === 1) { p.game.openScreen(new CartChestScreen(p.game, this)); return true; }
+    if (p.riding === this || p.sneaking) return false;
+    if (this.rider) return false;
+    return this.mount(p);
+  }
+  hurt(amount, src) {
+    if (this.removed) return false;
+    const g = this.world.game;
+    if (src && src.entity && src.entity === this.rider) return false;
+    this.hitDir = -this.hitDir;
+    this.hitTime = 10;
+    this.damage += (amount || 1) * 10;
+    const creative = src && src.entity && src.entity.type === 'player' && src.entity.creative;
+    if (creative || this.damage > 40 || (src && (src.type === 'explosion' || src.type === 'lava'))) {
+      if (g) this.breakApart(g, !creative);
+    }
+    return true;
+  }
+  breakApart(game, drop) {
+    if (this.removed) return;
+    if (this.rider) this.dismount();
+    this.removed = true;
+    if (this.items) for (const s of this.items) if (s) Behaviors.dropStack(game, this.x, this.y + 0.3, this.z, s);
+    if (drop) {
+      Behaviors.dropStack(game, this.x, this.y + 0.3, this.z, new ItemStack(ITEM_IDS.minecart, 1, 0));
+      if (this.kind === 1) Behaviors.dropStack(game, this.x, this.y + 0.3, this.z, new ItemStack(B.CHEST, 1, 0));
+    }
+  }
+  save() {
+    const d = super.save();
+    d.kind = this.kind;
+    if (this.items) d.items = this.items.map((s) => s ? s.toJSON() : null);
+    return d;
+  }
+  load(d) {
+    super.load(d);
+    this.kind = d.kind || 0; this.pyaw = this.yaw;
+    if (this.kind === 1) this.items = (d.items || []).concat(new Array(27).fill(null)).slice(0, 27).map((s) => s ? ItemStack.fromJSON(s) : null);
+  }
+}
+
 // ---- src/entity/painting.js
 // ---------------------------------------------------------------------------
 // Paintings hang on walls. Placing one picks a random canvas among those that
@@ -9794,6 +10127,11 @@ const Recipes = (() => {
   shaped([B.NOTE_BLOCK, 1], ['PPP', 'PEP', 'PPP'], { P: B.PLANKS, E: I.ember_dust });
   shaped([B.PISTON, 1], ['PPP', 'CIC', 'CEC'], { P: B.PLANKS, C: B.COBBLESTONE, I: I.iron_ingot, E: I.ember_dust });
   shapeless([B.STICKY_PISTON, 1], [I.slimeball, B.PISTON]);
+  shaped([B.RAIL, 16], ['I I', 'ISI', 'I I'], { I: I.iron_ingot, S: I.stick });
+  shaped([B.BOOSTER_RAIL, 6], ['G G', 'GSG', 'GEG'], { G: I.gold_ingot, S: I.stick, E: I.ember_dust });
+  shaped([B.DETECTOR_RAIL, 6], ['I I', 'IPI', 'IEI'], { I: I.iron_ingot, P: B.STONE_PLATE, E: I.ember_dust });
+  shaped([I.minecart], ['I I', 'III'], { I: I.iron_ingot });
+  shapeless([I.chest_minecart], [B.CHEST, I.minecart]);
   shaped([B.ENCHANTING_TABLE, 1], [' B ', 'DOD', 'OOO'], { B: I.book, D: I.diamond, O: B.OBSIDIAN });
   shaped([I.compass], [' I ', 'IEI', ' I '], { I: I.iron_ingot, E: I.ember_dust });
   shaped([I.clock], [' G ', 'GEG', ' G '], { G: I.gold_ingot, E: I.ember_dust });
@@ -10327,6 +10665,7 @@ const Behaviors = (() => {
       case B.SIGN: return BT.solid[below];
       case B.EMBER_TORCH: case B.EMBER_TORCH_OFF: return canStay(w, x, y, z, B.TORCH, meta);
       case B.EMBER_WIRE: case B.RELAY: case B.RELAY_ON: return isSolidTop(w, x, y - 1, z);
+      case B.RAIL: case B.BOOSTER_RAIL: case B.DETECTOR_RAIL: return Rails.canStay(w, x, y, z, id, meta);
       case B.STONE_PLATE: case B.WOOD_PLATE: return isSolidTop(w, x, y - 1, z) || below === B.FENCE;
       case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: {
         const a = CIRCUIT_ATT[meta & 7] || CIRCUIT_ATT[0];
@@ -10454,6 +10793,7 @@ const Behaviors = (() => {
     const w = game.world;
     w.setBlock(x, y, z, id, meta);
     if (id === B.WATER || id === B.LAVA) w.scheduleTick(x, y, z, tickRate(id));
+    if (Rails.isRail(id)) Rails.placed(w, x, y, z);
     const d = BLOCKS[id];
     game.audio.playBlock(d.sound, 'place', x + 0.5, y + 0.5, z + 0.5);
     if (!player.creative) player.inventory.decrementHeld(1);
@@ -10760,6 +11100,7 @@ const Behaviors = (() => {
     if (BLOCKS[id].gravity) w.scheduleTick(x, y, z, 2);
     if (id === B.WATER || id === B.LAVA) { if (!mixLiquids(w, x, y, z, id, meta)) w.scheduleTick(x, y, z, tickRate(id)); }
     if (typeof Circuits !== 'undefined' && Circuits.IS[id] && !w.menu) Circuits.changed(w, x, y, z);
+    if (id === B.RAIL && !w.menu) Rails.neighbourChanged(w, x, y, z, id);
     if (id === B.FARMLAND && BT.solid[w.getBlock(x, y + 1, z)] && BT.opaque[w.getBlock(x, y + 1, z)]) w.setBlock(x, y, z, B.DIRT, 0);
   }
 
@@ -11262,10 +11603,10 @@ const Circuits = (() => {
   const ATT = CIRCUIT_ATT;
   const IS = new Uint8Array(256), SOURCE = new Uint8Array(256), MACHINE = new Uint8Array(256), CONNECT = new Uint8Array(256);
   for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE,
-    B.EMBER_LAMP, B.EMBER_LAMP_ON, B.RELAY, B.RELAY_ON, B.NOTE_BLOCK, B.EMBER_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT]) IS[id] = 1;
-  for (const id of [B.EMBER_TORCH, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.RELAY_ON, B.EMBER_BLOCK]) SOURCE[id] = 1;
-  for (const id of [B.EMBER_LAMP, B.EMBER_LAMP_ON, B.NOTE_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.RELAY, B.RELAY_ON]) MACHINE[id] = 1;
-  for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK]) CONNECT[id] = 1;
+    B.EMBER_LAMP, B.EMBER_LAMP_ON, B.RELAY, B.RELAY_ON, B.NOTE_BLOCK, B.EMBER_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT, B.BOOSTER_RAIL, B.DETECTOR_RAIL]) IS[id] = 1;
+  for (const id of [B.EMBER_TORCH, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.RELAY_ON, B.EMBER_BLOCK, B.DETECTOR_RAIL]) SOURCE[id] = 1;
+  for (const id of [B.EMBER_LAMP, B.EMBER_LAMP_ON, B.NOTE_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.RELAY, B.RELAY_ON, B.BOOSTER_RAIL]) MACHINE[id] = 1;
+  for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK, B.DETECTOR_RAIL]) CONNECT[id] = 1;
   for (const id of [B.PISTON, B.STICKY_PISTON, B.PISTON_HEAD]) { IS[id] = 1; MACHINE[id] = 1; }
   // blocks a piston crushes (dropping them) rather than pushes
   const BREAKS = new Uint8Array(256);
@@ -11278,6 +11619,7 @@ const Circuits = (() => {
       case B.EMBER_BLOCK: return 15;
       case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: return (meta & 8) ? 15 : 0;
       case B.STONE_PLATE: case B.WOOD_PLATE: return (meta & 1) ? 15 : 0;
+      case B.DETECTOR_RAIL: return (meta & 8) ? 15 : 0;
       case B.EMBER_TORCH: { const a = TORCH_ATT[meta] || TORCH_ATT[0]; return (dx === a[0] && dy === a[1] && dz === a[2]) ? 0 : 15; }
       case B.RELAY_ON: { const f = HFACE_DIR[meta & 3]; return (dy === 0 && dx === f[0] && dz === f[1]) ? 15 : 0; }
     }
@@ -11293,6 +11635,7 @@ const Circuits = (() => {
       switch (id) {
         case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: { const a = ATT[m & 7] || ATT[0]; if ((m & 8) && a[0] === -d[0] && a[1] === -d[1] && a[2] === -d[2]) return 15; break; }
         case B.STONE_PLATE: case B.WOOD_PLATE: if ((m & 1) && d[1] === 1) return 15; break;
+        case B.DETECTOR_RAIL: if ((m & 8) && d[1] === 1) return 15; break;
         case B.EMBER_TORCH: if (d[1] === -1) return 15; break;
         case B.RELAY_ON: { const fd = HFACE_DIR[m & 3]; if (d[1] === 0 && fd[0] === -d[0] && fd[1] === -d[2]) return 15; break; }
       }
@@ -11472,6 +11815,7 @@ const Circuits = (() => {
         if (p !== was) { w.setBlock(x, y, z, id, (m & 31) | (p ? 32 : 0), 4); if (p && g) playNote(g, x, y, z, m & 31); }
         break;
       }
+      case B.BOOSTER_RAIL: Rails.updateBooster(w, x, y, z); break;
       case B.TNT: if (machinePower(w, x, y, z) > 0 && g) { w.setBlock(x, y, z, 0, 0); g.spawnEntity(new TNTEntity(w, x + 0.5, y, z + 0.5, 80)); } break;
       case B.DOOR_WOOD: case B.DOOR_IRON: {
         const lower = (m & 8) ? y - 1 : y;
@@ -11718,6 +12062,243 @@ const Circuits = (() => {
   }
   BLOCKS[B.NOTE_BLOCK].onPunch = (w, x, y, z) => { if (w.game) playNote(w.game, x, y, z, w.getMeta(x, y, z) & 31); };
   return { changed, blockChanged, use, tickPlates, machinePower, wireConns, playNote, IS };
+})();
+
+// ---- src/world/rails.js
+// ---------------------------------------------------------------------------
+// Rails, laid by the classic rules: a new rail links to the rails around it
+// (straights, curves and slopes), T-junctions switch with an ember signal,
+// booster rails pass their power along up to eight rails, detector rails
+// switch on while a cart rolls over them. Also the track geometry carts use.
+// ---------------------------------------------------------------------------
+const Rails = (() => {
+  // shape -> the two neighbours it links to [dx, dy, dz] (dy 1: that end climbs)
+  const LINKS = [
+    [[0, 0, -1], [0, 0, 1]], [[-1, 0, 0], [1, 0, 0]],
+    [[-1, 0, 0], [1, 1, 0]], [[-1, 1, 0], [1, 0, 0]], [[0, 1, -1], [0, 0, 1]], [[0, 0, -1], [0, 1, 1]],
+    [[0, 0, 1], [1, 0, 0]], [[0, 0, 1], [-1, 0, 0]], [[0, 0, -1], [-1, 0, 0]], [[0, 0, -1], [1, 0, 0]],
+  ];
+  // the classic cart track matrix (a slope's low end at -1)
+  const TRACK = [
+    [[0, 0, -1], [0, 0, 1]], [[-1, 0, 0], [1, 0, 0]],
+    [[-1, -1, 0], [1, 0, 0]], [[-1, 0, 0], [1, -1, 0]], [[0, 0, -1], [0, -1, 1]], [[0, -1, -1], [0, 0, 1]],
+    [[0, 0, 1], [1, 0, 0]], [[0, 0, 1], [-1, 0, 0]], [[0, 0, -1], [-1, 0, 0]], [[0, 0, -1], [1, 0, 0]],
+  ];
+  const isRail = (id) => id === B.RAIL || id === B.BOOSTER_RAIL || id === B.DETECTOR_RAIL;
+  const shapeOf = (id, m) => id === B.RAIL ? (m & 15) : (m & 7);
+  const ascending = (s) => s >= 2 && s <= 5;
+
+  // a rail with its links, like the classic helper
+  class Track {
+    constructor(w, x, y, z) {
+      this.w = w; this.x = x; this.y = y; this.z = z;
+      this.id = w.getBlock(x, y, z); this.meta = w.getMeta(x, y, z);
+      this.straight = this.id !== B.RAIL;
+      this.shape = shapeOf(this.id, this.meta);
+      this.links = LINKS[this.shape].map((d) => [x + d[0], y + d[1], z + d[2]]);
+    }
+    hasLinkXZ(x, z) { return this.links.some((l) => l[0] === x && l[2] === z); }
+    connectsTo(t) { return this.hasLinkXZ(t.x, t.z); }
+    // keep only links that lead to a rail which links back
+    prune() {
+      const out = [];
+      for (const l of this.links) { const r = trackAt(this.w, l[0], l[1], l[2]); if (r && r.connectsTo(this)) out.push([r.x, r.y, r.z]); }
+      this.links = out;
+    }
+    canTake(t) { return this.connectsTo(t) || this.links.length !== 2; }
+    canConnectAt(x, y, z) { const r = trackAt(this.w, x, y, z); if (!r) return false; r.prune(); return r.canTake(this); }
+    slope(shape) {
+      const { w, x, y, z } = this;
+      if (shape === 0) { if (isRail(w.getBlock(x, y + 1, z - 1))) shape = 4; if (isRail(w.getBlock(x, y + 1, z + 1))) shape = 5; }
+      if (shape === 1) { if (isRail(w.getBlock(x + 1, y + 1, z))) shape = 2; if (isRail(w.getBlock(x - 1, y + 1, z))) shape = 3; }
+      return shape;
+    }
+    setShape(shape) {
+      this.shape = shape;
+      this.links = LINKS[shape].map((d) => [this.x + d[0], this.y + d[1], this.z + d[2]]);
+      this.meta = this.id === B.RAIL ? shape : (this.meta & 8) | shape;
+      this.w.setBlock(this.x, this.y, this.z, this.id, this.meta);
+    }
+    // choose a shape from the rails around (the classic placement rule)
+    place(powered, initial) {
+      const { x, y, z } = this;
+      const n = this.canConnectAt(x, y, z - 1), s = this.canConnectAt(x, y, z + 1), we = this.canConnectAt(x - 1, y, z), e = this.canConnectAt(x + 1, y, z);
+      let shape = -1;
+      if ((n || s) && !we && !e) shape = 0;
+      if ((we || e) && !n && !s) shape = 1;
+      if (!this.straight) {
+        if (s && e && !n && !we) shape = 6;
+        if (s && we && !n && !e) shape = 7;
+        if (n && we && !s && !e) shape = 8;
+        if (n && e && !s && !we) shape = 9;
+      }
+      if (shape === -1) {
+        if (n || s) shape = 0;
+        if (we || e) shape = 1;
+        if (!this.straight) {
+          if (powered) { if (s && e) shape = 6; if (we && s) shape = 7; if (e && n) shape = 9; if (n && we) shape = 8; }
+          else { if (n && we) shape = 8; if (e && n) shape = 9; if (we && s) shape = 7; if (s && e) shape = 6; }
+        }
+      }
+      shape = this.slope(shape);
+      if (shape === -1) shape = this.shape;
+      if (!initial && shape === this.shape) return;
+      this.setShape(shape);
+      for (const l of this.links) {
+        const r = trackAt(this.w, l[0], l[1], l[2]);
+        if (!r) continue;
+        r.prune();
+        if (r.canTake(this)) r.connect(this);
+      }
+    }
+    // a neighbour asks to be linked in
+    connect(t) {
+      if (!this.connectsTo(t)) this.links.push([t.x, t.y, t.z]);
+      const { x, z } = this;
+      const n = this.hasLinkXZ(x, z - 1), s = this.hasLinkXZ(x, z + 1), we = this.hasLinkXZ(x - 1, z), e = this.hasLinkXZ(x + 1, z);
+      let shape = -1;
+      if (n || s) shape = 0;
+      if (we || e) shape = 1;
+      if (!this.straight) {
+        if (s && e && !n && !we) shape = 6;
+        if (s && we && !n && !e) shape = 7;
+        if (n && we && !s && !e) shape = 8;
+        if (n && e && !s && !we) shape = 9;
+      }
+      shape = this.slope(shape);
+      if (shape === -1) shape = this.shape;
+      this.setShape(shape);
+    }
+  }
+  // the rail at a spot, or one block above or below it
+  function trackAt(w, x, y, z) {
+    if (isRail(w.getBlock(x, y, z))) return new Track(w, x, y, z);
+    if (isRail(w.getBlock(x, y + 1, z))) return new Track(w, x, y + 1, z);
+    if (isRail(w.getBlock(x, y - 1, z))) return new Track(w, x, y - 1, z);
+    return null;
+  }
+  function adjacentRails(w, x, y, z) {
+    let n = 0;
+    for (const [dx, dz] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) if (trackAt(w, x + dx, y, z + dz)) n++;
+    return n;
+  }
+  const signal = (w, x, y, z) => typeof Circuits !== 'undefined' && Circuits.machinePower(w, x, y, z) > 0;
+  // a freshly placed rail links up with its neighbours
+  function placed(w, x, y, z) {
+    const t = new Track(w, x, y, z);
+    t.place(signal(w, x, y, z), true);
+    if (t.id === B.BOOSTER_RAIL) updateBooster(w, x, y, z);
+  }
+  // T-junctions flip their curve when the power beside them changes
+  const junctionPower = new Map();
+  function neighbourChanged(w, x, y, z, id) {
+    if (id !== B.RAIL) return;
+    if (adjacentRails(w, x, y, z) !== 3) return;
+    const p = signal(w, x, y, z), key = x + ',' + y + ',' + z;
+    if (junctionPower.get(key) === p) return;
+    junctionPower.set(key, p);
+    if (junctionPower.size > 512) junctionPower.delete(junctionPower.keys().next().value);
+    new Track(w, x, y, z).place(p, false);
+  }
+  // support: rails need a solid top beneath (and a slope something to lean on)
+  function canStay(w, x, y, z, id, meta) {
+    if (!Behaviors.isSolidTop(w, x, y - 1, z)) return false;
+    const s = shapeOf(id, meta);
+    if (ascending(s)) {
+      const d = [[1, 0], [-1, 0], [0, -1], [0, 1]][s - 2];
+      if (!Behaviors.isSolidTop(w, x + d[0], y, z + d[1])) return false;
+    }
+    return true;
+  }
+
+  // ------------------------------------------------------------ booster rails
+  // follow the line of booster rails looking for one fed by a signal
+  function chainFrom(w, x, y, z, m, forward, depth) {
+    if (depth >= 8) return false;
+    let i = x, j = y, k = z, flat = true, shape = m & 7;
+    switch (shape) {
+      case 0: if (forward) k++; else k--; break;
+      case 1: if (forward) i--; else i++; break;
+      case 2: if (forward) i--; else { i++; j++; flat = false; } shape = 1; break;
+      case 3: if (forward) { i--; j++; flat = false; } else i++; shape = 1; break;
+      case 4: if (forward) k++; else { k--; j++; flat = false; } shape = 0; break;
+      case 5: if (forward) { k++; j++; flat = false; } else k--; shape = 0; break;
+    }
+    return chainAt(w, i, j, k, forward, depth, shape) || (flat && chainAt(w, i, j - 1, k, forward, depth, shape));
+  }
+  function chainAt(w, x, y, z, forward, depth, shape) {
+    if (w.getBlock(x, y, z) !== B.BOOSTER_RAIL) return false;
+    const m = w.getMeta(x, y, z), o = m & 7;
+    if (shape === 1 && (o === 0 || o === 4 || o === 5)) return false;
+    if (shape === 0 && (o === 1 || o === 2 || o === 3)) return false;
+    if (!(m & 8)) return false;
+    return signal(w, x, y, z) || chainFrom(w, x, y, z, m, forward, depth + 1);
+  }
+  function updateBooster(w, x, y, z) {
+    if (w.getBlock(x, y, z) !== B.BOOSTER_RAIL) return;
+    const m = w.getMeta(x, y, z), was = (m & 8) !== 0;
+    const now = signal(w, x, y, z) || chainFrom(w, x, y, z, m, true, 0) || chainFrom(w, x, y, z, m, false, 0);
+    if (now !== was) w.setBlock(x, y, z, B.BOOSTER_RAIL, (m & 7) | (now ? 8 : 0));
+  }
+
+  // ------------------------------------------------------------ detector rails
+  function cartOn(w, x, y, z) {
+    for (const e of w.entitiesInBox(x - 0.5, y - 0.5, z - 0.5, x + 1.5, y + 1.5, z + 1.5)) {
+      if (e.type !== 'minecart' || e.removed) continue;
+      if (e.x > x + 0.125 && e.x < x + 0.875 && e.z > z + 0.125 && e.z < z + 0.875 && e.y >= y - 0.5 && e.y < y + 1.2) return true;
+    }
+    return false;
+  }
+  function detect(w, x, y, z) {
+    const m = w.getMeta(x, y, z);
+    if (!(m & 8)) { w.setBlock(x, y, z, B.DETECTOR_RAIL, m | 8); w.scheduleTick(x, y, z, 20, B.DETECTOR_RAIL); }
+  }
+  BLOCKS[B.DETECTOR_RAIL].circuitTick = (w, x, y, z) => {
+    const m = w.getMeta(x, y, z);
+    if (!(m & 8)) return;
+    if (cartOn(w, x, y, z)) w.scheduleTick(x, y, z, 20, B.DETECTOR_RAIL);
+    else w.setBlock(x, y, z, B.DETECTOR_RAIL, m & 7);
+  };
+
+  // ------------------------------------------------------------ the track carts ride
+  // the point on the rail nearest (x, y, z), or null
+  function posOnTrack(w, x, y, z) {
+    const i = Math.floor(x); let j = Math.floor(y); const k = Math.floor(z);
+    if (isRail(w.getBlock(i, j - 1, k))) j--;
+    const id = w.getBlock(i, j, k);
+    if (!isRail(id)) return null;
+    const t = TRACK[shapeOf(id, w.getMeta(i, j, k))];
+    const x0 = i + 0.5 + t[0][0] * 0.5, y0 = j + 0.0625 + t[0][1] * 0.5, z0 = k + 0.5 + t[0][2] * 0.5;
+    const x1 = i + 0.5 + t[1][0] * 0.5, y1 = j + 0.0625 + t[1][1] * 0.5, z1 = k + 0.5 + t[1][2] * 0.5;
+    const dx = x1 - x0, dy = (y1 - y0) * 2, dz = z1 - z0;
+    let f;
+    if (dx === 0) { x = i + 0.5; f = z - k; }
+    else if (dz === 0) { z = k + 0.5; f = x - i; }
+    else f = ((x - x0) * dx + (z - z0) * dz) * 2;
+    x = x0 + dx * f; y = y0 + dy * f; z = z0 + dz * f;
+    if (dy < 0) y += 1;
+    if (dy > 0) y += 0.5;
+    return [x, y, z];
+  }
+  // the same, moved d along the track
+  function posOffset(w, x, y, z, d) {
+    const i = Math.floor(x); let j = Math.floor(y); const k = Math.floor(z);
+    if (isRail(w.getBlock(i, j - 1, k))) j--;
+    const id = w.getBlock(i, j, k);
+    if (!isRail(id)) return null;
+    const s = shapeOf(id, w.getMeta(i, j, k));
+    y = j;
+    if (ascending(s)) y = j + 1;
+    const t = TRACK[s];
+    let dx = t[1][0] - t[0][0], dz = t[1][2] - t[0][2];
+    const len = Math.sqrt(dx * dx + dz * dz);
+    dx /= len; dz /= len;
+    x += dx * d; z += dz * d;
+    if (t[0][1] !== 0 && Math.floor(x) - i === t[0][0] && Math.floor(z) - k === t[0][2]) y += t[0][1];
+    else if (t[1][1] !== 0 && Math.floor(x) - i === t[1][0] && Math.floor(z) - k === t[1][2]) y += t[1][1];
+    return posOnTrack(w, x, y, z);
+  }
+  return { LINKS, TRACK, isRail, shapeOf, ascending, Track, trackAt, placed, neighbourChanged, canStay, updateBooster, cartOn, detect, posOnTrack, posOffset };
 })();
 
 // ---- src/game/interact.js
@@ -11979,6 +12560,7 @@ class Interaction {
       return;
     }
     if (held.id === I.boat) { this.noRepeat = true; if (g.placeBoat(held)) p.swing(); return; }
+    if ((held.id === I.minecart || held.id === I.chest_minecart) && this.hit && Rails.isRail(this.hit.id)) { this.noRepeat = true; if (g.placeMinecart(held, this.hit)) p.swing(); return; }
     if (held.id === I.message_bottle) { this.noRepeat = true; g.readMessageBottle(); return; }
     if (held.id === I.prospector_rod) { g.useProspectorRod(); return; }
     if (held.id === I.wayfinder) { g.useWayfinder(); return; }
@@ -11992,6 +12574,7 @@ class Interaction {
     const g = this.game, p = g.player;
     let pk = null;
     if (this.entity && this.entity.type === 'boat') pk = [ITEM_IDS.boat, this.entity.wood];
+    if (this.entity && this.entity.type === 'minecart') pk = [this.entity.kind === 1 ? ITEM_IDS.chest_minecart : ITEM_IDS.minecart, 0];
     else if (this.entity && this.entity.type === 'painting') pk = [ITEM_IDS.painting, 0];
     else if (this.entity && p.creative) {
       const mt = MOB_TYPES.findIndex((m) => m && m.key === this.entity.type);
@@ -13678,6 +14261,7 @@ class EntityRenderer {
       case 'thrown': return this.drawThrown(e, rx, ry, rz, partial);
       case 'lightning': return this.drawLightning(e, rx, ry, rz);
       case 'boat': return this.drawBoat(e, rx, ry, rz, partial);
+      case 'minecart': return this.drawMinecart(e, rx, ry, rz, partial);
       case 'fishhook': return this.drawHook(e, rx, ry, rz, partial);
       case 'painting': return this.drawPainting(e, rx, ry, rz);
       case 'moving_block': return this.drawMovingBlock(e, rx, ry, rz);
@@ -13832,6 +14416,33 @@ class EntityRenderer {
     this.texBox(b, m, [8, 1, -10, 10, 7, 10], layer, sky, blk);
     this.texBox(b, m, [-10, 1, -12, 10, 7, -10], layer, sky, blk);
     this.texBox(b, m, [-10, 1, 10, 10, 7, 12], layer, sky, blk);
+  }
+  // a minecart sits on the track and tilts with slopes (the classic way: sample the rail either side)
+  drawMinecart(e, rx, ry, rz, partial) {
+    const w = this.game.world;
+    const [ex, ey, ez] = e.lerpPos(partial);
+    const ox = rx - ex, oy = ry - ey, oz = rz - ez;
+    let px = ex, py = ey, pz = ez, theta = -e.lerpYaw(partial), phi = 0;
+    const on = Rails.posOnTrack(w, ex, ey, ez);
+    if (on) {
+      const a = Rails.posOffset(w, ex, ey, ez, 0.3) || on, b = Rails.posOffset(w, ex, ey, ez, -0.3) || on;
+      px = on[0]; py = (a[1] + b[1]) / 2; pz = on[2];
+      const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], h = Math.hypot(dx, dz);
+      if (h > 1e-6) { theta = Math.atan2(-dz, dx); phi = Math.atan2(dy, h); }
+    }
+    let base = M3.mul(M3.trans(px + ox, py + oy + 0.375, pz + oz), M3.ry(theta));
+    if (phi) base = M3.mul(base, M3.rz(phi));
+    const ht = e.hitTime - partial, dmg = Math.max(0, e.damage - partial);
+    if (ht > 0) base = M3.mul(base, M3.rx(Math.sin(ht) * ht * dmg / 10 * e.hitDir * DEG));
+    const m = M3.mul(base, M3.scale(1 / 16, 1 / 16, 1 / 16));
+    const [sky, blk] = this.lightAt(px, py + 0.5, pz);
+    const hull = this.r.atlas.layer('minecart_hull'), floor = this.r.atlas.layer('minecart_floor'), b = this.r.batch;
+    this.texBox(b, m, [-10, -5, -8, 10, -3, 8], floor, sky, blk);
+    this.texBox(b, m, [-10, -3, -8, -8, 5, 8], hull, sky, blk);
+    this.texBox(b, m, [8, -3, -8, 10, 5, 8], hull, sky, blk);
+    this.texBox(b, m, [-8, -3, -8, 8, 5, -6], hull, sky, blk);
+    this.texBox(b, m, [-8, -3, 6, 8, 5, 8], hull, sky, blk);
+    if (e.kind === 1) this.drawItem(new ItemStack(B.CHEST, 1, 0), M3.mul(M3.mul(base, M3.trans(0, 0.375, 0)), M3.scale(0.75, 0.75, 0.75)), sky, blk);
   }
   // where the line leaves the rod
   rodTip(p, partial) {
@@ -14537,6 +15148,19 @@ const SOUND_DEFS = (() => {
   S.arrow_hit = () => { const lp = new Biquad('lp', 1200, 1); return render(0.15, (t) => (lp.p(noise()) + Math.sin(2 * Math.PI * 180 * t) * 0.5) * env(t, 0.001, 0.03)); };
   const creak = (f0, f1, dur) => () => { const bp = new Biquad('bp', 600, 6); let ph = 0; return render(dur, (t) => { const f = f0 + (f1 - f0) * (t / dur); ph += 2 * Math.PI * f / DSP.SR; const s = (((ph / (2 * Math.PI)) % 1) < 0.15 ? 1 : 0) - 0.15; return (bp.p(s + noise() * 0.2) + (t > dur - 0.08 ? noise() * Math.exp(-(t - dur + 0.08) / 0.02) * 0.5 : 0)) * env(t, 0.02, dur * 0.6); }); };
   S.door_open = creak(55, 75, 0.45); S.door_close = creak(70, 50, 0.35);
+  // minecarts: a clack at every rail joint and the rumble of iron wheels
+  S.rail_clack = () => {
+    const bp = new Biquad('bp', 1900, 5), lp = new Biquad('lp', 900, 0.8);
+    return render(0.22, (t) => {
+      let s = 0;
+      for (const st of [0, 0.075]) if (t > st) { const tt = t - st; s += (bp.p(noise()) * 0.8 + Math.sin(2 * Math.PI * 1150 * tt) * 0.35) * Math.exp(-tt / 0.018) + lp.p(noise()) * Math.exp(-tt / 0.03) * 0.5; }
+      return s;
+    });
+  };
+  S.minecart_roll = () => {
+    const lp = new Biquad('lp', 420, 0.9), bp = new Biquad('bp', 1300, 3);
+    return render(0.55, (t) => (lp.p(noise()) * 1.2 * (0.75 + 0.25 * Math.sin(t * 2 * Math.PI * 23)) + bp.p(noise()) * 0.12) * Math.sin(Math.PI * t / 0.55));
+  };
   S.chest_open = creak(40, 55, 0.5); S.chest_close = creak(50, 38, 0.4);
   S.explode = () => {
     const lp = new Biquad('lp', 500, 0.8), lp2 = new Biquad('lp', 120, 0.8);
@@ -16244,7 +16868,7 @@ class StatsScreen extends Screen {
     const rows = [['Time played', Math.floor(min / 60) + 'h ' + (min % 60) + 'm'], ['Distance travelled', (st.distance / 1000).toFixed(2) + ' km'], ['Blocks mined', st.blocksMined], ['Items crafted', st.itemsCrafted],
       ['Jumps', st.jumps], ['Mobs killed', st.mobsKilled], ['Damage taken', Math.round(st.damageTaken)], ['Deaths', st.deaths],
       ['Biomes discovered', Object.keys(p.discovered.biomes).length + ' / ' + BIOMES.filter(Boolean).length], ['Creatures seen', Object.keys(p.discovered.mobs).length],
-      ['Fish caught', st.fishCaught || 0], ['Distance by boat', ((st.sailed || 0) / 1000).toFixed(2) + ' km']];
+      ['Fish caught', st.fishCaught || 0], ['Distance by boat', ((st.sailed || 0) / 1000).toFixed(2) + ' km'], ['Distance by minecart', ((st.carted || 0) / 1000).toFixed(2) + ' km']];
     let y = 40;
     for (const [a, b] of rows) { gui.text(a, this.W / 2 - 110, y, '#e0e0e0'); gui.textRight(String(b), this.W / 2 + 110, y, '#ffff80'); y += 12; }
   }
@@ -16289,6 +16913,7 @@ const HOW_TO_PLAY = [
   ['Waterways', 'Craft a boat from five planks to cross lakes and seas: right-click to climb in, steer with W and the mouse, and press Shift to hop out. Do not ram the shore at full speed!', 'Cast a fishing rod into water and wait for the float to dip, then reel in. Different waters hold different fish, and now and then a bottle washes up with a note about buried treasure.'],
   ['Ember Circuits', 'Ember dust laid on the ground carries power from levers, buttons, pressure plates and ember torches, growing weaker with every block. Ember torches invert a signal, relays repeat and delay it.', 'Powered lamps light up, doors and trapdoors swing open, TNT ignites, note blocks sing and pistons push (sticky pistons pull too). Build gates, clocks and secret doors - just like the old days.'],
   ['Enchanting', 'Build an enchanting table from a book, two diamonds and obsidian. Surround it with bookshelves (one block of air between them and the table) and it grows stronger - fifteen shelves is the most it can use.', 'Put in a tool, weapon, armour piece, bow or rod and some lapis lazuli, then choose one of three offers. Stronger offers cost more experience levels and lapis. The runes only hint at what you will get...'],
+  ['Rails', 'Lay rails on solid ground and they join up by themselves: straights, curves and slopes. Put a minecart on the track, climb in and give it a push - or let gravity do the work.', 'Booster rails speed carts along when powered and stop them dead when not. Detector rails send out an ember signal as a cart rolls over them, and a signal beside a T-junction flips the points.'],
   ['Mysteries', 'On clear nights, watch the sky. Falling stars leave craters lined with starmetal - the strongest material of all, but you will need a diamond pickaxe.', 'Lights drift over swamps after dark. Some say they lead to buried treasure. On the moors, ancient runestones hum when touched with jade...'],
   ['Creative Mode', 'In Creative mode you can fly (double-tap Space), break blocks instantly and take any block from the creative inventory (E).', 'Worlds with cheats enabled accept commands: open chat with T and type /help.'],
   ['Saving & Sharing', 'Your worlds save automatically in your browser. Use Export on the world list (or in the pause menu) to download a .blocklands file.', 'Import it on any device - including your phone - to continue where you left off or share your world with friends.'],
@@ -16761,7 +17386,7 @@ class ChestScreen extends ContainerScreen {
     this.inv = new Inventory(27, te.items);
     this.inv.listeners.push(() => this.game.world.markTileChanged(te.x, te.z));
     for (let r = 0; r < rows; r++) for (let c = 0; c < 9; c++) this.slots.push(new Slot(this.inv, r * 9 + c, 8 + c * 18, 18 + r * 18, { group: 'chest' }));
-    this.addPlayerSlots(103 + (rows - 4) * 18 + 18);
+    this.addPlayerSlots(103 + (rows - 4) * 18);
     te.open++;
     game.audio.play('chest_open', 0.5, 0.9 + Math.random() * 0.1, te.x + 0.5, te.y + 0.5, te.z + 0.5);
     if (te.buried) { te.buried = false; game.onTreasureFound(te); }
@@ -16786,6 +17411,19 @@ class ChestScreen extends ContainerScreen {
   }
 }
 
+// a chest riding on a minecart
+class CartChestScreen extends ChestScreen {
+  constructor(game, cart) {
+    super(game, { x: Math.floor(cart.x), y: Math.floor(cart.y), z: Math.floor(cart.z), items: cart.items, open: 0, buried: false });
+    this.cart = cart;
+  }
+  drawForeground(gui) {
+    this.label(gui, 'Minecart with Chest', 8, 6);
+    this.label(gui, 'Inventory', 8, this.ph - 96 + 2);
+  }
+  tick() { const c = this.cart; if (c.removed || this.player.distanceSq(c.x, c.y, c.z) > 64) this.game.closeScreen(); }
+}
+
 // ---------------------------------------------------------------- creative inventory
 const CREATIVE_TABS = (() => {
   const blk = (id, d) => [id, d || 0];
@@ -16806,12 +17444,12 @@ const CREATIVE_TABS = (() => {
     blk(B.LILY_PAD), blk(B.CATTAIL), blk(B.BRAMBLE), blk(B.LEAF_LITTER), ...all(B.FENCE), blk(B.FENCE_GATE), blk(B.TRAPDOOR), blk(B.GLASS_PANE), ...all(B.CARPET), blk(B.LUMITE_LAMP), blk(B.MOB_SPAWNER),
     [I.door_wood, 0], [I.door_iron, 0], [I.bed, 0], ...WOOD.map((w, i) => [I.sign, i]), [I.painting, 0]] });
   T.push({ name: 'Tools', icon: [I.iron_axe, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ['shovel', 'pickaxe', 'axe', 'hoe'].map((k) => [I[m + '_' + k], 0])),
-    ...items(['flint_and_steel', 'shears', 'fishing_rod', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'compass', 'clock', 'map', 'prospector_rod', 'wayfinder', 'journal', 'message_bottle']),
-    ...WOOD.map((w, i) => [I.boat, i])] });
+    ...items(['flint_and_steel', 'shears', 'fishing_rod', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'compass', 'clock', 'map', 'prospector_rod', 'wayfinder', 'journal', 'message_bottle'])] });
   T.push({ name: 'Combat', icon: [I.gold_sword, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].map((m) => [I[m + '_sword'], 0]), [I.bow, 0], [I.arrow, 0],
     ...['leather', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ARMOR_SLOTS.map((s) => [I[m + '_' + s], 0])), [I.snowball, 0], [I.egg, 0]] });
   T.push({ name: 'Ember Circuits', icon: [I.ember_dust, 0], list: [[I.ember_dust, 0], blk(B.EMBER_TORCH), blk(B.LEVER), blk(B.STONE_BUTTON), blk(B.WOOD_BUTTON), blk(B.STONE_PLATE), blk(B.WOOD_PLATE),
-    [I.relay, 0], blk(B.PISTON), blk(B.STICKY_PISTON), blk(B.EMBER_LAMP), blk(B.NOTE_BLOCK), blk(B.EMBER_BLOCK), blk(B.TNT), [I.door_wood, 0], [I.door_iron, 0], blk(B.TRAPDOOR), blk(B.FENCE_GATE)] });
+    [I.relay, 0], blk(B.PISTON), blk(B.STICKY_PISTON), blk(B.EMBER_LAMP), blk(B.NOTE_BLOCK), blk(B.EMBER_BLOCK), blk(B.TNT), [I.door_wood, 0], [I.door_iron, 0], blk(B.TRAPDOOR), blk(B.FENCE_GATE), blk(B.DETECTOR_RAIL)] });
+  T.push({ name: 'Transportation', icon: [B.BOOSTER_RAIL, 0], list: [blk(B.RAIL), blk(B.BOOSTER_RAIL), blk(B.DETECTOR_RAIL), [I.minecart, 0], [I.chest_minecart, 0], ...WOOD.map((w, i) => [I.boat, i])] });
   T.push({ name: 'Foodstuffs', icon: [I.apple, 0], list: items(['apple', 'golden_apple', 'bread', 'porkchop', 'cooked_porkchop', 'beef', 'steak', 'chicken', 'cooked_chicken', 'mutton', 'cooked_mutton', 'venison', 'cooked_venison', 'jerky',
     'fish', 'cooked_fish', 'salmon', 'cooked_salmon', 'sunfish', 'pufferfish', 'glimmerfin', 'carrot', 'potato', 'baked_potato', 'poison_potato', 'cookie', 'melon_slice', 'mushroom_stew', 'glow_berries', 'pumpkin_pie', 'berry_pie', 'berries', 'rotten_flesh', 'spider_eye']) });
   T.push({ name: 'Materials', icon: [I.stick, 0], list: [...items(['coal']), [I.coal, 1], ...items(['diamond', 'iron_ingot', 'gold_ingot', 'gold_nugget', 'cobalt_ingot', 'starmetal_ingot', 'jade', 'ember_dust', 'sulfur', 'lumite_shard', 'salt',
@@ -16879,8 +17517,8 @@ class CreativeScreen extends ContainerScreen {
   }
   setTab(i) { this.tab = i; this.scroll = 0; this.buildSlots(); this.layout(); }
   tabRect(i) {
-    const top = i < 5;
-    const col = top ? i : i - 5;
+    const top = i < 6;
+    const col = top ? i : i - 6;
     return [this.left + col * 29, top ? this.top - 28 : this.top + this.ph - 4, 28, 32, top];
   }
   isInsideExtra(mx, my) { for (let i = 0; i < CREATIVE_TABS.length; i++) { const [x, y, w, h] = this.tabRect(i); if (mx >= x && my >= y && mx < x + w && my < y + h) return true; } return false; }
@@ -17178,6 +17816,7 @@ const MILESTONES = [
   { id: 'tnt', name: 'Kaboom', desc: 'Craft TNT', icon: () => [B.TNT, 0] },
   { id: 'fish', name: 'Gone Fishing', desc: 'Catch a fish', icon: () => [ITEM_IDS.fish, 0] },
   { id: 'sail', name: 'Set Sail', desc: 'Row a boat 500 blocks', icon: () => [ITEM_IDS.boat, 0] },
+  { id: 'rails', name: 'On the Rails', desc: 'Ride a minecart 1000 blocks', icon: () => [ITEM_IDS.minecart, 0] },
   { id: 'bottle', name: 'Message Received', desc: 'Read a message in a bottle', icon: () => [ITEM_IDS.message_bottle, 0] },
   { id: 'enchant', name: 'Enchanter', desc: 'Enchant an item at an enchanting table', icon: () => [B.ENCHANTING_TABLE, 0] },
   { id: 'lamp', name: 'Bright Idea', desc: 'Light an ember lamp with a circuit', icon: () => [B.EMBER_LAMP_ON, 0] },
@@ -19240,6 +19879,7 @@ class Wolf extends Animal {
   inheritFrom(a, b) { this.setTamed(true); this.health = this.maxHealth; this.collar = Math.random() < 0.5 ? a.collar : b.collar; }
   // keep up with the owner: hop to a free spot next to them when too far behind
   teleportTo(p) {
+    if (this.riding) return false;
     const w = this.world, bx = Math.floor(p.x) - 2, bz = Math.floor(p.z) - 2, by = Math.floor(p.y);
     for (let l = 0; l <= 4; l++) for (let m = 0; m <= 4; m++) {
       if (l >= 1 && m >= 1 && l <= 3 && m <= 3) continue;
@@ -19655,6 +20295,7 @@ function entityFromData(world, d) {
   if (d.type === 'item') { const s = ItemStack.fromJSON(d.stack); if (!s) return null; e = new ItemEntity(world, d.x, d.y, d.z, s); }
   else if (d.type === 'xp') e = new XPOrb(world, d.x, d.y, d.z, d.value || 1);
   else if (d.type === 'boat') e = new Boat(world, d.x, d.y, d.z, d.wood || 0);
+  else if (d.type === 'minecart') e = new Minecart(world, d.x, d.y, d.z, d.kind || 0);
   else if (d.type === 'painting') e = new Painting(world, d.bx | 0, d.by | 0, d.bz | 0, d.facing || 0, d.art);
   else if (MOB_CLASSES[d.type]) e = new MOB_CLASSES[d.type](world);
   if (!e) return null;
@@ -20222,7 +20863,7 @@ class Game {
   }
 
   // ------------------------------------------------------------ entity persistence
-  persistable(e) { return e.type === 'item' || e.type === 'xp' || e.type === 'boat' || e.type === 'painting' || (e.category && e.category !== 'special' && (e.persistent || e.category === 'creature')); }
+  persistable(e) { return e.type === 'item' || e.type === 'xp' || e.type === 'boat' || e.type === 'minecart' || e.type === 'painting' || (e.category && e.category !== 'special' && (e.persistent || e.category === 'creature')); }
   onChunkEntities(c, m, fromSave) {
     const w = this.world, key = c.key;
     if (this.entityKeys.has(key)) {
@@ -20538,7 +21179,7 @@ class Game {
     }
     // gentle pushing between creatures, boats (and the player)
     const p = this.player;
-    const living = list.filter((e) => !e.removed && (e.category || e.type === 'boat') && !e.dead && !e.noClip && e.type !== 'wisp' && e.type !== 'stranger');
+    const living = list.filter((e) => !e.removed && (e.category || e.type === 'boat' || e.type === 'minecart') && !e.dead && !e.noClip && e.type !== 'wisp' && e.type !== 'stranger');
     w.solids = living.filter((e) => e.solid);
     if (p && !p.dead) living.push(p);
     for (let i = 0; i < living.length; i++) {
@@ -21185,6 +21826,17 @@ class Game {
     if (!p.creative) p.inventory.decrementHeld(1);
     return true;
   }
+  // a minecart goes onto the rail you click (a little higher on a slope)
+  placeMinecart(held, hit) {
+    const p = this.player, w = this.world;
+    const s = Rails.shapeOf(hit.id, hit.meta);
+    const c = new Minecart(w, hit.x + 0.5, hit.y + 0.0625 + (Rails.ascending(s) ? 0.5 : 0), hit.z + 0.5, held.id === ITEM_IDS.chest_minecart ? 1 : 0);
+    c.yaw = c.pyaw = (s === 1 || s === 2 || s === 3) ? 0 : Math.PI / 2;
+    this.spawnEntity(c);
+    this.audio.playBlock('metal', 'place', c.x, c.y, c.z);
+    if (!p.creative) p.inventory.decrementHeld(1);
+    return true;
+  }
   openSignEditor(te) { if (this.player && !this.player.dead) this.openScreen(new SignEditScreen(this, te)); }
   onFished(stack) {
     const p = this.player, I = ITEM_IDS;
@@ -21261,14 +21913,14 @@ class Game {
     // climb back into the boat you saved the game in
     const m = p.pendingMount;
     if (m) {
-      const b = w.entities.find((e) => e.type === 'boat' && !e.removed && !e.rider && Math.abs(e.x - m.x) < 1.5 && Math.abs(e.z - m.z) < 1.5 && Math.abs(e.y - m.y) < 2);
+      const b = w.entities.find((e) => (e.type === 'boat' || (e.type === 'minecart' && e.kind === 0)) && !e.removed && !e.rider && Math.abs(e.x - m.x) < 1.5 && Math.abs(e.z - m.z) < 1.5 && Math.abs(e.y - m.y) < 2);
       if (b) { b.mount(p); p.pendingMount = null; }
       else if (--m.t <= 0) p.pendingMount = null;
     }
     if (p.riding) {
       const v = p.riding, d = Math.hypot(v.x - v.px, v.z - v.pz);
-      p.stats.sailed = (p.stats.sailed || 0) + d;
-      if (p.stats.sailed >= 500) this.achieve('sail');
+      if (v.type === 'minecart') { p.stats.carted = (p.stats.carted || 0) + d; if (p.stats.carted >= 1000) this.achieve('rails'); }
+      else { p.stats.sailed = (p.stats.sailed || 0) + d; if (p.stats.sailed >= 500) this.achieve('sail'); }
     }
   }
 
