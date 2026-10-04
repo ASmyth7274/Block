@@ -18,7 +18,10 @@ class EntityRenderer {
     this.tmp = [0, 0, 0];
     this.handProj = Mat4.create();
     this.deferred = [];
+    this.glows = [];
   }
+  // additive camera-facing glow sprite
+  glow(rx, ry, rz, size, col) { this.glows.push([rx, ry, rz, size, col]); }
   uploadSkins() {
     const gl = this.r.gl;
     gl.bindTexture(gl.TEXTURE_2D, this.r.skinTex);
@@ -205,6 +208,24 @@ class EntityRenderer {
       gl.depthMask(true);
       gl.disable(gl.BLEND);
     }
+    if (this.glows.length) {
+      const b = this.r.batch, cam = this.game.camera, L = this.r.atlas.layer('wisp_glow');
+      b.reset();
+      const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+      const rx = [cy, 0, -sy], up = [sy * sp, cp, cy * sp];
+      for (const [x, y, z, s, c] of this.glows) {
+        const p = (a, bb) => [x + (rx[0] * a + up[0] * bb) * s, y + (rx[1] * a + up[1] * bb) * s, z + (rx[2] * a + up[2] * bb) * s];
+        this.quadOut(b, [p(-1, -1), p(1, -1), p(1, 1), p(-1, 1)], [[0, 1], [1, 1], [1, 0], [0, 0]], L, c, -1, 0);
+      }
+      this.glows.length = 0;
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      gl.depthMask(false);
+      this.r.useEnt(this.r.vp, 0, 0.004, true);
+      b.flush();
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+    }
     gl.enable(gl.CULL_FACE);
   }
 
@@ -217,7 +238,12 @@ class EntityRenderer {
       case 'arrow': return this.drawArrow(e, rx, ry, rz, partial);
       case 'thrown': return this.drawThrown(e, rx, ry, rz, partial);
       case 'lightning': return this.drawLightning(e, rx, ry, rz);
-      case 'wisp': return;
+      case 'wisp': {
+        const t = e.age + partial, pulse = 1 + Math.sin(t * 0.25) * 0.12;
+        this.glow(rx, ry + 0.2, rz, 0.55 * pulse, [110, 255, 230, 150]);
+        this.glow(rx, ry + 0.2, rz, 0.18 * pulse, [230, 255, 250, 255]);
+        return;
+      }
     }
     if (e.render) return e.render(this, rx, ry, rz, partial);
     void g;

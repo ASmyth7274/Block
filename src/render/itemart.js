@@ -367,6 +367,16 @@
     '.......o........', '.......o........', '................'], { o: [180, 200, 255] });
   sprite('particle_glint', ['................', '................', '................', '................', '.......o........', '.......o........',
     '......ooo.......', '....ooooooo.....', '......ooo.......', '.......o........', '.......o........'], { o: [255, 255, 255] });
+  // soft round glow (wisps)
+  (() => {
+    const g = new TexGen.Img();
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const d = Math.hypot(x - 7.5, y - 7.5) / 7.5;
+      const a = Math.max(0, 1 - d);
+      g.set(x, y, [255, 255, 255], Math.round(255 * a * a));
+    }
+    TexGen.reg('wisp_glow', g);
+  })();
   // rain & snow streak textures (tile vertically)
   (() => {
     const rain = new TexGen.Img(), snow = new TexGen.Img();

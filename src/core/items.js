@@ -165,7 +165,7 @@ for (const mat of ['cobalt', 'starmetal']) {
 }
 defItem('spawn_egg', {
   name: (d) => 'Spawn ' + ((typeof MOB_TYPES !== 'undefined' && MOB_TYPES[d]) ? MOB_TYPES[d].name : 'Creature'),
-  tex: 'spawn_egg', tintFn: (d) => (typeof MOB_TYPES !== 'undefined' && MOB_TYPES[d]) ? MOB_TYPES[d].egg : ['#888888', '#444444'],
+  tex: 'spawn_egg', tintFn: (d) => (typeof MOB_TYPES !== 'undefined' && MOB_TYPES[d] && MOB_TYPES[d].egg) ? MOB_TYPES[d].egg : (typeof MOB_TYPES !== 'undefined' && MOB_TYPES[d] ? ['#16161a', '#e8e8e8'] : ['#888888', '#444444']),
 });
 defItem('glow_berries', { name: 'Glowcap Stew', maxStack: 1, food: { hunger: 6, sat: 7.2, nightVision: 1 }, container: 'bowl', tex: 'glowcap_stew' });
 defItem('journal', { name: "Explorer's Journal", maxStack: 1 });
