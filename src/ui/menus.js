@@ -206,7 +206,7 @@ class WorldSelectScreen extends Screen {
     super.keyDown(e);
   }
 }
-function worldTypeName(t) { return { default: 'Default', large: 'Large Biomes', islands: 'Archipelago', flat: 'Superflat' }[t] || t; }
+function worldTypeName(t) { return { default: 'Default', large: 'Large Biomes', grand: 'Grand Heights', islands: 'Archipelago', flat: 'Superflat' }[t] || t; }
 
 // -------------------------------------------------------------------- create world
 class CreateWorldScreen extends Screen {
@@ -230,7 +230,7 @@ class CreateWorldScreen extends Screen {
     this.bMore = this.add(new Button(cx - 75, 187, 150, 20, () => this.more ? 'Done' : 'More World Options...', () => { this.more = !this.more; this.sync(); }));
     this.bStruct = this.add(new Button(cx - 155, 100, 150, 20, () => 'Generate Structures: ' + (this.structures ? 'ON' : 'OFF'), () => { this.structures = !this.structures; }));
     this.bType = this.add(new Button(cx + 5, 100, 150, 20, () => 'World Type: ' + worldTypeName(this.worldType), () => {
-      const order = ['default', 'large', 'islands', 'flat'];
+      const order = ['default', 'large', 'grand', 'islands', 'flat'];
       this.worldType = order[(order.indexOf(this.worldType) + 1) % order.length];
     }));
     this.bCheats = this.add(new Button(cx - 155, 151, 150, 20, () => 'Allow Cheats: ' + (this.cheats ? 'ON' : 'OFF'), () => { this.cheats = !this.cheats; }));

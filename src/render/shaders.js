@@ -10,7 +10,7 @@ uniform mat4 uVP;
 uniform vec3 uOrigin;
 out vec3 vUV; out vec4 vCol; out vec2 vLight; out float vDist;
 void main() {
-  vec3 p = (vec3(float(a.x & 511u), float((a.x >> 18) & 4095u), float((a.x >> 9) & 511u)) - 32.0) * 0.0625 + uOrigin;
+  vec3 p = (vec3(float(a.x & 511u), float((a.x >> 18) & 16383u), float((a.x >> 9) & 511u)) - 32.0) * 0.0625 + uOrigin;
   // shade codes 252-254 mark decals (wire on the ground): nudged toward the camera so they never z-fight
   uint shb = (a.z >> 24) & 255u;
   float sh = float(shb) / 255.0;

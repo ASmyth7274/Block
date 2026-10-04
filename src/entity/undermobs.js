@@ -131,7 +131,7 @@ class Wailer extends Monster {
     const w = this.world;
     // drifting about
     if (--this.courseTimer <= 0 || !this.goal) {
-      this.goal = [this.x + (Math.random() * 2 - 1) * 16, clamp(this.y + (Math.random() * 2 - 1) * 16, WG.LAVA_SEA + 4, CH_H - 10), this.z + (Math.random() * 2 - 1) * 16];
+      this.goal = [this.x + (Math.random() * 2 - 1) * 16, clamp(this.y + (Math.random() * 2 - 1) * 16, WG.LAVA_SEA + 4, UNDER_H - 10), this.z + (Math.random() * 2 - 1) * 16];
       this.courseTimer = 40 + this.rnd(60);
     }
     const gx = this.goal[0] - this.x, gy = this.goal[1] - this.y, gz = this.goal[2] - this.z;

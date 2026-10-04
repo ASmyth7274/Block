@@ -146,10 +146,10 @@ class Renderer {
   }
   meshChunk(world, c) {
     if (!c.tints) this.computeTints(world, c);
-    if (!c.render) c.render = { sect: new Array(8).fill(null), passes: [null, null, null], minY: 0, maxY: 0 };
+    if (!c.render) c.render = { sect: new Array(CH_SECTIONS).fill(null), passes: [null, null, null], minY: 0, maxY: 0 };
     const r = c.render;
     const touched = [false, false, false];
-    for (let sy = 0; sy < 8; sy++) {
+    for (let sy = 0; sy < CH_SECTIONS; sy++) {
       if (!c.dirty[sy]) continue;
       c.dirty[sy] = 0;
       const old = r.sect[sy];
@@ -158,22 +158,22 @@ class Renderer {
       for (let p = 0; p < 3; p++) if ((old && old[p]) || (res && res[p])) touched[p] = true;
     }
     c.anyDirty = false;
-    let minY = 8, maxY = -1;
-    for (let sy = 0; sy < 8; sy++) if (r.sect[sy]) { if (sy < minY) minY = sy; if (sy > maxY) maxY = sy; }
+    let minY = CH_SECTIONS, maxY = -1;
+    for (let sy = 0; sy < CH_SECTIONS; sy++) if (r.sect[sy]) { if (sy < minY) minY = sy; if (sy > maxY) maxY = sy; }
     r.minY = minY * 16; r.maxY = (maxY + 1) * 16;
     for (let p = 0; p < 3; p++) if (touched[p]) this.uploadPass(c, p);
   }
   uploadPass(c, p) {
     const gl = this.gl, r = c.render;
     let total = 0;
-    for (let sy = 0; sy < 8; sy++) { const s = r.sect[sy]; if (s && s[p]) total += s[p].length; }
+    for (let sy = 0; sy < CH_SECTIONS; sy++) { const s = r.sect[sy]; if (s && s[p]) total += s[p].length; }
     if (total === 0) {
       if (r.passes[p]) { gl.deleteBuffer(r.passes[p].vbo); gl.deleteVertexArray(r.passes[p].vao); this.vaos.delete(r.passes[p].vao); r.passes[p] = null; }
       return;
     }
     const data = new Uint32Array(total);
     let o = 0;
-    for (let sy = 0; sy < 8; sy++) { const s = r.sect[sy]; if (s && s[p]) { data.set(s[p], o); o += s[p].length; } }
+    for (let sy = 0; sy < CH_SECTIONS; sy++) { const s = r.sect[sy]; if (s && s[p]) { data.set(s[p], o); o += s[p].length; } }
     const quads = total / 12;
     this.ensureIndices(quads);
     let ps = r.passes[p];
@@ -614,7 +614,7 @@ class Renderer {
   drawClouds(world, cam, partial, fogColor) {
     const gl = this.gl;
     const fancy = this.game.settings.clouds !== 'fast';
-    const S = 12, CLOUD_Y = 112;
+    const S = 12, CLOUD_Y = 150;
     const t = (world.time + partial) * 0.03;
     const ox = cam.x + t, oz = cam.z;
     const ci = Math.floor(ox / S), cj = Math.floor(oz / S);

@@ -394,7 +394,7 @@ class EntityRenderer {
     const rng = new Noise.Random(e.seed);
     const layer = this.r.atlas.layer('particle_spark');
     let x = rx, z = rz;
-    const top = 128 - (ry + this.game.camera.y);
+    const top = CH_H - (ry + this.game.camera.y);
     const col = [190, 210, 255, 220];
     for (let y = top; y > ry; y -= 4) {
       const nx = x + (rng.nextFloat() - 0.5) * 2.2, nz = z + (rng.nextFloat() - 0.5) * 2.2;

@@ -2,7 +2,7 @@
 // ---------------------------------------------------------------------------
 // Section mesher (16x16x16) with smooth lighting & ambient occlusion.
 // Vertex = 3 x uint32:
-//   d0: x16+32 (9b) | z16+32 (9b) << 9 | y16+32 (12b) << 18   (1/16 block units, column space, biased)
+//   d0: x16+32 (9b) | z16+32 (9b) << 9 | y16+32 (14b) << 18   (1/16 block units, column space, biased)
 //   d1: u (5b) | v (5b) << 5 | layer (10b) << 10 | sky*4 (6b) << 20 | blk*4 (6b) << 26
 //   d2: r | g << 8 | b << 16 | shade << 24
 // ---------------------------------------------------------------------------
@@ -180,7 +180,7 @@ class Mesher {
   vert(buf, x16, y16, z16, u, v, layer, sky4, blk4, tint, shade) {
     if (buf.n + 3 > buf.a.length) buf.grow();
     const a = buf.a; let n = buf.n;
-    a[n] = ((x16 + 32) & 511) | (((z16 + 32) & 511) << 9) | (((y16 + 32) & 4095) << 18);
+    a[n] = ((x16 + 32) & 511) | (((z16 + 32) & 511) << 9) | (((y16 + 32) & 16383) << 18);
     a[n + 1] = (u & 31) | ((v & 31) << 5) | ((layer & 1023) << 10) | ((sky4 & 63) << 20) | ((blk4 & 63) << 26);
     a[n + 2] = tint[0] | (tint[1] << 8) | (tint[2] << 16) | ((shade & 255) << 24);
     buf.n = n + 3;

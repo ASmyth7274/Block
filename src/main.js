@@ -887,7 +887,7 @@ class Game {
     for (const c of w.chunks.values()) {
       if (Math.abs(c.cx - pcx) > R || Math.abs(c.cz - pcz) > R) continue;
       const bl = c.blocks, mt = c.meta;
-      for (let s = 0; s < 8; s++) {
+      for (let s = 0; s < CH_SECTIONS; s++) {
         for (let k = 0; k < 3; k++) {
           const idx = (s << 12) | ((Math.random() * 4096) | 0);
           const id = bl[idx];
@@ -1155,6 +1155,7 @@ class Game {
       ashen_wastes: [B.ASH, 0], salt_flats: [B.SALT, 0], meadow: [B.FLOWER, 3], canyon: [B.SAND, 1], stone_shore: [B.COBBLESTONE, 0],
       brimstone_depths: [B.BRIMSTONE, 0], bone_shoals: [B.BONESAND, 0], cinder_hollows: [B.BASALT, 0], glimmering_grotto: [B.SUNSTONE, 0],
       great_isle: [B.STARSTONE, 0], starlit_gulf: [B.OBSIDIAN, 0], drift_isles: [B.STARSTONE_BRICKS, 0],
+      grand_peaks: [B.SNOW, 0], highlands: [B.TALL_GRASS, 1], spire_woods: [B.MOSSY_COBBLESTONE, 0], tablelands: [B.STONE, 0], glacier: [B.PACKED_ICE, 0],
     };
     const e = map[key] || [B.GRASS, 0];
     return new ItemStack(e[0], 1, e[1]);
@@ -1400,7 +1401,7 @@ class Game {
       for (let x = bx - 6; x <= bx + 6 && !lava; x++) for (let z = bz - 6; z <= bz + 6 && !lava; z++) for (let y = Math.max(1, by - 4); y <= by + 2; y++) if (w.getBlock(x, y, z) === B.LAVA) { lava = true; break; }
       if (lava) this.achieve('deep');
     }
-    if (p.y > 114) this.achieve('high');
+    if (p.y > 152) this.achieve('high');
     const a = p.inventory.armor.items;
     if (a[0] && a[1] && a[2] && a[3]) this.achieve('armor');
   }

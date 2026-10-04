@@ -1,8 +1,9 @@
 'use strict';
 // ---------------------------------------------------------------------------
-// Chunk: 16 x 128 x 16 column. Index = (y << 8) | (z << 4) | x
+// Chunk: 16 x 256 x 16 column. Index = (y << 8) | (z << 4) | x
+// The Underworld only uses the lower 128 (its bedrock roof sits at 127).
 // ---------------------------------------------------------------------------
-const CH_H = 128, SEA_LEVEL = 62;
+const CH_H = 256, SEA_LEVEL = 62, UNDER_H = 128, CH_SECTIONS = CH_H >> 4;
 
 class Chunk {
   constructor(cx, cz) {
@@ -11,7 +12,7 @@ class Chunk {
     this.meta = new Uint8Array(16 * 16 * CH_H);
     this.light = new Uint8Array(16 * 16 * CH_H);   // (sky << 4) | block
     this.biomes = new Uint8Array(256);
-    this.heightmap = new Uint8Array(256);           // lowest y that sees the sky directly
+    this.heightmap = new Uint16Array(256);          // lowest y that sees the sky directly
     this.dirty = new Uint8Array(CH_H >> 4);         // sections needing a re-mesh
     this.anyDirty = true;
     this.tiles = new Map();                          // index -> tile entity

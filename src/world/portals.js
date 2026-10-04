@@ -86,7 +86,7 @@ const Portals = (() => {
     return true;
   }
   function findSite(w, x, y, z) {
-    const top = w.dim === 1 ? CH_H - 10 : CH_H - 8, lo = w.dim === 1 ? WG.LAVA_SEA + 2 : 4;
+    const top = w.dim === 1 ? UNDER_H - 10 : CH_H - 8, lo = w.dim === 1 ? WG.LAVA_SEA + 2 : 4;
     let best = null, bd = Infinity;
     for (let r = 0; r <= 16; r++) {
       for (let ox = -r; ox <= r; ox++) for (let oz = -r; oz <= r; oz++) {
@@ -137,7 +137,7 @@ const Portals = (() => {
       forget(w.info, travel.link);
     }
     const x = Math.floor(travel.x), z = Math.floor(travel.z);
-    let y = clamp(Math.floor(travel.y), w.dim === 1 ? WG.LAVA_SEA + 4 : 8, w.dim === 1 ? CH_H - 16 : CH_H - 10);
+    let y = clamp(Math.floor(travel.y), w.dim === 1 ? WG.LAVA_SEA + 4 : 8, w.dim === 1 ? UNDER_H - 16 : CH_H - 10);
     const site = findSite(w, x, y, z);
     if (site) return build(w, site.x, site.y, site.z, site.axis, false);
     if (w.dim === 1) y = clamp(y, 70, 100);

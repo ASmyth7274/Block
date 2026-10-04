@@ -446,8 +446,8 @@ function serializeChunk(c) {
 function deserializeChunk(rec) {
   return {
     cx: rec.cx, cz: rec.cz,
-    blocks: rleDecode(rec.blocks instanceof Uint8Array ? rec.blocks : new Uint8Array(rec.blocks), 32768),
-    meta: rleDecode(rec.meta instanceof Uint8Array ? rec.meta : new Uint8Array(rec.meta), 32768),
+    blocks: rleDecode(rec.blocks instanceof Uint8Array ? rec.blocks : new Uint8Array(rec.blocks), 16 * 16 * CH_H),
+    meta: rleDecode(rec.meta instanceof Uint8Array ? rec.meta : new Uint8Array(rec.meta), 16 * 16 * CH_H),
     biomes: rec.biomes instanceof Uint8Array ? rec.biomes : new Uint8Array(rec.biomes),
     tiles: rec.tiles || [],
     entities: [],

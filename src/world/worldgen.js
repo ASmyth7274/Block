@@ -10,7 +10,8 @@ function WorldGenFactory(Noise, TAB) {
   const I = TAB.items;
   const OPAQUE = TAB.opaque, SOLID = TAB.solid, REPL = TAB.replaceable;
   const { Random, Octaves, seedHash } = Noise;
-  const H = 128, SEA = 62;
+  const H = 256, SEA = 62;
+  const UH = 128;   // the Underworld keeps to the lower half, under a bedrock roof
   const IDX = (x, y, z) => (y << 8) | (z << 4) | x;
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -54,6 +55,22 @@ function WorldGenFactory(Noise, TAB) {
   BI.MEADOW = biome(20, 'meadow', 'Wildflower Meadow', { temp: 0.7, rain: 0.7, depth: 0.2, scale: 0.12, grass: '#83c95a', foliage: '#5fb83a', trees: 0.25, treeKinds: [['oak', 2], ['birch', 1], ['maple', 1]], tallGrass: 10, flowers: 22, flowerKinds: [0, 1, 2, 3, 5, 7], animals: [['sheep', 2], ['cow', 2], ['chicken', 1]], structures: ['camp', 'tower'] });
   BI.CANYON = biome(21, 'canyon', 'Red Canyon', { temp: 2.0, rain: 0, depth: 0.9, scale: 0.3, top: B.SAND, topMeta: 1, filler: B.TERRACOTTA, under: B.SAND, grass: '#90814d', foliage: '#9e814d', tallGrass: 0, flowers: 0, deadBush: 3, cane: 4, pumpkins: false, animals: [], structures: ['crater'], jade: true, terrace: true });
   BI.STONE_SHORE = biome(22, 'stone_shore', 'Stone Shore', { temp: 0.2, rain: 0.3, depth: 0.1, scale: 0.8, top: B.STONE, filler: B.STONE, under: B.GRAVEL, tallGrass: 0, flowers: 0, cane: 0, pumpkins: false, animals: [], structures: [], jade: true });
+
+  // ---- the high country ----
+  // peak: ridged mountain ranges; plateau: [step, base] terraces with cliff edges; rocky: bare stone on steep
+  // slopes; snowcap: snow fields above this height; spires: stone pillars rising from the woods
+  BI.GRAND_PEAKS = biome(23, 'grand_peaks', 'Grand Peaks', { temp: 0.43, rain: 0.4, depth: 1.35, scale: 0.55, peak: 1.0, rocky: true, snowcap: 168, grass: '#7fae7f', foliage: '#5f9a63',
+    trees: 0.8, treeKinds: [['spruce', 3], ['pine', 2]], tallGrass: 2, ferns: 1, flowers: 0.3, flowerKinds: [6, 4], cane: 0, pumpkins: false, animals: [['sheep', 2], ['deer', 1]], structures: ['tower'], jade: true });
+  BI.HIGHLANDS = biome(24, 'highlands', 'Highlands', { temp: 0.5, rain: 0.6, depth: 2.4, scale: 0.16, plateau: [12, 70], rocky: true, grass: '#86b36a', foliage: '#64a148',
+    trees: 0.5, treeKinds: [['oak', 3], ['spruce', 2], ['birch', 1]], tallGrass: 10, flowers: 4, flowerKinds: [0, 1, 4, 6], boulders: 0.4, animals: [['sheep', 4], ['cow', 2], ['deer', 1]], structures: ['circle', 'tower', 'camp'] });
+  BI.SPIRE_WOODS = biome(25, 'spire_woods', 'Spire Woods', { temp: 0.8, rain: 0.9, depth: 0.12, scale: 0.12, spires: true, grass: '#5fbf48', foliage: '#3fae22',
+    trees: 9, treeKinds: [['oak', 4], ['jungle_bush', 3], ['big_oak', 2], ['birch', 1]], tallGrass: 12, ferns: 4, flowers: 2, flowerKinds: [0, 5, 2], mushrooms: 1, animals: [['pig', 2], ['chicken', 2], ['deer', 1]], structures: ['camp'] });
+  BI.TABLELANDS = biome(26, 'tablelands', 'Tablelands', { temp: 0.9, rain: 0.25, depth: 1.9, scale: 0.34, plateau: [22, 66], rocky: true, grass: '#a3b259', foliage: '#8aa23e',
+    trees: 0.2, treeKinds: [['oak', 2], ['dead', 1]], tallGrass: 6, flowers: 1, flowerKinds: [1, 7], deadBush: 0.5, cane: 2, animals: [['cow', 2], ['sheep', 1]], structures: ['tower', 'camp'] });
+  BI.GLACIER = biome(27, 'glacier', 'Glacier', { temp: -0.6, rain: 0.5, depth: 1.1, scale: 0.28, peak: 0.45, glacier: true, top: B.SNOW, filler: B.PACKED_ICE, under: B.PACKED_ICE, grass: '#80b497', foliage: '#60a17b',
+    trees: 0, tallGrass: 0, flowers: 0, cane: 0, pumpkins: false, animals: [], structures: [] });
+  BI.MOUNTAINS.peak = 0.35; BI.MOUNTAINS.rocky = true; BI.MOUNTAINS.snowcap = 150; BI.MOUNTAINS.temp = 0.3;   // snow above ~118
+  BI.CANYON.plateau = [7, 66];
 
   const LAND_TOP_OK = new Uint8Array(256);
   for (const id of [B.GRASS, B.DIRT, B.PODZOL, B.MYCELIUM]) LAND_TOP_OK[id] = 1;
@@ -161,6 +178,17 @@ function WorldGenFactory(Noise, TAB) {
       this.bands = new Uint8Array(64);
       const bandCols = [0, 0, 0, 2, 2, 5, 13, 15, 9, 0, 0, 13];
       for (let i = 0; i < 64; i++) this.bands[i] = bandCols[br.nextInt(bandCols.length)];
+      // the high country's own noise (seeded apart, so older terrain keeps its shape)
+      const hr = new Random(seedHash(this.seed, 77, 4096));
+      this.nPeak = new Octaves(hr, 4); this.nPeak2 = new Octaves(hr, 3); this.nCrag = new Octaves(hr, 2);
+    }
+    // 0 in the valleys, 1 along the crests of the great ranges
+    ridge(x, z) {
+      // narrow crests from the zero-lines of the noise, crossed by smaller spurs, rising and falling along their length
+      const a = Math.pow(clamp(1 - Math.abs(this.nPeak.noise2(x / 330, z / 330)) * 2.6, 0, 1), 2.2);
+      const b = Math.pow(clamp(1 - Math.abs(this.nPeak2.noise2(x / 120 + 11.3, z / 120 - 7.7)) * 2.4, 0, 1), 2);
+      const crest = 0.45 + 0.55 * clamp(this.nCrag.noise2(x / 110 + 3.1, z / 110 - 9.4) * 2.4 + 0.5, 0, 1);
+      return clamp((a * 0.8 + b * Math.sqrt(a) * 0.35 + b * 0.08) * crest, 0, 1);
     }
 
     // ---- climate & biome ----
@@ -184,8 +212,12 @@ function WorldGenFactory(Noise, TAB) {
       // thresholds are tuned against the measured spread of the climate noise (std ~0.23)
       if (c < -0.22) return (w > 0.33 && h > 0.12) ? BI.MUSHROOM.id : BI.DEEP_OCEAN.id;
       if (c < -0.04) return BI.OCEAN.id;
+      // the high country: great ranges, ordinary mountains, then high plateaus
+      if (m > 0.42 && c > 0.02) return t < -0.2 ? BI.GLACIER.id : BI.GRAND_PEAKS.id;
       if (m > 0.3 && c > 0.0) return BI.MOUNTAINS.id;
       if (c < -0.022) return m > 0.2 ? BI.STONE_SHORE.id : BI.BEACH.id;
+      if (m > 0.21 && c > 0.05 && t > -0.12 && t < 0.3) return (h < -0.08 && w < 0.1) ? BI.TABLELANDS.id : BI.HIGHLANDS.id;
+      if (w > 0.36 && h > 0.03 && t > -0.02 && t < 0.3) return BI.SPIRE_WOODS.id;
       if (t < -0.29) return h > 0.0 ? BI.SNOWY_TAIGA.id : BI.SNOWY_TUNDRA.id;
       if (t < -0.12) {
         if (h > 0.12) return w > 0.0 ? BI.REDWOOD.id : BI.TAIGA.id;
@@ -268,7 +300,8 @@ function WorldGenFactory(Noise, TAB) {
 
       // biome parameter grid (4-block spacing, margin of 3)
       const GN = 11, GO = 3;
-      const gDepth = new Float32Array(GN * GN), gScale = new Float32Array(GN * GN), gRiver = new Float32Array(GN * GN), gTer = new Float32Array(GN * GN);
+      const gDepth = new Float32Array(GN * GN), gScale = new Float32Array(GN * GN), gRiver = new Float32Array(GN * GN), gTer = new Float32Array(GN * GN), gPeak = new Float32Array(GN * GN);
+      const gStep = new Float32Array(GN * GN), gBase = new Float32Array(GN * GN);
       for (let gz = 0; gz < GN; gz++) for (let gx = 0; gx < GN; gx++) {
         const wx = x0 + (gx - GO) * 4, wz = z0 + (gz - GO) * 4;
         this.climate(wx, wz, cl);
@@ -277,43 +310,59 @@ function WorldGenFactory(Noise, TAB) {
         if (b === BI.MOUNTAINS) { const e = smooth(0.36, 0.7, cl.m); d += e * 0.6; s += e * 0.2; }
         gDepth[gz * GN + gx] = d; gScale[gz * GN + gx] = s;
         gRiver[gz * GN + gx] = (b.depth > -0.4 && b !== BI.BEACH) ? this.riverFactor(cl) : 0;
-        gTer[gz * GN + gx] = b.terrace ? 1 : 0;
+        gTer[gz * GN + gx] = b.plateau ? 1 : 0;
+        gStep[gz * GN + gx] = b.plateau ? b.plateau[0] : 0; gBase[gz * GN + gx] = b.plateau ? b.plateau[1] : 0;
+        gPeak[gz * GN + gx] = b.peak || 0;
       }
-      // density grid 5 x 17 x 5
-      const dens = new Float32Array(5 * 17 * 5);
+      // density grid 5 x NY x 5
+      const NY = (H >> 3) + 1;
+      const dens = new Float32Array(5 * NY * 5);
       for (let gz = 0; gz < 5; gz++) for (let gx = 0; gx < 5; gx++) {
         const ci = (gz + GO) * GN + (gx + GO);
         const cDepth = gDepth[ci];
-        let sd = 0, ss = 0, sw = 0, st = 0;
+        let sd = 0, ss = 0, sw = 0, st = 0, sp = 0;
         for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) {
           const ni = (gz + GO + dz) * GN + (gx + GO + dx);
           let wgt = 10 / Math.sqrt(dx * dx + dz * dz + 0.2);
           const nd = gDepth[ni];
           if (nd > cDepth) wgt *= 0.5;
-          sd += nd * wgt; ss += gScale[ni] * wgt; st += gTer[ni] * wgt; sw += wgt;
+          sd += nd * wgt; ss += gScale[ni] * wgt; st += gTer[ni] * wgt; sp += gPeak[ni] * wgt; sw += wgt;
         }
         let depth = sd / sw, scale = ss / sw;
-        const ter = st / sw;
+        const ter = st / sw, pk = sp / sw;
         const wx = x0 + gx * 4, wz = z0 + gz * 4;
         let targetY = 64 + depth * 17 + this.nHill.noise2(wx / 220, wz / 220) * (2 + scale * 12);
         let amp = 2 + scale * 56;
+        // great ranges: ridges that climb toward the sky, with valleys between
+        if (pk > 0.01) { const rg = this.ridge(wx, wz); targetY += pk * rg * 150; amp += pk * rg * 10; }
+        // Grand Heights: every hill a mountain, every mountain a monster
+        if (this.type === 'grand' && targetY > SEA) { targetY = SEA + (targetY - SEA) * 1.7 + 6; amp = amp * 1.8 + 6; }
+        // the sky is not infinite: ease the very highest ground down rather than shearing it flat
+        if (targetY > 190) targetY = 190 + (targetY - 190) * 0.4;
+        if (targetY + amp > 236) amp = Math.max(4, 236 - targetY);
         const rf = gRiver[ci];
         if (rf > 0 && targetY > SEA - 4) { targetY -= (targetY - (SEA - 4)) * rf; amp = lerp(amp, 1.2, rf); }
-        for (let gy = 0; gy < 17; gy++) {
+        // above this, nothing but air: skip the noise
+        const roof = targetY + amp * 0.85 + 12;
+        const step = gStep[ci] || 7, base = gBase[ci] || 66;
+        for (let gy = 0; gy < NY; gy++) {
           const y = gy * 8;
-          const n = this.nDens.noise3(wx / 110, y / 80, wz / 110) * 0.75 + this.nDens2.noise3(wx / 42, y / 30, wz / 42) * 0.3;
-          let surf = targetY + n * amp;
-          if (ter > 0.01) { // mesa terraces
-            const step = 7, base = 66;
-            const k = (surf - base) / step;
-            const fl = Math.floor(k), fr = k - fl;
-            const terr = base + (fl + smooth(0.55, 0.95, fr)) * step;
-            surf = lerp(surf, terr, ter);
+          let d;
+          if (y > roof) d = roof - y - 4;
+          else {
+            const n = this.nDens.noise3(wx / 110, y / 80, wz / 110) * 0.75 + this.nDens2.noise3(wx / 42, y / 30, wz / 42) * 0.3;
+            let surf = targetY + n * amp;
+            if (ter > 0.01) { // plateaus and mesas: flat steps with cliff edges
+              const k = (surf - base) / step;
+              const fl = Math.floor(k), fr = k - fl;
+              const terr = base + (fl + smooth(0.55, 0.95, fr)) * step;
+              surf = lerp(surf, terr, ter);
+            }
+            d = surf - y;
           }
-          let d = surf - y;
-          if (y > 116) d -= (y - 116) * 1.5;
+          if (y > H - 26) d -= (y - (H - 26)) * 1.5;
           if (y < 8) d += (8 - y) * 3;
-          dens[(gz * 5 + gx) * 17 + gy] = d;
+          dens[(gz * 5 + gx) * NY + gy] = d;
         }
       }
       // interpolate densities into blocks
@@ -321,7 +370,7 @@ function WorldGenFactory(Noise, TAB) {
         const gz = z >> 2, tz = (z & 3) / 4;
         for (let x = 0; x < 16; x++) {
           const gx = x >> 2, tx = (x & 3) / 4;
-          const a = (gz * 5 + gx) * 17, b2 = (gz * 5 + gx + 1) * 17, c2 = ((gz + 1) * 5 + gx) * 17, d2 = ((gz + 1) * 5 + gx + 1) * 17;
+          const a = (gz * 5 + gx) * NY, b2 = (gz * 5 + gx + 1) * NY, c2 = ((gz + 1) * 5 + gx) * NY, d2 = ((gz + 1) * 5 + gx + 1) * NY;
           for (let y = 0; y < H; y++) {
             const gy = y >> 3, ty = (y & 7) / 8;
             const v00 = dens[a + gy] + (dens[a + gy + 1] - dens[a + gy]) * ty;
@@ -337,6 +386,7 @@ function WorldGenFactory(Noise, TAB) {
         }
       }
       this.surface(cx, cz, blocks, meta, biomes);
+      this.spires(cx, cz, blocks, meta, biomes);
       this.carveCaves(cx, cz, blocks, meta);
       this.carveRavines(cx, cz, blocks, meta);
       // heightmap: highest non-air, non-liquid block
@@ -351,11 +401,26 @@ function WorldGenFactory(Noise, TAB) {
     surface(cx, cz, blocks, meta, biomes) {
       const rng = new Random(seedHash(this.seed, cx, cz, 0x5EAF));
       const x0 = cx * 16, z0 = cz * 16;
+      // where the rock first meets the air, column by column (for slopes)
+      const tops = new Int16Array(256);
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
+        let y = H - 1;
+        while (y > 0 && blocks[IDX(x, y, z)] !== B.STONE) y--;
+        tops[z * 16 + x] = y;
+      }
+      const slopeAt = (x, z) => {
+        const t = tops[z * 16 + x];
+        let m = 0;
+        if (x > 0) m = Math.max(m, Math.abs(t - tops[z * 16 + x - 1])); if (x < 15) m = Math.max(m, Math.abs(t - tops[z * 16 + x + 1]));
+        if (z > 0) m = Math.max(m, Math.abs(t - tops[(z - 1) * 16 + x])); if (z < 15) m = Math.max(m, Math.abs(t - tops[(z + 1) * 16 + x]));
+        return m;
+      };
       for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
         const bid = biomes[z * 16 + x], b = BIOMES[bid];
         const wx = x0 + x, wz = z0 + z;
         const sn = this.nSurf.noise2(wx / 16, wz / 16);
-        const depth = Math.floor(sn * 2.5 + 3 + rng.nextFloat() * 0.25);
+        let depth = Math.floor(sn * 2.5 + 3 + rng.nextFloat() * 0.25);
+        if (b.glacier) depth += 7;     // a thick sheet of old ice
         const patch = this.nPatch.noise2(wx / 24, wz / 24);
         let run = -1;
         let top = b.top, topMeta = b.topMeta, fill = b.filler, fillMeta = b.fillerMeta;
@@ -367,6 +432,18 @@ function WorldGenFactory(Noise, TAB) {
         if (b === BI.MOORS && patch > 0.38) { top = B.PEAT; fill = B.PEAT; }
         if (b === BI.MOORS && patch < -0.5) { top = B.DIRT; topMeta = 1; }
         if (b === BI.DESERT && patch > 0.62 && sn > 0.3) { top = B.QUICKSAND; fill = B.QUICKSAND; }
+        // the high country: bare rock where it is steep, snowfields up top
+        const ty = tops[z * 16 + x];
+        if (b.rocky && ty > SEA + 6) {
+          const sl = slopeAt(x, z), crag = this.nCrag.noise2(wx / 9, wz / 9);
+          if (sl >= 3 || (sl >= 2 && crag > 0.15)) { top = crag > 0.35 ? B.GRAVEL : B.STONE; fill = B.STONE; topMeta = 0; }
+          if (b.snowcap && ty > b.snowcap + crag * 10 && (sl < 4 || ty > b.snowcap + 22)) { top = B.SNOW; fill = sl < 3 ? B.SNOW : B.STONE; topMeta = 0; }
+        }
+        if (b.glacier) {
+          // crevasses split the ice sheet
+          const cv = Math.abs(this.nCrag.noise2(wx / 38 + 40, wz / 38 - 13));
+          if (cv < 0.035 && ty > SEA + 4) { for (let y = ty; y > Math.max(SEA, ty - 14); y--) blocks[IDX(x, y, z)] = 0; }
+        }
         for (let y = H - 1; y >= 0; y--) {
           const i = IDX(x, y, z);
           if (y <= rng.nextInt(5)) { blocks[i] = B.BEDROCK; continue; }
@@ -399,6 +476,43 @@ function WorldGenFactory(Noise, TAB) {
             if (y < SEA - 1 && (b === BI.OCEAN || b === BI.DEEP_OCEAN)) { blocks[i] = blocks[i + 256] === B.SAND ? B.SAND : B.GRAVEL; continue; }
             blocks[i] = fill; meta[i] = fillMeta;
             if (fill === B.SAND && run === 0 && b !== BI.SALT_FLATS) { run = rng.nextInt(4); fill = B.SANDSTONE; }
+          }
+        }
+      }
+    }
+    // ---- spire woods: towers of stone standing up out of the trees, crowned with grass ----
+    spires(cx, cz, blocks, meta, biomes) {
+      let any = false;
+      for (let i = 0; i < 256 && !any; i++) if (biomes[i] === BI.SPIRE_WOODS.id) any = true;
+      if (!any) return;
+      const X0 = cx * 16, Z0 = cz * 16, S = 21;
+      for (let i = Math.floor((X0 - 12) / S); i <= Math.floor((X0 + 27) / S); i++) for (let j = Math.floor((Z0 - 12) / S); j <= Math.floor((Z0 + 27) / S); j++) {
+        const rng = new Random(seedHash(this.seed, i, j, 0x5917));
+        if (rng.nextInt(10) < 3) continue;
+        const px = i * S + 4 + rng.nextInt(S - 8) + 0.5, pz = j * S + 4 + rng.nextInt(S - 8) + 0.5;
+        if (this.biomeAt(Math.floor(px), Math.floor(pz)) !== BI.SPIRE_WOODS.id) continue;
+        const r0 = 3 + rng.nextFloat() * 4, top = 98 + rng.nextInt(58), lx0 = (rng.nextFloat() - 0.5) * 0.08, lz0 = (rng.nextFloat() - 0.5) * 0.08;
+        const sd = rng.nextInt(0xffffff), R = Math.ceil(r0 * 1.3 + 4);
+        for (let x = Math.max(X0, Math.floor(px - R)); x <= Math.min(X0 + 15, Math.floor(px + R)); x++) {
+          for (let z = Math.max(Z0, Math.floor(pz - R)); z <= Math.min(Z0 + 15, Math.floor(pz + R)); z++) {
+            const lx = x - X0, lz = z - Z0;
+            let g = top + 4;
+            while (g > 1 && (blocks[IDX(lx, g, lz)] === 0 || blocks[IDX(lx, g, lz)] === B.WATER)) g--;
+            let hi = -1;
+            for (let y = Math.max(g + 1, SEA - 4); y <= top + 3; y++) {
+              const h = clamp((y - 64) / (top - 64), 0, 1);
+              const ccx = px + lx0 * (y - 64), ccz = pz + lz0 * (y - 64);
+              const ang = Math.atan2(z + 0.5 - ccz, x + 0.5 - ccx);
+              const jag = ((Math.imul(sd ^ ((y >> 1) * 7919), 2654435761) ^ Math.imul(Math.floor((ang + 4) * 1.6), 40503)) >>> 0) % 100 / 100;
+              let r = r0 * (1.3 - 0.35 * h) + (jag - 0.5) * 1.3;
+              if (y > top) r *= Math.max(0, 1 - (y - top) / 3.5);
+              if (Math.hypot(x + 0.5 - ccx, z + 0.5 - ccz) >= r) continue;
+              const i2 = IDX(lx, y, lz);
+              blocks[i2] = jag > 0.86 ? B.MOSSY_COBBLESTONE : B.STONE; meta[i2] = 0;
+              hi = y;
+            }
+            // a cap of earth and grass for the trees up top
+            if (hi >= top - 1 && hi > g + 6) { blocks[IDX(lx, hi, lz)] = B.GRASS; blocks[IDX(lx, hi - 1, lz)] = B.DIRT; blocks[IDX(lx, hi - 2, lz)] = B.DIRT; }
           }
         }
       }
@@ -885,13 +999,18 @@ function WorldGenFactory(Noise, TAB) {
         if (!b.trees || occupied[lz * 16 + lx]) continue;
         const kind = pickWeighted(rng, b.treeKinds);
         const y = surf(lx, lz);
-        if (y >= 116) continue;
+        if (y >= H - 32) continue;
         const tb = topId(lx, lz);
         const above = t.blocks[IDX(lx, y + 1, lz)];
         if (kind === 'huge_mushroom') { if (tb !== B.MYCELIUM && tb !== B.GRASS) continue; }
         else if (!LAND_TOP_OK[tb] && !(kind === 'dead' && (tb === B.ASH || tb === B.BASALT || tb === B.SCORCHED_STONE))) continue;
         if (above !== 0 && !(kind === 'swamp_oak' && above === B.WATER && t.blocks[IDX(lx, y + 2, lz)] === 0)) continue;
         features.push({ phase: 1, type: 'tree', kind, x: x0 + lx, y: y + 1, z: z0 + lz, seed });
+      }
+      // ---- ice spikes on the glaciers ----
+      if (center.glacier && rng.nextInt(3) === 0) {
+        const lx = 2 + rng.nextInt(12), lz = 2 + rng.nextInt(12), y = surf(lx, lz);
+        if (topId(lx, lz) === B.SNOW && !occupied[lz * 16 + lx]) features.push({ phase: 1, type: 'ice_spike', x: x0 + lx, y: y + 1, z: z0 + lz, seed: rng.nextSeed() });
       }
       // ---- boulders & fallen logs ----
       if (center.boulders && rng.nextFloat() < center.boulders) {
@@ -1704,6 +1823,15 @@ function WorldGenFactory(Noise, TAB) {
         }
         case 'crater': this.crater(W, rng, f); break;
         case 'circle': this.circle(W, rng, f); break;
+        case 'ice_spike': {
+          // a tapering column of packed ice, now and then a tall one
+          const tall = rng.nextInt(8) === 0, hgt = tall ? 22 + rng.nextInt(18) : 6 + rng.nextInt(9), r0 = tall ? 2.6 : 1.4 + rng.nextFloat();
+          for (let y = -2; y < hgt; y++) {
+            const r = r0 * (1 - Math.max(0, y) / hgt) + 0.35;
+            for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) if (dx * dx + dz * dz <= r * r) W.set(f.x + dx, f.y + y, f.z + dz, B.PACKED_ICE, 0, 2);
+          }
+          break;
+        }
       }
     }
     crater(W, rng, f) {
@@ -2080,7 +2208,7 @@ function WorldGenFactory(Noise, TAB) {
         for (let x = 0; x < 16; x++) {
           const gx = x >> 2, tx = (x & 3) / 4;
           const a = (gz * 5 + gx) * 17, b2 = (gz * 5 + gx + 1) * 17, c2 = ((gz + 1) * 5 + gx) * 17, d2 = ((gz + 1) * 5 + gx + 1) * 17;
-          for (let y = 0; y < H; y++) {
+          for (let y = 0; y < UH; y++) {
             const gy = y >> 3, ty = (y & 7) / 8;
             const v00 = dens[a + gy] + (dens[a + gy + 1] - dens[a + gy]) * ty;
             const v10 = dens[b2 + gy] + (dens[b2 + gy + 1] - dens[b2 + gy]) * ty;
@@ -2094,8 +2222,8 @@ function WorldGenFactory(Noise, TAB) {
       // bedrock floor and roof, ragged like the classics
       const br = new Random(seedHash(this.seed, cx, cz, 0xBED));
       for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
-        blocks[IDX(x, 0, z)] = B.BEDROCK; blocks[IDX(x, H - 1, z)] = B.BEDROCK;
-        for (let k = 1; k < 5; k++) { if (br.nextInt(5) >= k) blocks[IDX(x, k, z)] = B.BEDROCK; if (br.nextInt(5) >= k) blocks[IDX(x, H - 1 - k, z)] = B.BEDROCK; }
+        blocks[IDX(x, 0, z)] = B.BEDROCK; blocks[IDX(x, UH - 1, z)] = B.BEDROCK;
+        for (let k = 1; k < 5; k++) { if (br.nextInt(5) >= k) blocks[IDX(x, k, z)] = B.BEDROCK; if (br.nextInt(5) >= k) blocks[IDX(x, UH - 1 - k, z)] = B.BEDROCK; }
       }
       this.uSurface(out);
       this.uOres(out);
@@ -2109,7 +2237,7 @@ function WorldGenFactory(Noise, TAB) {
       for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
         const b = biomes[z * 16 + x], wx = x0 + x, wz = z0 + z;
         const p1 = this.uPatch.noise2(wx / 22, wz / 22), p2 = this.uPatch2.noise2(wx / 18 + 9.1, wz / 18 - 4.4);
-        for (let y = 5; y < H - 5; y++) {
+        for (let y = 5; y < UH - 5; y++) {
           const i = IDX(x, y, z);
           if (blocks[i] !== B.BRIMSTONE || blocks[i + 256] !== 0) continue;
           // a floor: air above rock
@@ -2150,16 +2278,16 @@ function WorldGenFactory(Noise, TAB) {
       const { blocks, meta, biomes, cx, cz } = out, X0 = cx * 16, Z0 = cz * 16;
       const rng = new Random(seedHash(this.seed, cx, cz, 0xF00D));
       const reg = biomes[136];
-      const get = (x, y, z) => (x < 0 || x > 15 || z < 0 || z > 15 || y < 0 || y >= H) ? -1 : blocks[IDX(x, y, z)];
-      const set = (x, y, z, id, m) => { if (x < 0 || x > 15 || z < 0 || z > 15 || y < 1 || y >= H - 1) return; const i = IDX(x, y, z); blocks[i] = id; meta[i] = m || 0; };
+      const get = (x, y, z) => (x < 0 || x > 15 || z < 0 || z > 15 || y < 0 || y >= UH) ? -1 : blocks[IDX(x, y, z)];
+      const set = (x, y, z, id, m) => { if (x < 0 || x > 15 || z < 0 || z > 15 || y < 1 || y >= UH - 1) return; const i = IDX(x, y, z); blocks[i] = id; meta[i] = m || 0; };
       const solid = (id) => id > 0 && SOLID[id] && id !== B.LAVA;
       // ---- sunstone clusters hanging from the roof ----
       const clusters = reg === BI.U_GROTTO.id ? 14 : reg === BI.U_DEPTHS.id ? 6 : 3;
       for (let c = 0; c < clusters; c++) {
         const sx = 3 + rng.nextInt(10), sz = 3 + rng.nextInt(10);
         let sy = 40 + rng.nextInt(80);
-        while (sy < H - 6 && get(sx, sy, sz) !== 0) sy++;
-        while (sy < H - 6 && get(sx, sy + 1, sz) === 0) sy++;
+        while (sy < UH - 6 && get(sx, sy, sz) !== 0) sy++;
+        while (sy < UH - 6 && get(sx, sy + 1, sz) === 0) sy++;
         if (!solid(get(sx, sy + 1, sz)) || get(sx, sy, sz) !== 0) continue;
         set(sx, sy, sz, B.SUNSTONE);
         for (let k = 0; k < 140; k++) {
@@ -2214,7 +2342,7 @@ function WorldGenFactory(Noise, TAB) {
           const x = 2 + rng.nextInt(12), z = 2 + rng.nextInt(12), y = floorAt(x, z, LAVA_SEA + 1, 100);
           if (y < 0) continue;
           const w = rng.nextInt(3) === 0 ? 2 : 1;
-          let top = y; while (top < H - 6 && get(x, top, z) === 0) top++;
+          let top = y; while (top < UH - 6 && get(x, top, z) === 0) top++;
           if (top - y > 40) continue;
           for (let yy = y; yy < top; yy++) for (let dx = 0; dx < w; dx++) for (let dz = 0; dz < w; dz++) if (get(x + dx, yy, z + dz) === 0) set(x + dx, yy, z + dz, B.BASALT);
         }
@@ -2238,7 +2366,7 @@ function WorldGenFactory(Noise, TAB) {
         for (let k = 0; k < 4; k++) {
           const x = 1 + rng.nextInt(14), z = 1 + rng.nextInt(14);
           let y = 60 + rng.nextInt(60);
-          while (y < H - 6 && get(x, y, z) === 0) y++;
+          while (y < UH - 6 && get(x, y, z) === 0) y++;
           if (!solid(get(x, y, z))) continue;
           for (let j = 1; j <= 1 + rng.nextInt(4) && get(x, y - j, z) === 0; j++) set(x, y - j, z, B.QUARTZ_BLOCK, 2);
         }
@@ -2325,8 +2453,8 @@ function WorldGenFactory(Noise, TAB) {
     fortressCell(out, L, c, ox, oz) {
       const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16, F = L.F;
       const inC = (x, z) => x >= X0 && x < X0 + 16 && z >= Z0 && z < Z0 + 16;
-      const get = (x, y, z) => (!inC(x, z) || y < 0 || y >= H) ? -1 : blocks[IDX(x - X0, y, z - Z0)];
-      const set = (x, y, z, id, m) => { if (!inC(x, z) || y < 1 || y >= H - 1) return; const i = IDX(x - X0, y, z - Z0); blocks[i] = id; meta[i] = m || 0; };
+      const get = (x, y, z) => (!inC(x, z) || y < 0 || y >= UH) ? -1 : blocks[IDX(x - X0, y, z - Z0)];
+      const set = (x, y, z, id, m) => { if (!inC(x, z) || y < 1 || y >= UH - 1) return; const i = IDX(x - X0, y, z - Z0); blocks[i] = id; meta[i] = m || 0; };
       const BR = B.BRIMSTONE_BRICKS, FE = B.BRIMSTONE_FENCE;
       const rng = new Random(c.seed);
       const enclosed = c.kind === 'hall' || c.kind === 'hallx' || c.kind === 'garden' || c.kind === 'treasury';
