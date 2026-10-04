@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000">
+<meta name="description" content="Blocklands - a block-building exploration game in the spirit of the classic era.">
+<title>Blocklands</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%23866043'/%3E%3Crect width='16' height='5' fill='%2379c05a'/%3E%3Crect y='5' width='3' height='2' fill='%2379c05a'/%3E%3Crect x='7' y='5' width='4' height='1' fill='%2379c05a'/%3E%3Crect x='13' y='5' width='3' height='3' fill='%2379c05a'/%3E%3Crect x='4' y='9' width='2' height='2' fill='%23614331'/%3E%3Crect x='10' y='11' width='2' height='2' fill='%23614331'/%3E%3C/svg%3E">
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; overscroll-behavior: none; }
+  canvas { position: fixed; left: 0; top: 0; width: 100%; height: 100%; display: block; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; outline: none; }
+  #gl { z-index: 0; image-rendering: pixelated; image-rendering: crisp-edges; }
+  #gui { z-index: 1; }
+  #textinput { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; font-size: 16px; z-index: -1; }
+  #splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 5; color: #fff;
+    font: bold 20px monospace; letter-spacing: 2px; text-shadow: 2px 2px #3f3f3f; background: #2b1d14; }
+  #splash small { margin-top: 12px; font-size: 13px; color: #b0b0b0; letter-spacing: 1px; }
+  #fatal { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 6; color: #fff; background: #2b1d14; font: 16px monospace; text-align: center; padding: 24px; box-sizing: border-box; }
+  #fatal .detail { margin-top: 12px; color: #a0a0a0; font-size: 12px; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="gui"></canvas>
+<input id="textinput" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send">
+<div id="splash">BLOCKLANDS<small>Generating textures...</small></div>
+<div id="fatal"><div class="msg"></div><div class="detail"></div></div>
+<!-- BEGIN SCRIPTS -->
+<script src="src/core/util.js"></script>
+<script src="src/core/noise.js"></script>
+<script src="src/core/blocks.js"></script>
+<script src="src/core/items.js"></script>
+<script src="src/render/texgen.js"></script>
+<script src="src/render/itemart.js"></script>
+<script src="src/world/worldgen.js"></script>
+<script src="src/world/chunk.js"></script>
+<script src="src/world/lighting.js"></script>
+<script src="src/world/tileentities.js"></script>
+<script src="src/world/world.js"></script>
+<script src="src/render/gl.js"></script>
+<script src="src/render/shaders.js"></script>
+<script src="src/render/atlas.js"></script>
+<script src="src/render/mesher.js"></script>
+<script src="src/render/renderer.js"></script>
+<script src="src/ui/font.js"></script>
+<script src="src/ui/itemicons.js"></script>
+<script src="src/ui/gui.js"></script>
+<script src="src/game/settings.js"></script>
+<script src="src/game/input.js"></script>
+<script src="src/entity/entity.js"></script>
+<script src="src/entity/objects.js"></script>
+<script src="src/entity/player.js"></script>
+<script src="src/game/recipes.js"></script>
+<script src="src/game/inventory.js"></script>
+<script src="src/world/behaviors.js"></script>
+<script src="src/game/interact.js"></script>
+<script src="src/render/particles.js"></script>
+<script src="src/render/skins.js"></script>
+<script src="src/render/models.js"></script>
+<script src="src/render/entityrender.js"></script>
+<script src="src/audio/sound.js"></script>
+<script src="src/audio/music.js"></script>
+<script src="src/storage/storage.js"></script>
+<script src="src/ui/hud.js"></script>
+<script src="src/ui/screen.js"></script>
+<script src="src/ui/menus.js"></script>
+<script src="src/ui/containers.js"></script>
+<script src="src/ui/chat.js"></script>
+<script src="src/ui/journal.js"></script>
+<script src="src/ui/touch.js"></script>
+<script src="src/entity/mobs.js"></script>
+<script src="src/main.js"></script>
+<!-- END SCRIPTS -->
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>world preview</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block;width:100vw;height:100vh}</style></head>
+<body><canvas id="gl"></canvas>
+<script src="../../src/core/util.js"></script>
+<script src="../../src/core/noise.js"></script>
+<script src="../../src/core/blocks.js"></script>
+<script src="../../src/core/items.js"></script>
+<script src="../../src/render/texgen.js"></script>
+<script src="../../src/world/worldgen.js"></script>
+<script src="../../src/world/chunk.js"></script>
+<script src="../../src/world/lighting.js"></script>
+<script src="../../src/world/tileentities.js"></script>
+<script src="../../src/world/world.js"></script>
+<script src="../../src/render/gl.js"></script>
+<script src="../../src/render/shaders.js"></script>
+<script src="../../src/render/atlas.js"></script>
+<script src="../../src/render/mesher.js"></script>
+<script src="../../src/render/renderer.js"></script>
+<script>
+// Minimal harness: render a world from a fixed camera (used for automated screenshots)
+const q = new URLSearchParams(location.search);
+const game = { settings: { renderDistance: +(q.get('rd') || 6), mipmaps: true, graphics: 'fancy', smoothLighting: true, clouds: 'fancy', brightness: 0.5 } };
+const canvas = document.getElementById('gl');
+game.renderer = new Renderer(game, canvas);
+game.renderer.resize(innerWidth, innerHeight);
+const world = new World(game, { id: 'preview', seed: +(q.get('seed') || 12345), dayTime: +(q.get('time') || 6000) }, { menu: true });
+game.world = world;
+let cam = { x: +(q.get('x') || 0) + 0.5, y: +(q.get('y') || 90), z: +(q.get('z') || 0) + 0.5, yaw: +(q.get('yaw') || 0) * DEG, pitch: +(q.get('pitch') || -20) * DEG, fov: 70 };
+let frames = 0, idle = 0;
+window.ready = false;
+function frame() {
+  world.updateStreaming(cam.x, cam.z, game.settings.renderDistance);
+  const meshed = game.renderer.updateMeshes(world, 30);
+  game.renderer.render(world, cam, 0, {});
+  frames++;
+  const pending = world.gen.pending;
+  idle = (pending === 0 && meshed === 0) ? idle + 1 : 0;
+  window.dbg = { chunks: world.chunks.size, pending, frames, stats: game.renderer.stats };
+  if (frames > 5 && idle > 3) window.ready = true;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.setCam = (c) => Object.assign(cam, c);
+window.cam_x = () => cam.x; window.cam_z = () => cam.z;
+</script></body></html>

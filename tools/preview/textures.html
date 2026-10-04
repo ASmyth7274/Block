@@ -1,0 +1,18 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{background:#7a8a99;margin:0;font:10px monospace}#g{display:flex;flex-wrap:wrap;gap:4px;padding:6px}.t{display:flex;flex-direction:column;align-items:center;width:72px}canvas{image-rendering:pixelated;width:64px;height:64px;background:repeating-conic-gradient(#999 0 25%,#bbb 0 50%) 0 0/16px 16px}</style></head><body><div id="g"></div>
+<script src="../../src/core/util.js"></script>
+<script src="../../src/core/noise.js"></script>
+<script src="../../src/core/blocks.js"></script>
+<script src="../../src/core/items.js"></script>
+<script src="../../src/render/texgen.js"></script>
+<script src="../../src/render/itemart.js"></script>
+<script>
+const filter = new URLSearchParams(location.search).get('f');
+const g = document.getElementById('g');
+for (const name in TexGen.T) {
+  if (filter && !name.match(new RegExp(filter))) continue;
+  const d = document.createElement('div'); d.className = 't';
+  const c = TexGen.T[name].toCanvas(1);
+  d.appendChild(c); const s = document.createElement('span'); s.textContent = name.slice(0, 13); d.appendChild(s); g.appendChild(d);
+}
+window.done = true;
+</script></body></html>
