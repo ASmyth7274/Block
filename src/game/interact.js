@@ -193,6 +193,7 @@ class Interaction {
       if (tool && !p.creative) p.inventory.damageHeld(p, tool.kind === 'sword' ? 1 : 2);
       p.exhaust(0.3);
       if (e.onAttackedByPlayer) e.onAttackedByPlayer(p);
+      rallyWolves(g, e);
     }
   }
 

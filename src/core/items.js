@@ -66,8 +66,8 @@ defItem('flint', { name: 'Flint' });
 defItem('leather', { name: 'Leather' });
 defItem('bone', { name: 'Bone', handheld: true });
 defItem('dye', {
-  name: (d) => d === 0 ? 'Bone Meal' : d === 11 ? 'Lapis Lazuli' : d === 15 ? 'Ink Dye' : COLOR_NAMES[d & 15] + ' Dye',
-  tex: (d) => d === 0 ? 'bone_meal' : d === 11 ? 'lapis' : 'dye_' + COLORS[d & 15], variants: [...Array(16).keys()],
+  name: (d) => d === 0 ? 'Bone Meal' : d === 11 ? 'Lapis Lazuli' : d === 15 ? 'Ink Sac' : COLOR_NAMES[d & 15] + ' Dye',
+  tex: (d) => d === 0 ? 'bone_meal' : d === 11 ? 'lapis' : d === 15 ? 'ink_sac' : 'dye_' + COLORS[d & 15], variants: [...Array(16).keys()],
 });
 defItem('wheat', { name: 'Wheat', tex: 'item_wheat' });
 defItem('seeds', { name: 'Seeds', tex: 'seeds', plant: { block: 45, on: [46] } });

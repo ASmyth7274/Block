@@ -221,6 +221,7 @@ class Player extends Living {
         if (t && Math.random() < 0.15 * t) { att.hurt(1 + Math.floor(Math.random() * 4), { type: 'thorns', entity: this, knockback: 0.2 }); a.dmg = Math.min(maxDamageOf(a.id) - 1, a.dmg + 2); break; }
       }
     }
+    if (att && att !== this) rallyWolves(this.game, att);
     if (src.entity) this.hurtDir = Math.atan2(src.entity.z - this.z, src.entity.x - this.x) * 180 / Math.PI - this.yaw * 180 / Math.PI;
     else this.hurtDir = 0;
     this.exhaust(0.3);

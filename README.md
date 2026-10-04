@@ -85,6 +85,10 @@ splash text and a slowly turning live panorama.
 - New creatures: Boomcaps (explosive toadstools), Mummies in the desert,
   Wraiths that drift over snow and moor at night, deer, bats, wisps, and the
   Stranger, who is only ever seen at a distance.
+- Wolves that hunt in packs through forest and taiga: tame one with bones and
+  it sits, follows, fights at your side, shakes itself dry after a swim and
+  wears a collar you can dye. Squid pulse through rivers and seas and vanish
+  in a cloud of ink when startled.
 - Wisps that lead the curious to buried treasure (or release one yourself
   with wisp essence), runestones that wake when touched with jade, the
   Prospector's Rod that twitches towards ore, the Wayfinder that points at

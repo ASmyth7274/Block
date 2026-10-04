@@ -111,6 +111,26 @@ class Particles {
     const L = this.layer('particle_drip');
     for (let i = 0; i < n; i++) this.add({ x: x + (Math.random() - 0.5) * 0.2, y: y + 0.05, z: z + (Math.random() - 0.5) * 0.2, vx: (Math.random() - 0.5) * 0.08, vy: 0.08 + Math.random() * 0.08, vz: (Math.random() - 0.5) * 0.08, size: 0.05, life: 8 + Math.floor(Math.random() * 6), gravity: 0.04, layer: L, r: 0.55, g: 0.65, b: 1, lit: true });
   }
+  // water flung off a shaking wolf
+  shakeDrops(x, y, z, w, n) {
+    const L = this.layer('particle_drip');
+    n = Math.ceil(n * this.density());
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * TAU;
+      this.add({ x: x + Math.cos(a) * w * 0.5, y: y + Math.random() * 0.3, z: z + Math.sin(a) * w * 0.5, vx: Math.cos(a) * 0.12, vy: 0.08 + Math.random() * 0.1, vz: Math.sin(a) * 0.12,
+        size: 0.05, life: 10 + Math.floor(Math.random() * 8), gravity: 0.04, layer: L, r: 0.55, g: 0.65, b: 1, lit: true });
+    }
+  }
+  // a squid's cloud of ink, hanging in the water
+  ink(x, y, z, n) {
+    const L = this.layer('particle_smoke');
+    n = Math.ceil(n * this.density());
+    for (let i = 0; i < n; i++) {
+      const g = 0.02 + Math.random() * 0.05, a = Math.random() * TAU, sp = Math.random() * 0.12;
+      this.add({ x: x + (Math.random() - 0.5) * 0.5, y: y + (Math.random() - 0.5) * 0.5, z: z + (Math.random() - 0.5) * 0.5, vx: Math.cos(a) * sp, vy: (Math.random() - 0.4) * 0.06, vz: Math.sin(a) * sp,
+        size: 0.18 + Math.random() * 0.12, life: 40 + Math.floor(Math.random() * 40), layer: L, r: g, g, b: g * 1.4, grow: 1.8, drag: 0.9, collide: false, fade: true, lit: true });
+    }
+  }
   bubble(x, y, z, n) {
     const L = this.layer('particle_bubble');
     for (let i = 0; i < (n || 1); i++) this.add({ x: x + (Math.random() - 0.5) * 0.5, y, z: z + (Math.random() - 0.5) * 0.5, vx: (Math.random() - 0.5) * 0.02, vy: 0.04 + Math.random() * 0.02, vz: (Math.random() - 0.5) * 0.02, size: 0.05, life: 20 + Math.floor(Math.random() * 20), layer: L, drag: 0.85, gravity: -0.002, collide: false, water: true });

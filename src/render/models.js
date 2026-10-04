@@ -104,6 +104,31 @@ const MODELS = (() => {
       leg2: { pivot: [2.5, 11, -5], boxes: [bx([-1, -11, -1], [2, 11, 2], [0, 16])] },
       leg3: { pivot: [-2.5, 11, -5], boxes: [bx([-1, -11, -1], [2, 11, 2], [0, 16], { mirror: true })] },
     },
+    wolf: {
+      head: { pivot: [0, 10.5, -5], boxes: [bx([-3, -3, -4], [6, 6, 4], [0, 0]), bx([-1.5, -3, -7], [3, 3, 4], [0, 10]), bx([-3, 3, -2.5], [2, 2, 1], [48, 0]), bx([1, 3, -2.5], [2, 2, 1], [48, 0], { mirror: true })] },
+      mane: { pivot: [0, 10.5, -3], boxes: [bx([-4, -3.5, -3], [8, 7, 6], [20, 0])] },
+      // the collar is an overlay ring around the neck (only drawn on tame wolves)
+      collar: { pivot: [0, 10.5, -3], follow: 'mane', overlay: true, boxes: [bx([-4, -3.5, -2], [8, 7, 1], [0, 0])] },
+      body: { pivot: [0, 10, 4.5], boxes: [bx([-3, -3, -4.5], [6, 6, 9], [18, 14])] },
+      tail: { pivot: [0, 12, 8], boxes: [bx([-1, -8, -1], [2, 8, 2], [9, 18])] },
+      leg0: { pivot: [1.5, 8, 7], boxes: [bx([-1, -8, -1], [2, 8, 2], [0, 18])] },
+      leg1: { pivot: [-1.5, 8, 7], boxes: [bx([-1, -8, -1], [2, 8, 2], [0, 18], { mirror: true })] },
+      leg2: { pivot: [1.5, 8, -4], boxes: [bx([-1, -8, -1], [2, 8, 2], [0, 18])] },
+      leg3: { pivot: [-1.5, 8, -4], boxes: [bx([-1, -8, -1], [2, 8, 2], [0, 18], { mirror: true })] },
+    },
+    // a squid is built around its middle so it can tumble freely
+    squid: (() => {
+      const m = {
+        body: { pivot: [0, 0, 0], boxes: [bx([-6, -8, -6], [12, 16, 12], [0, 0])] },
+        finR: { pivot: [6, 4, 0], boxes: [bx([0, -3, -2], [1, 6, 4], [48, 22])] },
+        finL: { pivot: [-6, 4, 0], boxes: [bx([-1, -3, -2], [1, 6, 4], [48, 22], { mirror: true })] },
+      };
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        m['t' + i] = { pivot: [Math.cos(a) * 4.5, -7, Math.sin(a) * 4.5], boxes: [bx([-1, -18, -1], [2, 18, 2], [48, 0])] };
+      }
+      return m;
+    })(),
     bat: {
       head: { pivot: [0, 8, 0], boxes: [bx([-3, 0, -3], [6, 6, 6], [0, 0])] },
       body: { pivot: [0, 8, 0], boxes: [bx([-3, -6, -2], [6, 6, 4], [0, 16])] },

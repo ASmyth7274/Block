@@ -1141,8 +1141,8 @@ defItem('flint', { name: 'Flint' });
 defItem('leather', { name: 'Leather' });
 defItem('bone', { name: 'Bone', handheld: true });
 defItem('dye', {
-  name: (d) => d === 0 ? 'Bone Meal' : d === 11 ? 'Lapis Lazuli' : d === 15 ? 'Ink Dye' : COLOR_NAMES[d & 15] + ' Dye',
-  tex: (d) => d === 0 ? 'bone_meal' : d === 11 ? 'lapis' : 'dye_' + COLORS[d & 15], variants: [...Array(16).keys()],
+  name: (d) => d === 0 ? 'Bone Meal' : d === 11 ? 'Lapis Lazuli' : d === 15 ? 'Ink Sac' : COLOR_NAMES[d & 15] + ' Dye',
+  tex: (d) => d === 0 ? 'bone_meal' : d === 11 ? 'lapis' : d === 15 ? 'ink_sac' : 'dye_' + COLORS[d & 15], variants: [...Array(16).keys()],
 });
 defItem('wheat', { name: 'Wheat', tex: 'item_wheat' });
 defItem('seeds', { name: 'Seeds', tex: 'seeds', plant: { block: 45, on: [46] } });
@@ -2959,6 +2959,12 @@ const TexGen = (function () {
   art('sulfur', DUST, { a: '#8a8a18', b: '#d4d43c', c: '#f8f89a' });
   art('salt', DUST, { a: '#c8c0c0', b: '#ebe6e6', c: '#ffffff' });
   art('bone_meal', DUST, { a: '#b8b4a8', b: '#e0ddd2', c: '#ffffff' });
+  // a glossy, drooping sac of squid ink
+  art('ink_sac', [
+    '................', '......oo........', '.....oaao.......', '.....oaao.......', '....oaabao......', '...oaabbbao.....',
+    '..oaabbcbbao....', '..oabbccbbbao...', '.oabbbcbbbbao...', '.oabbbbbbbbbo...', '.oaabbbbbbbao...', '..oaabbbbbaao...',
+    '...ooaaaaaoo....', '.....ooooo......', '................', '................'],
+    { o: '#07070b', a: '#1b1c26', b: '#2c2e3c', c: '#6a6e88' });
   art('string', [
     '................', '................', '...oo...........', '..o..o..........', '..o...o.........', '...o...o........',
     '....o...o.......', '.....o...o......', '......o...o.....', '.......o...o....', '........o...o...', '.........o...o..',
@@ -3515,18 +3521,18 @@ function WorldGenFactory(Noise, TAB) {
   BI.PLAINS = biome(2, 'plains', 'Plains', { temp: 0.8, rain: 0.4, depth: 0.125, scale: 0.05, grass: '#91bd59', foliage: '#77ab2f', trees: 0.1, treeKinds: [['oak', 9], ['big_oak', 1]], tallGrass: 14, flowers: 3, flowerKinds: [0, 1, 3], animals: [['cow', 2], ['pig', 2], ['sheep', 3], ['chicken', 2]], structures: ['tower', 'camp', 'crater'] });
   BI.DESERT = biome(3, 'desert', 'Desert', { temp: 2.0, rain: 0, depth: 0.125, scale: 0.05, top: B.SAND, filler: B.SAND, under: B.SAND, grass: '#bfb755', foliage: '#aea42a', tallGrass: 0, flowers: 0, deadBush: 2, cactus: 10, cane: 50, pumpkins: false, animals: [], structures: ['well', 'crater', 'quicksand'] });
   BI.MOUNTAINS = biome(4, 'mountains', 'Mountains', { temp: 0.2, rain: 0.3, depth: 1.0, scale: 0.5, grass: '#8ab689', foliage: '#6da36b', trees: 0.6, treeKinds: [['spruce', 2], ['oak', 1]], tallGrass: 3, flowers: 0.5, animals: [['sheep', 3], ['deer', 1]], structures: ['tower'], jade: true });
-  BI.FOREST = biome(5, 'forest', 'Forest', { temp: 0.7, rain: 0.8, depth: 0.1, scale: 0.2, grass: '#79c05a', foliage: '#59ae30', trees: 10, treeKinds: [['oak', 12], ['big_oak', 2], ['birch', 4]], tallGrass: 3, flowers: 2, flowerKinds: [0, 1, 3, 2], mushrooms: 1, animals: [['pig', 2], ['chicken', 2], ['deer', 2], ['cow', 1]], bramble: 1, logs: 0.3, structures: ['camp', 'hut', 'tower'] });
+  BI.FOREST = biome(5, 'forest', 'Forest', { temp: 0.7, rain: 0.8, depth: 0.1, scale: 0.2, grass: '#79c05a', foliage: '#59ae30', trees: 10, treeKinds: [['oak', 12], ['big_oak', 2], ['birch', 4]], tallGrass: 3, flowers: 2, flowerKinds: [0, 1, 3, 2], mushrooms: 1, animals: [['pig', 2], ['chicken', 2], ['deer', 2], ['cow', 1], ['wolf', 1]], bramble: 1, logs: 0.3, structures: ['camp', 'hut', 'tower'] });
   BI.BIRCH_FOREST = biome(6, 'birch_forest', 'Birch Forest', { temp: 0.6, rain: 0.6, depth: 0.1, scale: 0.2, grass: '#88bb67', foliage: '#6ba941', trees: 10, treeKinds: [['birch', 1]], tallGrass: 3, flowers: 2, flowerKinds: [2, 3, 0], animals: [['deer', 2], ['chicken', 1], ['pig', 1]], logs: 0.2, structures: ['camp', 'hut'] });
-  BI.TAIGA = biome(7, 'taiga', 'Taiga', { temp: 0.25, rain: 0.8, depth: 0.2, scale: 0.2, grass: '#86b783', foliage: '#68a464', trees: 10, treeKinds: [['spruce', 3], ['pine', 1]], tallGrass: 1, ferns: 4, flowers: 0.3, mushrooms: 1, podzol: true, animals: [['deer', 3], ['pig', 1], ['sheep', 1]], bramble: 2, logs: 0.4, structures: ['camp', 'hut', 'tower'] });
+  BI.TAIGA = biome(7, 'taiga', 'Taiga', { temp: 0.25, rain: 0.8, depth: 0.2, scale: 0.2, grass: '#86b783', foliage: '#68a464', trees: 10, treeKinds: [['spruce', 3], ['pine', 1]], tallGrass: 1, ferns: 4, flowers: 0.3, mushrooms: 1, podzol: true, animals: [['deer', 3], ['pig', 1], ['sheep', 1], ['wolf', 2]], bramble: 2, logs: 0.4, structures: ['camp', 'hut', 'tower'] });
   BI.SNOWY_TUNDRA = biome(8, 'snowy_tundra', 'Snowy Tundra', { temp: 0.0, rain: 0.5, depth: 0.125, scale: 0.05, grass: '#80b497', foliage: '#60a17b', trees: 0.3, treeKinds: [['spruce', 1]], tallGrass: 1, flowers: 0.2, flowerKinds: [6], cane: 0, pumpkins: false, animals: [['deer', 1], ['sheep', 1]], structures: ['tower', 'crater'] });
-  BI.SNOWY_TAIGA = biome(9, 'snowy_taiga', 'Snowy Taiga', { temp: -0.5, rain: 0.4, depth: 0.2, scale: 0.2, grass: '#80b497', foliage: '#60a17b', trees: 8, treeKinds: [['spruce', 3], ['pine', 1]], tallGrass: 1, ferns: 2, flowers: 0.2, flowerKinds: [6], cane: 0, pumpkins: false, animals: [['deer', 2]], structures: ['camp', 'hut'] });
+  BI.SNOWY_TAIGA = biome(9, 'snowy_taiga', 'Snowy Taiga', { temp: -0.5, rain: 0.4, depth: 0.2, scale: 0.2, grass: '#80b497', foliage: '#60a17b', trees: 8, treeKinds: [['spruce', 3], ['pine', 1]], tallGrass: 1, ferns: 2, flowers: 0.2, flowerKinds: [6], cane: 0, pumpkins: false, animals: [['deer', 2], ['wolf', 2]], structures: ['camp', 'hut'] });
   BI.SWAMP = biome(10, 'swamp', 'Swampland', { temp: 0.8, rain: 0.9, depth: -0.2, scale: 0.1, under: B.CLAY, grass: '#6a7039', foliage: '#6a7039', water: '#a8c890', trees: 2, treeKinds: [['swamp_oak', 1]], tallGrass: 5, flowers: 1, flowerKinds: [2], mushrooms: 8, lily: 4, cattails: 6, cane: 10, animals: [['chicken', 1], ['pig', 1]], structures: ['treasure', 'hut'] });
   BI.JUNGLE = biome(11, 'jungle', 'Jungle', { temp: 0.95, rain: 0.9, depth: 0.1, scale: 0.2, grass: '#59c93c', foliage: '#30bb0b', trees: 40, treeKinds: [['jungle_bush', 10], ['jungle', 6], ['mega_jungle', 2], ['big_oak', 1]], tallGrass: 25, ferns: 6, flowers: 4, flowerKinds: [0, 5], melons: true, animals: [['chicken', 3], ['pig', 1]], structures: [] });
   BI.MUSHROOM = biome(12, 'mushroom_island', 'Mushroom Isle', { temp: 0.9, rain: 1.0, depth: 0.2, scale: 0.3, top: B.MYCELIUM, grass: '#55c93f', foliage: '#2bbb0f', trees: 1, treeKinds: [['huge_mushroom', 1]], tallGrass: 0, flowers: 0, mushrooms: 8, cane: 0, pumpkins: false, animals: [['cow', 1]], structures: [] });
   BI.BEACH = biome(13, 'beach', 'Beach', { temp: 0.8, rain: 0.4, depth: 0.0, scale: 0.025, top: B.SAND, filler: B.SAND, under: B.SAND, grass: '#91bd59', foliage: '#77ab2f', tallGrass: 0, flowers: 0, cane: 4, pumpkins: false, animals: [], structures: ['treasure'] });
   BI.RIVER = biome(14, 'river', 'River', { temp: 0.5, rain: 0.5, depth: -0.5, scale: 0.0, top: B.SAND, filler: B.SAND, under: B.SAND, tallGrass: 0, flowers: 0, cane: 8, cattails: 2, pumpkins: false, animals: [] });
   BI.AUTUMN = biome(15, 'autumn_forest', 'Autumn Woods', { temp: 0.6, rain: 0.6, depth: 0.15, scale: 0.25, grass: '#a3a64f', foliage: '#c4782a', trees: 7, treeKinds: [['maple', 5], ['gold_maple', 4], ['oak', 2], ['birch', 1]], tallGrass: 4, flowers: 1, flowerKinds: [5, 1], mushrooms: 1, litter: 18, pumpkins: true, pumpkinBoost: 4, animals: [['deer', 3], ['pig', 1], ['chicken', 1]], bramble: 2, logs: 0.4, structures: ['camp', 'hut'] });
-  BI.REDWOOD = biome(16, 'redwood_grove', 'Redwood Grove', { temp: 0.45, rain: 0.9, depth: 0.25, scale: 0.25, grass: '#6fa860', foliage: '#4a8a3c', trees: 5, treeKinds: [['redwood', 4], ['spruce', 3], ['small_redwood', 3]], tallGrass: 2, ferns: 10, flowers: 0.3, podzol: true, mushrooms: 2, animals: [['deer', 4]], bramble: 1, logs: 0.6, structures: ['camp', 'hut'] });
+  BI.REDWOOD = biome(16, 'redwood_grove', 'Redwood Grove', { temp: 0.45, rain: 0.9, depth: 0.25, scale: 0.25, grass: '#6fa860', foliage: '#4a8a3c', trees: 5, treeKinds: [['redwood', 4], ['spruce', 3], ['small_redwood', 3]], tallGrass: 2, ferns: 10, flowers: 0.3, podzol: true, mushrooms: 2, animals: [['deer', 4], ['wolf', 1]], bramble: 1, logs: 0.6, structures: ['camp', 'hut'] });
   BI.MOORS = biome(17, 'moors', 'Moorland', { temp: 0.35, rain: 0.7, depth: 0.35, scale: 0.3, grass: '#8a9a5a', foliage: '#7a8a4a', trees: 0.15, treeKinds: [['oak', 2], ['dead', 1]], tallGrass: 8, flowers: 6, flowerKinds: [4, 4, 4, 1], peat: true, boulders: 0.6, animals: [['sheep', 4], ['deer', 1]], structures: ['circle', 'tower'], jade: true });
   BI.ASHEN = biome(18, 'ashen_wastes', 'Ashen Wastes', { temp: 1.6, rain: 0, depth: 0.25, scale: 0.4, top: B.ASH, filler: B.BASALT, under: B.ASH, grass: '#8a8a5a', foliage: '#7a7a4a', trees: 0.5, treeKinds: [['dead', 1]], tallGrass: 0, flowers: 0.15, flowerKinds: [7], deadBush: 3, cane: 0, pumpkins: false, lavaPools: true, animals: [], structures: ['crater'] });
   BI.SALT_FLATS = biome(19, 'salt_flats', 'Salt Flats', { temp: 1.4, rain: 0.1, depth: 0.02, scale: 0.0, top: B.SALT, filler: B.SAND, under: B.SAND, grass: '#b8b070', foliage: '#a8a050', tallGrass: 0, flowers: 0, deadBush: 0.5, cane: 0, pumpkins: false, animals: [], structures: ['crater'] });
@@ -9577,6 +9583,7 @@ class Player extends Living {
         if (t && Math.random() < 0.15 * t) { att.hurt(1 + Math.floor(Math.random() * 4), { type: 'thorns', entity: this, knockback: 0.2 }); a.dmg = Math.min(maxDamageOf(a.id) - 1, a.dmg + 2); break; }
       }
     }
+    if (att && att !== this) rallyWolves(this.game, att);
     if (src.entity) this.hurtDir = Math.atan2(src.entity.z - this.z, src.entity.x - this.x) * 180 / Math.PI - this.yaw * 180 / Math.PI;
     else this.hurtDir = 0;
     this.exhaust(0.3);
@@ -11908,6 +11915,7 @@ class Interaction {
       if (tool && !p.creative) p.inventory.damageHeld(p, tool.kind === 'sword' ? 1 : 2);
       p.exhaust(0.3);
       if (e.onAttackedByPlayer) e.onAttackedByPlayer(p);
+      rallyWolves(g, e);
     }
   }
 
@@ -12116,6 +12124,26 @@ class Particles {
   fishSplash(x, y, z, n) {
     const L = this.layer('particle_drip');
     for (let i = 0; i < n; i++) this.add({ x: x + (Math.random() - 0.5) * 0.2, y: y + 0.05, z: z + (Math.random() - 0.5) * 0.2, vx: (Math.random() - 0.5) * 0.08, vy: 0.08 + Math.random() * 0.08, vz: (Math.random() - 0.5) * 0.08, size: 0.05, life: 8 + Math.floor(Math.random() * 6), gravity: 0.04, layer: L, r: 0.55, g: 0.65, b: 1, lit: true });
+  }
+  // water flung off a shaking wolf
+  shakeDrops(x, y, z, w, n) {
+    const L = this.layer('particle_drip');
+    n = Math.ceil(n * this.density());
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * TAU;
+      this.add({ x: x + Math.cos(a) * w * 0.5, y: y + Math.random() * 0.3, z: z + Math.sin(a) * w * 0.5, vx: Math.cos(a) * 0.12, vy: 0.08 + Math.random() * 0.1, vz: Math.sin(a) * 0.12,
+        size: 0.05, life: 10 + Math.floor(Math.random() * 8), gravity: 0.04, layer: L, r: 0.55, g: 0.65, b: 1, lit: true });
+    }
+  }
+  // a squid's cloud of ink, hanging in the water
+  ink(x, y, z, n) {
+    const L = this.layer('particle_smoke');
+    n = Math.ceil(n * this.density());
+    for (let i = 0; i < n; i++) {
+      const g = 0.02 + Math.random() * 0.05, a = Math.random() * TAU, sp = Math.random() * 0.12;
+      this.add({ x: x + (Math.random() - 0.5) * 0.5, y: y + (Math.random() - 0.5) * 0.5, z: z + (Math.random() - 0.5) * 0.5, vx: Math.cos(a) * sp, vy: (Math.random() - 0.4) * 0.06, vz: Math.sin(a) * sp,
+        size: 0.18 + Math.random() * 0.12, life: 40 + Math.floor(Math.random() * 40), layer: L, r: g, g, b: g * 1.4, grow: 1.8, drag: 0.9, collide: false, fade: true, lit: true });
+    }
   }
   bubble(x, y, z, n) {
     const L = this.layer('particle_bubble');
@@ -12537,6 +12565,94 @@ const Skins = (() => {
     s.box(12, 16, 1, 6, 1, () => vary(r, C('#d8c8a8'), 0.1));               // antler
     s.box(8, 28, 4, 1, 1, () => vary(r, C('#d8c8a8'), 0.1));                // antler tine
     s.box(16, 12, 2, 3, 1, () => vary(r, belly, 0.05));                     // tail
+    return s;
+  })();
+  // wolves: wild (amber-eyed), tame (soft eyes, tongue out) and angry (red eyes, bared teeth)
+  function wolfSkin(kind) {
+    const s = new Skin(); const r = rng('wolf');
+    const fur = C('#c6bfb5'), dark = C('#857c72'), light = C('#e9e5df'), nose = C('#262120');
+    const k = kind === 'angry' ? 0.86 : 1;
+    const v = (c, a) => { const q = vary(r, c, a || 0.07); return [q[0] * k, q[1] * k, q[2] * k]; };
+    // head
+    s.box(0, 0, 6, 6, 4, (f, x, y) => {
+      if (f === 'front') {
+        if (y === 2 && (x === 1 || x === 4)) return kind === 'angry' ? [220, 30, 24] : kind === 'tame' ? [40, 28, 20] : [214, 150, 40];
+        if (y === 1 && (x === 1 || x === 4)) return kind === 'angry' ? v(C('#3a2e28')) : v(dark);
+        if (kind === 'angry' && y === 1 && (x === 2 || x === 3)) return v(C('#4a3e36'));
+        if (y >= 4) return v(light);
+        return v(fur);
+      }
+      if (f === 'top') return v((x + y) % 3 === 0 ? dark : fur);
+      if (f === 'bottom') return v(light);
+      return v(y >= 4 ? light : fur);
+    });
+    // snout
+    s.box(0, 10, 3, 3, 4, (f, x, y) => {
+      if (f === 'front') {
+        if (y === 0 && x === 1) return nose;
+        if (y === 0) return v(C('#4a403a'));
+        if (y === 2 && kind === 'angry') return x === 1 ? [40, 20, 20] : [235, 230, 220];
+        if (y === 2 && kind === 'tame' && x === 1) return [214, 96, 110];
+        return v(light);
+      }
+      if (f === 'top') return v(y >= 3 ? C('#5a504a') : fur);
+      if (f === 'bottom') return (kind === 'tame' && y === 0 && x === 1) ? [214, 96, 110] : v(light);
+      if (kind === 'angry' && y === 2 && (f === 'left' || f === 'right')) return (x % 2) ? [235, 230, 220] : [60, 30, 30];
+      return v(y === 2 ? light : fur);
+    });
+    // ears
+    s.box(48, 0, 2, 2, 1, (f, x, y) => (f === 'front' && y === 1) ? [168, 120, 112] : v(dark));
+    // mane: shaggy, lighter at the throat
+    s.box(20, 0, 8, 7, 6, (f, x, y) => {
+      if (f === 'bottom' || (f === 'front' && y >= 4)) return v(light, 0.1);
+      if (f === 'top') return v((x * 7 + y * 3) % 5 === 0 ? dark : fur, 0.1);
+      if ((x * 5 + y * 3) % 7 === 0) return v(light, 0.1);
+      return v(y < 2 ? C('#a8a097') : fur, 0.1);
+    });
+    // body with a dark saddle along the back
+    s.box(18, 14, 6, 6, 9, (f, x, y, fw, fh) => {
+      if (f === 'top') return v((x === 0 || x === fw - 1) ? fur : dark);
+      if (f === 'bottom') return v(light);
+      if (y === 0) return v(dark);
+      if (y >= 4) return v(light);
+      return v(fur);
+    });
+    // tail with a dark tip
+    s.box(9, 18, 2, 8, 2, (f, x, y) => v(y >= 6 ? C('#4a423c') : y < 2 ? fur : (y % 2 ? fur : dark)));
+    // legs with darker paws
+    s.box(0, 18, 2, 8, 2, (f, x, y) => v(y >= 7 ? C('#6a6058') : y < 3 ? fur : light));
+    return s;
+  }
+  S.wolf = wolfSkin('wild');
+  S.wolf_tame = wolfSkin('tame');
+  S.wolf_angry = wolfSkin('angry');
+  // the collar (white, tinted with the dye colour when drawn) wraps the front of the mane
+  S.wolf_collar = (() => {
+    const s = new Skin();
+    s.box(0, 0, 8, 7, 1, (f, x, y) => f === 'back' ? null : ((x + y) % 4 === 0 ? [214, 214, 214] : [255, 255, 255]));
+    return s;
+  })();
+  S.squid = (() => {
+    const s = new Skin(); const r = rng('squid');
+    const skin = C('#2c3c5c'), deep = C('#1c2840'), pale = C('#5c7096'), spot = C('#7a5a8a');
+    s.box(0, 0, 12, 16, 12, (f, x, y) => {
+      if (f === 'front' || f === 'back') {
+        if (f === 'front' && y >= 9 && y <= 11 && (x === 2 || x === 3 || x === 8 || x === 9)) {
+          if (y === 10 && (x === 3 || x === 8)) return [12, 12, 16];
+          return y === 9 ? [230, 236, 240] : [196, 208, 220];
+        }
+      }
+      if (f === 'top') return vary(r, (x + y) % 4 === 0 ? spot : deep, 0.1);
+      if (f === 'bottom') return vary(r, deep, 0.1);
+      if (y < 4 && (x * 3 + y * 5) % 7 === 0) return vary(r, spot, 0.1);
+      if ((x * 5 + y * 7) % 11 === 0) return vary(r, pale, 0.1);
+      return vary(r, y > 12 ? deep : skin, 0.08);
+    });
+    s.box(48, 0, 2, 18, 2, (f, x, y) => {
+      if ((f === 'front' || f === 'left') && y > 3 && y % 3 === 0) return vary(r, C('#9aa8c8'), 0.08);
+      return vary(r, y > 14 ? deep : skin, 0.08);
+    });
+    s.box(48, 22, 1, 6, 4, () => vary(r, pale, 0.1));
     return s;
   })();
   S.bat = (() => {
@@ -13206,6 +13322,31 @@ const MODELS = (() => {
       leg2: { pivot: [2.5, 11, -5], boxes: [bx([-1, -11, -1], [2, 11, 2], [0, 16])] },
       leg3: { pivot: [-2.5, 11, -5], boxes: [bx([-1, -11, -1], [2, 11, 2], [0, 16], { mirror: true })] },
     },
+    wolf: {
+      head: { pivot: [0, 10.5, -5], boxes: [bx([-3, -3, -4], [6, 6, 4], [0, 0]), bx([-1.5, -3, -7], [3, 3, 4], [0, 10]), bx([-3, 3, -2.5], [2, 2, 1], [48, 0]), bx([1, 3, -2.5], [2, 2, 1], [48, 0], { mirror: true })] },
+      mane: { pivot: [0, 10.5, -3], boxes: [bx([-4, -3.5, -3], [8, 7, 6], [20, 0])] },
+      // the collar is an overlay ring around the neck (only drawn on tame wolves)
+      collar: { pivot: [0, 10.5, -3], follow: 'mane', overlay: true, boxes: [bx([-4, -3.5, -2], [8, 7, 1], [0, 0])] },
+      body: { pivot: [0, 10, 4.5], boxes: [bx([-3, -3, -4.5], [6, 6, 9], [18, 14])] },
+      tail: { pivot: [0, 12, 8], boxes: [bx([-1, -8, -1], [2, 8, 2], [9, 18])] },
+      leg0: { pivot: [1.5, 8, 7], boxes: [bx([-1, -8, -1], [2, 8, 2], [0, 18])] },
+      leg1: { pivot: [-1.5, 8, 7], boxes: [bx([-1, -8, -1], [2, 8, 2], [0, 18], { mirror: true })] },
+      leg2: { pivot: [1.5, 8, -4], boxes: [bx([-1, -8, -1], [2, 8, 2], [0, 18])] },
+      leg3: { pivot: [-1.5, 8, -4], boxes: [bx([-1, -8, -1], [2, 8, 2], [0, 18], { mirror: true })] },
+    },
+    // a squid is built around its middle so it can tumble freely
+    squid: (() => {
+      const m = {
+        body: { pivot: [0, 0, 0], boxes: [bx([-6, -8, -6], [12, 16, 12], [0, 0])] },
+        finR: { pivot: [6, 4, 0], boxes: [bx([0, -3, -2], [1, 6, 4], [48, 22])] },
+        finL: { pivot: [-6, 4, 0], boxes: [bx([-1, -3, -2], [1, 6, 4], [48, 22], { mirror: true })] },
+      };
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        m['t' + i] = { pivot: [Math.cos(a) * 4.5, -7, Math.sin(a) * 4.5], boxes: [bx([-1, -18, -1], [2, 18, 2], [48, 0])] };
+      }
+      return m;
+    })(),
     bat: {
       head: { pivot: [0, 8, 0], boxes: [bx([-3, 0, -3], [6, 6, 6], [0, 0])] },
       body: { pivot: [0, 8, 0], boxes: [bx([-3, -6, -2], [6, 6, 4], [0, 16])] },
@@ -13312,6 +13453,7 @@ class EntityRenderer {
       const ps = pose[part.follow || name];
       if (ps && ps.hide) continue;
       if (opts.only && !opts.only.includes(name)) continue;
+      if (part.overlay && !opts.only) continue;
       if (part.antler && !opts.antlers) continue;
       if (part.translucent && opts.noTranslucent) continue;
       let m = M3.mul(base, M3.trans(part.pivot[0], part.pivot[1], part.pivot[2]));
@@ -14448,6 +14590,50 @@ const SOUND_DEFS = (() => {
   S.wraith_say = () => { const bp = new Biquad('bp', 900, 4); return render(1.6, (t) => { bp.set(500 + Math.sin(t * 3) * 400, 4); return (bp.p(noise()) * 0.8 + Math.sin(2 * Math.PI * (620 + Math.sin(t * 6) * 30) * t) * 0.2) * Math.sin(Math.PI * t / 1.6); }); };
   S.wraith_hurt = S.wraith_say;
   S.bat_say = () => render(0.1, (t) => Math.sin(2 * Math.PI * (5000 - t * 20000) * t) * env(t, 0.002, 0.02));
+  // wolves: barks, growls, whines, panting, a yelp, a fur shake and a howl for moonlit nights
+  const bark = (f0, n, gap) => () => {
+    const f1 = new Biquad('bp', 900, 2.5), f2 = new Biquad('bp', 2100, 4);
+    let ph = 0;
+    const len = 0.11;
+    return render(n * (len + gap), (t) => {
+      const k = Math.floor(t / (len + gap)), tt = t - k * (len + gap);
+      if (tt > len) return 0;
+      const f = f0 * (1.15 - tt / len * 0.45) * (k % 2 ? 0.94 : 1);
+      ph += 2 * Math.PI * f / DSP.SR;
+      const src = ((ph / (2 * Math.PI)) % 1) * 2 - 1 + noise() * 0.6;
+      return (f1.p(src) * 1.1 + f2.p(src) * 0.6) * Math.sin(Math.PI * tt / len) * (tt < 0.01 ? tt / 0.01 : 1);
+    });
+  };
+  S.wolf_bark = bark(420, 2, 0.07);
+  S.wolf_growl = () => {
+    const lp = new Biquad('lp', 700, 1.5), bp = new Biquad('bp', 320, 2);
+    let ph = 0;
+    return render(1.1, (t) => {
+      ph += 2 * Math.PI * (88 + Math.sin(t * 31) * 9) / DSP.SR;
+      const src = ((ph / (2 * Math.PI)) % 1) * 2 - 1 + noise() * 0.9;
+      return (lp.p(src) * 0.7 + bp.p(src)) * (0.6 + 0.4 * Math.sin(t * 23)) * Math.sin(Math.PI * Math.min(1, t / 1.1));
+    });
+  };
+  // swept tones keep a running phase so the pitch glides cleanly
+  const glide = (dur, freq, shape, grit) => () => {
+    let ph = 0;
+    return render(dur, (t) => {
+      ph += 2 * Math.PI * freq(t) / DSP.SR;
+      return (Math.sin(ph) * 0.6 + Math.sin(ph * 2) * 0.15 + (grit ? noise() * grit : 0)) * shape(t);
+    });
+  };
+  S.wolf_whine = glide(0.75, (t) => 980 - t * 360 + Math.sin(t * 38) * 25, (t) => Math.sin(Math.PI * t / 0.75));
+  S.wolf_pant = () => {
+    const bp = new Biquad('bp', 1500, 1.2);
+    return render(0.8, (t) => { const k = (t * 6.5) % 1; return bp.p(noise()) * Math.sin(Math.PI * Math.min(1, k / 0.55)) * (k < 0.55 ? 1 : 0) * 0.9; });
+  };
+  S.wolf_hurt = glide(0.22, (t) => t < 0.05 ? 900 + t * 9000 : 1350 - (t - 0.05) * 3000, (t) => env(t, 0.004, 0.08), 0.15);
+  S.wolf_death = glide(1.0, (t) => 1050 - t * 600 + Math.sin(t * 30) * 30, (t) => Math.sin(Math.PI * t) * Math.exp(-t * 0.8), 0.08);
+  S.wolf_shake = () => {
+    const bp = new Biquad('bp', 2400, 0.9);
+    return render(0.7, (t) => bp.p(noise()) * (0.5 + 0.5 * Math.sin(t * 2 * Math.PI * 14)) * Math.sin(Math.PI * t / 0.7));
+  };
+  S.wolf_howl = glide(2.6, (t) => 380 + Math.min(1, t / 0.6) * 260 - Math.max(0, t - 1.8) * 220 + Math.sin(t * 11) * 6, (t) => Math.sin(Math.PI * t / 2.6) * 0.85, 0.03);
   S.boomcap_say = () => { const lp = new Biquad('lp', 600, 2); return render(0.4, (t) => lp.p(noise()) * env(t, 0.02, 0.1)); };
   S.wisp = () => render(1.2, (t) => { let s = 0; [2093, 2637, 3136].forEach((f, i) => { const st = i * 0.18; if (t > st) s += Math.sin(2 * Math.PI * f * (t - st)) * Math.exp(-(t - st) / 0.3); }); return s; });
   S.stranger = () => { const lp = new Biquad('lp', 300, 1); return render(3, (t) => (lp.p(noise()) * 0.6 + Math.sin(2 * Math.PI * 55 * t) * 0.3) * Math.sin(Math.PI * t / 3)); };
@@ -16098,6 +16284,7 @@ const HOW_TO_PLAY = [
   ['Survival', 'Your health regenerates while your hunger bar is nearly full. Eat by holding the right mouse button with food selected. Sprinting, jumping and fighting make you hungry faster.', 'Falling from high places, drowning, fire, lava and monsters all hurt. Wear armour to take less damage. If you die you drop your items where you fell.'],
   ['Mining & Smelting', 'Ores hide underground: coal, iron, gold, ember, lapis, diamonds - and new finds like cobalt deep in slate, sulfur near lava and jade in high places.', 'Smelt ores in a Furnace with fuel such as coal, charcoal, wood or peat. Better pickaxes mine harder materials: some ores need iron or diamond tools.'],
   ['Farming', 'Till grass or dirt with a hoe and plant seeds near water. Crops need light to grow. Bone meal speeds up growth.', 'Animals give food, leather and wool. Shear sheep for wool and use buckets to collect milk. Brambles in the forest give berries you can bake into pies.'],
+  ['Companions', 'Wolves roam forests and taigas in packs. Strike one and the whole pack turns on you - but offer a wild wolf bones and it may become your companion. A collar shows it is yours.', 'Right-click your wolf to make it sit or follow. It fights at your side and keeps up wherever you go. Feed it meat to heal it, breed two tame wolves with meat, and dye its collar any colour you like.'],
   ['Exploration', 'The world is huge. Biomes have their own plants, creatures and treasures: look for camps, ruined towers, hermit huts, desert wells and sunken ruins.', 'Your Explorer\'s Map (M) fills in as you travel, and your Explorer\'s Journal (J) records every biome and creature you discover. Some secrets are rare - keep travelling!'],
   ['Waterways', 'Craft a boat from five planks to cross lakes and seas: right-click to climb in, steer with W and the mouse, and press Shift to hop out. Do not ram the shore at full speed!', 'Cast a fishing rod into water and wait for the float to dip, then reel in. Different waters hold different fish, and now and then a bottle washes up with a note about buried treasure.'],
   ['Ember Circuits', 'Ember dust laid on the ground carries power from levers, buttons, pressure plates and ember torches, growing weaker with every block. Ember torches invert a signal, relays repeat and delay it.', 'Powered lamps light up, doors and trapdoors swing open, TNT ignites, note blocks sing and pistons push (sticky pistons pull too). Build gates, clocks and secret doors - just like the old days.'],
@@ -16987,6 +17174,7 @@ const MILESTONES = [
   { id: 'biomesAll', name: 'World Traveller', desc: 'Discover every biome', icon: () => [ITEM_IDS.wayfinder, 0] },
   { id: 'harvest', name: 'Green Thumb', desc: 'Harvest fully grown wheat', icon: () => [ITEM_IDS.wheat, 0] },
   { id: 'breed', name: 'Rancher', desc: 'Breed two animals', icon: () => [ITEM_IDS.wheat, 0] },
+  { id: 'tame', name: 'Best Friend', desc: 'Tame a wolf with bones', icon: () => [ITEM_IDS.bone, 0] },
   { id: 'tnt', name: 'Kaboom', desc: 'Craft TNT', icon: () => [B.TNT, 0] },
   { id: 'fish', name: 'Gone Fishing', desc: 'Catch a fish', icon: () => [ITEM_IDS.fish, 0] },
   { id: 'sail', name: 'Set Sail', desc: 'Row a boat 500 blocks', icon: () => [ITEM_IDS.boat, 0] },
@@ -17782,6 +17970,8 @@ const MOB_TYPES = [
   { key: 'bat', name: 'Bat', egg: ['#4c3e30', '#141414'], cat: 'ambient', lore: 'Squeaks and flutters in the dark of caves. Harmless.' },
   { key: 'wisp', name: 'Wisp', egg: ['#8affee', '#2a6a64'], cat: 'ambient', lore: 'A drifting light over swamp and shore after dark. Follow it and it may lead you to buried treasure.' },
   { key: 'stranger', name: 'The Stranger', egg: null, cat: 'special', lore: 'Watching. Always at the edge of sight. Gone when you look closer.' },
+  { key: 'wolf', name: 'Wolf', egg: ['#d2ccc3', '#8a7c6c'], cat: 'creature', lore: 'Hunts in packs through forest and taiga - strike one and the whole pack answers. Offer bones and it may become a loyal companion.' },
+  { key: 'squid', name: 'Squid', egg: ['#2c3c5c', '#7a8aa8'], cat: 'water', lore: 'Pulses through rivers and seas. Startle it and it vanishes in a cloud of ink. Its ink sacs make black dye.' },
 ];
 const MOB_INDEX = {};
 MOB_TYPES.forEach((m, i) => { if (m) { m.index = i; MOB_INDEX[m.key] = m; } });
@@ -18246,7 +18436,7 @@ class Monster extends Mob {
     if (this.pathDone && Math.random() < 1 / 120) this.wander(10, 4, 1.0, (x, y, z) => this.pathWeight(x, y, z));
     this.idleLook(game); this.keepWatching();
   }
-  onRevenge(e) { if (e.type === 'player' && e.survivalLike) { this.target = e; this.unseen = 0; } }
+  onRevenge(e) { if ((e.type === 'player' && e.survivalLike) || e.type === 'wolf') { this.target = e; this.unseen = 0; } }
   maybeEquip() {
     const d = this.world.difficulty;
     if (Math.random() < [0, 0.01, 0.025, 0.05][d]) {
@@ -18698,7 +18888,7 @@ class Animal extends Mob {
   aiTick(game) {
     const p = game.player;
     if (this.loveCooldown > 0) this.loveCooldown--;
-    if (this.fire > 0 && this.panic <= 0) this.panic = 40;
+    if (this.fire > 0 && this.panic <= 0 && !this.brave) this.panic = 40;
     // panic
     if (this.panic > 0) {
       this.panic--;
@@ -18976,6 +19166,315 @@ class Deer extends Animal {
 }
 
 // ---------------------------------------------------------------------------
+// Wolves: packs in the woods; tame one with bones and it stays by your side
+// ---------------------------------------------------------------------------
+const WOLF_MEAT = ['porkchop', 'cooked_porkchop', 'beef', 'steak', 'chicken', 'cooked_chicken', 'mutton', 'cooked_mutton', 'rotten_flesh', 'venison', 'cooked_venison', 'jerky'];
+class Wolf extends Animal {
+  constructor(world) {
+    super(world, 'wolf');
+    this.maxHealth = this.health = 8;
+    this.baseSpeed = 0.3; this.temptSpeed = 1.0; this.brave = true;
+    this.w = 0.6; this.h = 0.85; this.eye = 0.68;
+    this.tamed = false; this.sitting = false; this.angry = false; this.collar = 14;
+    this.following = false; this.begging = false;
+    this.interest = 0; this.pinterest = 0;
+    this.wet = false; this.shaking = false; this.shakeT = 0; this.pshakeT = 0;
+    this.talkInterval = 80;
+    this.applySize();
+  }
+  setTamed(t) { this.tamed = t; this.maxHealth = t ? 20 : 8; if (this.health > this.maxHealth) this.health = this.maxHealth; }
+  setTarget(e) { this.target = e; this.unseen = 0; this.angry = !!e && !this.tamed; if (!e) this.clearPath(); }
+  isMeat(s) { return WOLF_MEAT.some((k) => ITEM_IDS[k] === s.id); }
+  isBreedItem(s) { return this.tamed && this.isMeat(s); }
+  isTemptItem() { return false; }
+  // tamed wolves are never a threat to their owner; mobs only bite half as hard
+  hurt(amount, src) {
+    if (src && src.entity && src.entity.type !== 'player' && src.type !== 'arrow') amount = (amount + 1) / 2;
+    const ok = super.hurt(amount, src);
+    if (ok) this.sitting = false;
+    return ok;
+  }
+  onRevenge(e) {
+    if (!e || e === this || e.dead) return;
+    if (e.type === 'player' && (this.tamed || !e.survivalLike)) return;
+    if (e.type === 'wolf' && e.tamed && this.tamed) return;
+    this.setTarget(e);
+    // the pack answers
+    for (const o of this.world.entitiesInBox(this.x - 16, this.y - 10, this.z - 16, this.x + 16, this.y + 10, this.z + 16)) {
+      if (o !== this && o.type === 'wolf' && !o.dead && !o.target && o.tamed === this.tamed && !o.sitting) o.setTarget(e);
+    }
+  }
+  interact(player, held) {
+    const g = this.game;
+    if (this.tamed) {
+      if (held && this.isMeat(held) && this.health < this.maxHealth) {
+        this.heal(foodOf(held.id).hunger);
+        if (!player.creative) player.inventory.decrementHeld(1);
+        g.audio.play('eat', 0.5, 1.2, this.x, this.y + this.eye, this.z);
+        return true;
+      }
+      if (held && held.id === ITEM_IDS.dye) {
+        if ((held.dmg & 15) !== this.collar) { this.collar = held.dmg & 15; if (!player.creative) player.inventory.decrementHeld(1); return true; }
+        return false;
+      }
+      if (held && this.isBreedItem(held)) return super.interact(player, held);
+      this.sitting = !this.sitting;
+      this.jumping = false; this.following = false;
+      this.setTarget(null);
+      return true;
+    }
+    if (held && held.id === ITEM_IDS.bone && !this.angry) {
+      if (!player.creative) player.inventory.decrementHeld(1);
+      if (Math.random() < 1 / 3) {
+        this.setTamed(true);
+        this.health = this.maxHealth;
+        this.sitting = true;
+        this.setTarget(null);
+        g.particles.hearts(this.x, this.y + this.h, this.z, 7);
+        g.achieve('tame');
+      } else g.particles.smoke(this.x, this.y + this.h, this.z, 7);
+      return true;
+    }
+    return false;
+  }
+  inheritFrom(a, b) { this.setTamed(true); this.health = this.maxHealth; this.collar = Math.random() < 0.5 ? a.collar : b.collar; }
+  // keep up with the owner: hop to a free spot next to them when too far behind
+  teleportTo(p) {
+    const w = this.world, bx = Math.floor(p.x) - 2, bz = Math.floor(p.z) - 2, by = Math.floor(p.y);
+    for (let l = 0; l <= 4; l++) for (let m = 0; m <= 4; m++) {
+      if (l >= 1 && m >= 1 && l <= 3 && m <= 3) continue;
+      const x = bx + l, z = bz + m;
+      const below = w.getBlock(x, by - 1, z);
+      if (!BT.solid[below] || !BT.opaque[below] || BT.solid[w.getBlock(x, by, z)] || BT.solid[w.getBlock(x, by + 1, z)] || BT.fluid[w.getBlock(x, by, z)]) continue;
+      this.setPos(x + 0.5, by, z + 0.5);
+      this.clearPath(); this.vx = this.vy = this.vz = 0; this.fallDistance = 0;
+      return true;
+    }
+    return false;
+  }
+  findTarget() {
+    const w = this.world;
+    const near = (type, r, pred) => {
+      let best = null, bd = r * r;
+      for (const e of w.entitiesInBox(this.x - r, this.y - 4, this.z - r, this.x + r, this.y + 4, this.z + r)) {
+        if (e.type !== type || e.dead || (pred && !pred(e))) continue;
+        const d = this.distSqTo(e); if (d < bd && this.canSee(e)) { bd = d; best = e; }
+      }
+      return best;
+    };
+    if (!this.tamed && Math.random() < 1 / 40) { const s = near('sheep', 12); if (s) { this.setTarget(s); return; } }
+    if (Math.random() < 1 / 20) { const s = near('skeleton', 16); if (s) this.setTarget(s); }
+  }
+  aiTick(game) {
+    const p = game.player;
+    const t0 = this.target;
+    if (t0 && (t0.dead || t0.removed || this.distSqTo(t0) > 16 * 16 || (t0.type === 'player' && (this.tamed || !t0.survivalLike)))) this.setTarget(null);
+    // begging: a bone (or meat, for a tame wolf) in your hand gets its full attention
+    const held = p && !p.dead ? p.inventory.held() : null;
+    this.begging = !!(held && (held.id === ITEM_IDS.bone || (this.tamed && this.isMeat(held))) && this.distSqTo(p) < 64 && !this.target && this.love <= 0);
+    if (this.sitting) {
+      this.clearPath(); this.following = false;
+      if (this.target) this.setTarget(null);
+      if (this.begging) this.lookAtEntity(p, 2); else { this.idleLook(game); this.keepWatching(); }
+      return;
+    }
+    if (!this.target) this.findTarget(game);
+    const t = this.target;
+    if (t) {
+      const d2 = this.chase(1.0);
+      if (this.onGround && d2 >= 4 && d2 <= 16 && Math.random() < 0.2 && this.canSee(t)) {
+        const dx = t.x - this.x, dz = t.z - this.z, d = Math.sqrt(dx * dx + dz * dz) || 1;
+        this.vx += dx / d * 0.4 + this.vx * 0.2; this.vz += dz / d * 0.4 + this.vz * 0.2; this.vy = 0.4;
+      }
+      this.tryMelee(t, d2, 4);
+      return;
+    }
+    if (this.tamed && p && !p.dead) {
+      const d2 = this.distSqTo(p);
+      if (d2 >= 144 && !p.riding && this.teleportTo(p)) return;
+      if (d2 > 100 || (this.following && d2 > 4)) {
+        this.following = true;
+        this.lookAtEntity(p, 2);
+        if (--this.repath <= 0 || this.pathDone) { this.repath = 10; if (!this.navigateTo(p.x, p.y, p.z, 1.0, 24)) this.steerTo(p.x, p.y, p.z, 1.0); }
+        return;
+      }
+      if (this.following) { this.following = false; this.clearPath(); }
+    }
+    if (this.begging) { this.lookAtEntity(p, 2); this.clearPath(); return; }
+    super.aiTick(game);
+  }
+  mobTick(game) {
+    // wet fur (from water or rain) gets shaken off on dry land
+    const bx = Math.floor(this.x), by = Math.floor(this.y), bz = Math.floor(this.z);
+    if (this.inWater || this.world.isRainingAt(bx, by + 1, bz)) { this.wet = true; this.shaking = false; this.shakeT = this.pshakeT = 0; }
+    else if (this.wet && !this.shaking && this.onGround && this.pathDone) { this.shaking = true; this.shakeT = this.pshakeT = 0; }
+    if (this.shaking) {
+      if (this.shakeT === 0) game.audio.play('wolf_shake', 0.4, this.soundPitch(), this.x, this.y + this.eye, this.z);
+      this.pshakeT = this.shakeT; this.shakeT += 0.05;
+      if (this.pshakeT >= 2) { this.wet = false; this.shaking = false; this.shakeT = this.pshakeT = 0; }
+      else if (this.shakeT > 0.4) { const n = Math.floor(Math.sin((this.shakeT - 0.4) * Math.PI) * 7); if (n > 0) game.particles.shakeDrops(this.x, this.y + 0.8, this.z, this.w, n); }
+    }
+    this.pinterest = this.interest;
+    this.interest += ((this.begging ? 1 : 0) - this.interest) * 0.4;
+    // a lone howl on dark nights
+    if (!this.tamed && this.world.skyDarken() >= 8 && Math.random() < 1 / 4000) game.audio.play('wolf_howl', 3, 0.9 + Math.random() * 0.2, this.x, this.y + this.eye, this.z);
+  }
+  saySound() {
+    if (this.angry) return 'wolf_growl';
+    if (Math.random() < 1 / 3) return this.tamed && this.health < 10 ? 'wolf_whine' : 'wolf_pant';
+    return 'wolf_bark';
+  }
+  hurtSound() { return 'wolf_hurt'; }
+  deathSound() { return 'wolf_death'; }
+  soundVolume() { return 0.4; }
+  dropLoot() {}
+  shakeAngle(partial, off) {
+    if (!this.shaking) return 0;
+    const f = clamp((this.pshakeT + (this.shakeT - this.pshakeT) * partial + off) / 1.8, 0, 1);
+    return Math.sin(f * Math.PI) * Math.sin(f * Math.PI * 11) * 0.15 * Math.PI;
+  }
+  tailAngle() { return this.angry ? 1.54 : this.tamed ? (0.55 - (20 - this.health) * 0.02) * Math.PI : Math.PI / 5; }
+  render(er, rx, ry, rz, partial) {
+    const [sky, blk] = er.lightAt(this.x, this.y + 0.5, this.z);
+    const pose = this.quadPose(partial);
+    const head = this.baby ? pose.head.rot : pose.head;
+    head[2] = (this.pinterest + (this.interest - this.pinterest) * partial) * 0.15 * Math.PI + this.shakeAngle(partial, 0);
+    const swing = this.limbSwing - this.limbAmount * (1 - partial);
+    const amt = clamp(this.prevLimbAmount + (this.limbAmount - this.prevLimbAmount) * partial, 0, 1);
+    const wag = this.angry ? 0 : Math.cos(swing * 0.6662) * 1.4 * amt;
+    const tail = [-this.tailAngle(), wag, this.shakeAngle(partial, -0.2)];
+    pose.mane = [0, 0, this.shakeAngle(partial, -0.08)];
+    pose.body = [0, 0, this.shakeAngle(partial, -0.16)];
+    pose.tail = tail;
+    if (this.sitting) {
+      pose.mane = { rot: [0.31, 0, pose.mane[2]], off: [0, -2, 0.15] };
+      pose.body = { rot: [Math.PI / 4, 0, pose.body[2]], off: [0, -5.8, -2.7] };
+      pose.tail = { rot: [-Math.max(this.tailAngle(), 1.2), 0, tail[2]], off: [0, -9, -2] };
+      pose.leg0 = { rot: [Math.PI / 2, 0, 0], off: [0, -6, -5] };
+      pose.leg1 = { rot: [Math.PI / 2, 0, 0], off: [0, -6, -5] };
+      pose.leg2 = { rot: [0.47, 0, 0], off: [0, -1, 0] };
+      pose.leg3 = { rot: [0.47, 0, 0], off: [0, -1, 0] };
+    }
+    let col = er.entColor(this);
+    if (this.wet) { const f = 0.75 + (this.pshakeT + (this.shakeT - this.pshakeT) * partial) / 2 * 0.25; col = [col[0] * f, col[1] * f, col[2] * f, col[3]]; }
+    const base = er.baseMatrix(this, rx, ry, rz, partial, this.baby ? 0.5 : 1);
+    er.drawModel(MODELS.wolf, this.tamed ? 'wolf_tame' : this.angry ? 'wolf_angry' : 'wolf', base, pose, col, sky, blk);
+    if (this.tamed) {
+      const c = hexToRgb(COLOR_RGB[this.collar] || '#b02e26');
+      er.drawModel(MODELS.wolf, 'wolf_collar', base, pose, [c[0] * col[0] / 255, c[1] * col[1] / 255, c[2] * col[2] / 255, 255], sky, blk, { only: ['collar'], inflate: 0.3 });
+    }
+  }
+  save() { const d = super.save(); d.tamed = this.tamed; d.sitting = this.sitting; d.collar = this.collar; return d; }
+  load(d) { super.load(d); this.setTamed(!!d.tamed); if (d.health !== undefined) this.health = Math.min(d.health, this.maxHealth); this.sitting = !!d.sitting; if (d.collar !== undefined) this.collar = d.collar; }
+}
+// tamed wolves defend their owner and join in when the owner attacks
+function rallyWolves(game, foe) {
+  const p = game.player, w = game.world;
+  if (!p || !w || !foe || foe === p || foe.dead || !foe.hurt || foe.type === 'player' || foe.type === 'boomcap' || (foe.type === 'wolf' && foe.tamed)) return;
+  for (const e of w.entities) if (e.type === 'wolf' && e.tamed && !e.sitting && !e.dead && e !== foe && e.distSqTo(p) < 24 * 24) e.setTarget(foe);
+}
+
+// ---------------------------------------------------------------------------
+// Water creatures
+// ---------------------------------------------------------------------------
+class Squid extends Mob {
+  constructor(world) {
+    super(world, 'squid');
+    this.category = 'water';
+    this.maxHealth = this.health = 10;
+    this.w = 0.95; this.h = 0.95; this.eye = 0.47;
+    this.swims = false;
+    this.xpValue = () => 1 + this.rnd(3);
+    this.spin = 0; this.spinSpeed = 1 / (Math.random() + 1) * 0.2;
+    this.tentacle = 0; this.ptentacle = 0;
+    this.sPitch = 0; this.psPitch = 0; this.sRoll = 0; this.psRoll = 0;
+    this.swimSpeed = 0; this.rollSpeed = 0;
+    this.mvx = 0; this.mvy = 0; this.mvz = 0;
+    this.air = 300; this.inkCooldown = 0; this.flee = 0;
+  }
+  aiTick() {
+    if (this.flee > 0) { this.flee--; return; }
+    if (this.idleTime > 100) { this.mvx = this.mvy = this.mvz = 0; return; }
+    if (Math.random() < 1 / 50 || !this.inWater || (!this.mvx && !this.mvy && !this.mvz)) {
+      const a = Math.random() * TAU;
+      this.mvx = Math.cos(a) * 0.2; this.mvy = -0.1 + Math.random() * 0.2; this.mvz = Math.sin(a) * 0.2;
+    }
+  }
+  // the classic squid: a pulse of the tentacles drives each burst of speed
+  travel() {
+    this.ptentacle = this.tentacle; this.psPitch = this.sPitch; this.psRoll = this.sRoll;
+    this.spin += this.spinSpeed;
+    if (this.spin > TAU) { this.spin -= TAU; if (Math.random() < 0.1) this.spinSpeed = 1 / (Math.random() + 1) * 0.2; }
+    if (this.inWater) {
+      if (this.spin < Math.PI) {
+        const f = this.spin / Math.PI;
+        this.tentacle = Math.sin(f * f * Math.PI) * Math.PI * 0.25;
+        if (f > 0.75) { this.swimSpeed = 1; this.rollSpeed = 1; } else this.rollSpeed *= 0.8;
+      } else { this.tentacle = 0; this.swimSpeed *= 0.9; this.rollSpeed *= 0.99; }
+      const k = this.flee > 0 ? 2.2 : 1;
+      this.vx = this.mvx * this.swimSpeed * k; this.vy = this.mvy * this.swimSpeed * k; this.vz = this.mvz * this.swimSpeed * k;
+      this.move(this.vx, this.vy, this.vz);
+      const hs = Math.sqrt(this.vx * this.vx + this.vz * this.vz);
+      if (hs > 0.001) this.yaw += wrapRadians(Math.atan2(-this.vx, -this.vz) - this.yaw) * 0.1;
+      this.bodyYaw = this.yaw;
+      this.sRoll += 0.0822 * this.rollSpeed;
+      if (hs > 0.0001 || Math.abs(this.vy) > 0.0001) this.sPitch += (-Math.atan2(hs, this.vy) - this.sPitch) * 0.1;
+      this.fallDistance = 0;
+    } else {
+      this.tentacle = Math.abs(Math.sin(this.spin)) * Math.PI * 0.25;
+      this.vx = 0; this.vz = 0;
+      this.vy -= 0.08; this.vy *= 0.98;
+      this.move(this.vx, this.vy, this.vz);
+      this.sPitch += (-Math.PI / 2 - this.sPitch) * 0.02;
+    }
+  }
+  mobTick() {
+    if (this.inkCooldown > 0) this.inkCooldown--;
+    // out of the water a squid slowly suffocates
+    if (!this.inWater) { if (--this.air === -20) { this.air = 0; this.hurt(2, { type: 'drown' }); } }
+    else this.air = 300;
+  }
+  onHurt(amount, src) {
+    super.onHurt(amount, src);
+    if (!this.inWater || this.dead || this.health <= 0) return;
+    if (this.inkCooldown <= 0) {
+      this.game.particles.ink(this.x, this.y + 0.5, this.z, 24);
+      this.game.audio.play('swim', 0.5, 0.7, this.x, this.y, this.z);
+      this.inkCooldown = 40;
+    }
+    // dart away from whatever hurt it
+    const a = src && src.entity;
+    if (a) {
+      const dx = this.x - a.x, dy = this.y - a.y, dz = this.z - a.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+      this.mvx = dx / d * 0.25; this.mvy = Math.max(-0.1, dy / d * 0.25); this.mvz = dz / d * 0.25;
+      this.flee = 30; this.swimSpeed = 1; this.spin = Math.PI * 0.8;
+    }
+  }
+  knockback(dx, dz, strength) { if (!this.inWater) super.knockback(dx, dz, strength); }
+  dropLoot() { this.drop(ITEM_IDS.dye, 1 + this.rnd(3), 15); }
+  render(er, rx, ry, rz, partial) {
+    const [sky, blk] = er.lightAt(this.x, this.y + 0.5, this.z);
+    const yaw = this.pbodyYaw + wrapRadians(this.bodyYaw - this.pbodyYaw) * partial;
+    const pitch = this.psPitch + (this.sPitch - this.psPitch) * partial;
+    const roll = this.psRoll + (this.sRoll - this.psRoll) * partial;
+    let m = M3.trans(rx, ry + 0.5, rz);
+    m = M3.mul(m, M3.ry(yaw));
+    m = M3.mul(m, M3.rx(pitch));
+    m = M3.mul(m, M3.ry(roll));
+    if (this.dead && this.deathTime > 0) m = M3.mul(m, M3.rz(Math.min(1, Math.sqrt((this.deathTime + partial - 1) / 20 * 1.6)) * Math.PI / 2));
+    m = M3.mul(m, M3.scale(1 / 16, 1 / 16, 1 / 16));
+    const ta = this.ptentacle + (this.tentacle - this.ptentacle) * partial;
+    const pose = {};
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; pose['t' + i] = [ta, Math.atan2(-Math.cos(a), -Math.sin(a)), 0]; }
+    const fin = Math.sin((this.age + partial) * 0.25) * 0.25;
+    pose.finR = [0, 0, -fin]; pose.finL = [0, 0, fin];
+    er.drawModel(MODELS.squid, 'squid', m, pose, er.entColor(this), sky, blk);
+  }
+  save() { const d = super.save(); d.air = this.air; return d; }
+  load(d) { super.load(d); if (d.air !== undefined) this.air = d.air; }
+}
+
+// ---------------------------------------------------------------------------
 // Ambient creatures
 // ---------------------------------------------------------------------------
 class Bat extends Mob {
@@ -19142,7 +19641,7 @@ class Stranger extends Mob {
 // ---------------------------------------------------------------------------
 // Registry, creation & persistence
 // ---------------------------------------------------------------------------
-const MOB_CLASSES = { zombie: Zombie, skeleton: Skeleton, spider: Spider, boomcap: Boomcap, slime: Slime, mummy: Mummy, wraith: Wraith, pig: Pig, cow: Cow, sheep: Sheep, chicken: Chicken, deer: Deer, bat: Bat, wisp: Wisp, stranger: Stranger };
+const MOB_CLASSES = { zombie: Zombie, skeleton: Skeleton, spider: Spider, boomcap: Boomcap, slime: Slime, mummy: Mummy, wraith: Wraith, pig: Pig, cow: Cow, sheep: Sheep, chicken: Chicken, deer: Deer, bat: Bat, wisp: Wisp, stranger: Stranger, wolf: Wolf, squid: Squid };
 function createMob(type, world, extra) {
   const C = MOB_CLASSES[type];
   if (!C) return null;
@@ -19169,7 +19668,7 @@ function entityFromData(world, d) {
 class MobSpawner {
   constructor(game) { this.game = game; this.counts = { monster: 0, creature: 0, ambient: 0, wisp: 0, special: 0 }; this.t = 0; }
   count() {
-    const c = this.counts; c.monster = 0; c.creature = 0; c.ambient = 0; c.wisp = 0; c.special = 0; c.bat = 0; c.wraith = 0;
+    const c = this.counts; c.monster = 0; c.creature = 0; c.ambient = 0; c.wisp = 0; c.special = 0; c.bat = 0; c.wraith = 0; c.water = 0;
     for (const e of this.game.world.entities) {
       if (e.removed || !e.category) continue;
       c[e.category] = (c[e.category] || 0) + 1;
@@ -19191,6 +19690,7 @@ class MobSpawner {
       for (let i = 0; i < 2; i++) if (this.spawnMonsterPack(rd)) { this.counts.monster += 1; }
     }
     if (this.t % 20 === 7 && this.counts.bat < 5) this.spawnBat();
+    if (this.t % 40 === 19 && this.counts.water < Math.max(4, Math.round(6 * area / 169))) this.spawnSquid(rd);
     if (this.t % 400 === 13 && this.counts.creature < Math.round(14 * area / 169) + 4) this.spawnAnimals(rd);
     if (this.t % 100 === 31 && this.counts.wisp < 3) this.spawnWisp();
     if (this.t % 200 === 53 && this.counts.wraith < 2 && w.difficulty > 0) this.spawnWraith();
@@ -19277,6 +19777,23 @@ class MobSpawner {
       if (g2 !== B.GRASS && g2 !== B.PODZOL && g2 !== B.MYCELIUM && g2 !== B.SNOW) continue;
       if (!this.canStand(x, y, z, 2) || w.getLightLevel(x, y, z) < 9) continue;
       g.spawnMob(type, x + 0.5, y, z + 0.5);
+    }
+  }
+  // squid shoals: anywhere the water is at least two deep, between y 46 and the sea surface
+  spawnSquid(rd) {
+    const g = this.game, w = g.world, p = g.player;
+    const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
+    const cx = pcx + this.rnd(rd * 2 + 1) - rd, cz = pcz + this.rnd(rd * 2 + 1) - rd;
+    if (!w.getChunk(cx, cz)) return;
+    const x0 = cx * 16 + this.rnd(16), z0 = cz * 16 + this.rnd(16), y0 = 46 + this.rnd(SEA_LEVEL - 46);
+    if (w.getBlock(x0, y0, z0) !== B.WATER) return;
+    for (let i = 0; i < 4; i++) {
+      const x = x0 + this.rnd(5) - 2, z = z0 + this.rnd(5) - 2, y = y0 + this.rnd(3) - 1;
+      if ((x + 0.5 - p.x) ** 2 + (y - p.y) ** 2 + (z + 0.5 - p.z) ** 2 < 24 * 24 || !w.isLoaded(x, z)) continue;
+      if (y < 46 || y >= SEA_LEVEL || w.getBlock(x, y, z) !== B.WATER || w.getBlock(x, y - 1, z) !== B.WATER) continue;
+      const up = w.getBlock(x, y + 1, z);
+      if (up !== B.WATER && up !== 0) continue;
+      g.spawnMob('squid', x + 0.5, y, z + 0.5);
     }
   }
   spawnBat() {

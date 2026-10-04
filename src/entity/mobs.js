@@ -21,6 +21,8 @@ const MOB_TYPES = [
   { key: 'bat', name: 'Bat', egg: ['#4c3e30', '#141414'], cat: 'ambient', lore: 'Squeaks and flutters in the dark of caves. Harmless.' },
   { key: 'wisp', name: 'Wisp', egg: ['#8affee', '#2a6a64'], cat: 'ambient', lore: 'A drifting light over swamp and shore after dark. Follow it and it may lead you to buried treasure.' },
   { key: 'stranger', name: 'The Stranger', egg: null, cat: 'special', lore: 'Watching. Always at the edge of sight. Gone when you look closer.' },
+  { key: 'wolf', name: 'Wolf', egg: ['#d2ccc3', '#8a7c6c'], cat: 'creature', lore: 'Hunts in packs through forest and taiga - strike one and the whole pack answers. Offer bones and it may become a loyal companion.' },
+  { key: 'squid', name: 'Squid', egg: ['#2c3c5c', '#7a8aa8'], cat: 'water', lore: 'Pulses through rivers and seas. Startle it and it vanishes in a cloud of ink. Its ink sacs make black dye.' },
 ];
 const MOB_INDEX = {};
 MOB_TYPES.forEach((m, i) => { if (m) { m.index = i; MOB_INDEX[m.key] = m; } });
@@ -485,7 +487,7 @@ class Monster extends Mob {
     if (this.pathDone && Math.random() < 1 / 120) this.wander(10, 4, 1.0, (x, y, z) => this.pathWeight(x, y, z));
     this.idleLook(game); this.keepWatching();
   }
-  onRevenge(e) { if (e.type === 'player' && e.survivalLike) { this.target = e; this.unseen = 0; } }
+  onRevenge(e) { if ((e.type === 'player' && e.survivalLike) || e.type === 'wolf') { this.target = e; this.unseen = 0; } }
   maybeEquip() {
     const d = this.world.difficulty;
     if (Math.random() < [0, 0.01, 0.025, 0.05][d]) {
@@ -937,7 +939,7 @@ class Animal extends Mob {
   aiTick(game) {
     const p = game.player;
     if (this.loveCooldown > 0) this.loveCooldown--;
-    if (this.fire > 0 && this.panic <= 0) this.panic = 40;
+    if (this.fire > 0 && this.panic <= 0 && !this.brave) this.panic = 40;
     // panic
     if (this.panic > 0) {
       this.panic--;
@@ -1215,6 +1217,315 @@ class Deer extends Animal {
 }
 
 // ---------------------------------------------------------------------------
+// Wolves: packs in the woods; tame one with bones and it stays by your side
+// ---------------------------------------------------------------------------
+const WOLF_MEAT = ['porkchop', 'cooked_porkchop', 'beef', 'steak', 'chicken', 'cooked_chicken', 'mutton', 'cooked_mutton', 'rotten_flesh', 'venison', 'cooked_venison', 'jerky'];
+class Wolf extends Animal {
+  constructor(world) {
+    super(world, 'wolf');
+    this.maxHealth = this.health = 8;
+    this.baseSpeed = 0.3; this.temptSpeed = 1.0; this.brave = true;
+    this.w = 0.6; this.h = 0.85; this.eye = 0.68;
+    this.tamed = false; this.sitting = false; this.angry = false; this.collar = 14;
+    this.following = false; this.begging = false;
+    this.interest = 0; this.pinterest = 0;
+    this.wet = false; this.shaking = false; this.shakeT = 0; this.pshakeT = 0;
+    this.talkInterval = 80;
+    this.applySize();
+  }
+  setTamed(t) { this.tamed = t; this.maxHealth = t ? 20 : 8; if (this.health > this.maxHealth) this.health = this.maxHealth; }
+  setTarget(e) { this.target = e; this.unseen = 0; this.angry = !!e && !this.tamed; if (!e) this.clearPath(); }
+  isMeat(s) { return WOLF_MEAT.some((k) => ITEM_IDS[k] === s.id); }
+  isBreedItem(s) { return this.tamed && this.isMeat(s); }
+  isTemptItem() { return false; }
+  // tamed wolves are never a threat to their owner; mobs only bite half as hard
+  hurt(amount, src) {
+    if (src && src.entity && src.entity.type !== 'player' && src.type !== 'arrow') amount = (amount + 1) / 2;
+    const ok = super.hurt(amount, src);
+    if (ok) this.sitting = false;
+    return ok;
+  }
+  onRevenge(e) {
+    if (!e || e === this || e.dead) return;
+    if (e.type === 'player' && (this.tamed || !e.survivalLike)) return;
+    if (e.type === 'wolf' && e.tamed && this.tamed) return;
+    this.setTarget(e);
+    // the pack answers
+    for (const o of this.world.entitiesInBox(this.x - 16, this.y - 10, this.z - 16, this.x + 16, this.y + 10, this.z + 16)) {
+      if (o !== this && o.type === 'wolf' && !o.dead && !o.target && o.tamed === this.tamed && !o.sitting) o.setTarget(e);
+    }
+  }
+  interact(player, held) {
+    const g = this.game;
+    if (this.tamed) {
+      if (held && this.isMeat(held) && this.health < this.maxHealth) {
+        this.heal(foodOf(held.id).hunger);
+        if (!player.creative) player.inventory.decrementHeld(1);
+        g.audio.play('eat', 0.5, 1.2, this.x, this.y + this.eye, this.z);
+        return true;
+      }
+      if (held && held.id === ITEM_IDS.dye) {
+        if ((held.dmg & 15) !== this.collar) { this.collar = held.dmg & 15; if (!player.creative) player.inventory.decrementHeld(1); return true; }
+        return false;
+      }
+      if (held && this.isBreedItem(held)) return super.interact(player, held);
+      this.sitting = !this.sitting;
+      this.jumping = false; this.following = false;
+      this.setTarget(null);
+      return true;
+    }
+    if (held && held.id === ITEM_IDS.bone && !this.angry) {
+      if (!player.creative) player.inventory.decrementHeld(1);
+      if (Math.random() < 1 / 3) {
+        this.setTamed(true);
+        this.health = this.maxHealth;
+        this.sitting = true;
+        this.setTarget(null);
+        g.particles.hearts(this.x, this.y + this.h, this.z, 7);
+        g.achieve('tame');
+      } else g.particles.smoke(this.x, this.y + this.h, this.z, 7);
+      return true;
+    }
+    return false;
+  }
+  inheritFrom(a, b) { this.setTamed(true); this.health = this.maxHealth; this.collar = Math.random() < 0.5 ? a.collar : b.collar; }
+  // keep up with the owner: hop to a free spot next to them when too far behind
+  teleportTo(p) {
+    const w = this.world, bx = Math.floor(p.x) - 2, bz = Math.floor(p.z) - 2, by = Math.floor(p.y);
+    for (let l = 0; l <= 4; l++) for (let m = 0; m <= 4; m++) {
+      if (l >= 1 && m >= 1 && l <= 3 && m <= 3) continue;
+      const x = bx + l, z = bz + m;
+      const below = w.getBlock(x, by - 1, z);
+      if (!BT.solid[below] || !BT.opaque[below] || BT.solid[w.getBlock(x, by, z)] || BT.solid[w.getBlock(x, by + 1, z)] || BT.fluid[w.getBlock(x, by, z)]) continue;
+      this.setPos(x + 0.5, by, z + 0.5);
+      this.clearPath(); this.vx = this.vy = this.vz = 0; this.fallDistance = 0;
+      return true;
+    }
+    return false;
+  }
+  findTarget() {
+    const w = this.world;
+    const near = (type, r, pred) => {
+      let best = null, bd = r * r;
+      for (const e of w.entitiesInBox(this.x - r, this.y - 4, this.z - r, this.x + r, this.y + 4, this.z + r)) {
+        if (e.type !== type || e.dead || (pred && !pred(e))) continue;
+        const d = this.distSqTo(e); if (d < bd && this.canSee(e)) { bd = d; best = e; }
+      }
+      return best;
+    };
+    if (!this.tamed && Math.random() < 1 / 40) { const s = near('sheep', 12); if (s) { this.setTarget(s); return; } }
+    if (Math.random() < 1 / 20) { const s = near('skeleton', 16); if (s) this.setTarget(s); }
+  }
+  aiTick(game) {
+    const p = game.player;
+    const t0 = this.target;
+    if (t0 && (t0.dead || t0.removed || this.distSqTo(t0) > 16 * 16 || (t0.type === 'player' && (this.tamed || !t0.survivalLike)))) this.setTarget(null);
+    // begging: a bone (or meat, for a tame wolf) in your hand gets its full attention
+    const held = p && !p.dead ? p.inventory.held() : null;
+    this.begging = !!(held && (held.id === ITEM_IDS.bone || (this.tamed && this.isMeat(held))) && this.distSqTo(p) < 64 && !this.target && this.love <= 0);
+    if (this.sitting) {
+      this.clearPath(); this.following = false;
+      if (this.target) this.setTarget(null);
+      if (this.begging) this.lookAtEntity(p, 2); else { this.idleLook(game); this.keepWatching(); }
+      return;
+    }
+    if (!this.target) this.findTarget(game);
+    const t = this.target;
+    if (t) {
+      const d2 = this.chase(1.0);
+      if (this.onGround && d2 >= 4 && d2 <= 16 && Math.random() < 0.2 && this.canSee(t)) {
+        const dx = t.x - this.x, dz = t.z - this.z, d = Math.sqrt(dx * dx + dz * dz) || 1;
+        this.vx += dx / d * 0.4 + this.vx * 0.2; this.vz += dz / d * 0.4 + this.vz * 0.2; this.vy = 0.4;
+      }
+      this.tryMelee(t, d2, 4);
+      return;
+    }
+    if (this.tamed && p && !p.dead) {
+      const d2 = this.distSqTo(p);
+      if (d2 >= 144 && !p.riding && this.teleportTo(p)) return;
+      if (d2 > 100 || (this.following && d2 > 4)) {
+        this.following = true;
+        this.lookAtEntity(p, 2);
+        if (--this.repath <= 0 || this.pathDone) { this.repath = 10; if (!this.navigateTo(p.x, p.y, p.z, 1.0, 24)) this.steerTo(p.x, p.y, p.z, 1.0); }
+        return;
+      }
+      if (this.following) { this.following = false; this.clearPath(); }
+    }
+    if (this.begging) { this.lookAtEntity(p, 2); this.clearPath(); return; }
+    super.aiTick(game);
+  }
+  mobTick(game) {
+    // wet fur (from water or rain) gets shaken off on dry land
+    const bx = Math.floor(this.x), by = Math.floor(this.y), bz = Math.floor(this.z);
+    if (this.inWater || this.world.isRainingAt(bx, by + 1, bz)) { this.wet = true; this.shaking = false; this.shakeT = this.pshakeT = 0; }
+    else if (this.wet && !this.shaking && this.onGround && this.pathDone) { this.shaking = true; this.shakeT = this.pshakeT = 0; }
+    if (this.shaking) {
+      if (this.shakeT === 0) game.audio.play('wolf_shake', 0.4, this.soundPitch(), this.x, this.y + this.eye, this.z);
+      this.pshakeT = this.shakeT; this.shakeT += 0.05;
+      if (this.pshakeT >= 2) { this.wet = false; this.shaking = false; this.shakeT = this.pshakeT = 0; }
+      else if (this.shakeT > 0.4) { const n = Math.floor(Math.sin((this.shakeT - 0.4) * Math.PI) * 7); if (n > 0) game.particles.shakeDrops(this.x, this.y + 0.8, this.z, this.w, n); }
+    }
+    this.pinterest = this.interest;
+    this.interest += ((this.begging ? 1 : 0) - this.interest) * 0.4;
+    // a lone howl on dark nights
+    if (!this.tamed && this.world.skyDarken() >= 8 && Math.random() < 1 / 4000) game.audio.play('wolf_howl', 3, 0.9 + Math.random() * 0.2, this.x, this.y + this.eye, this.z);
+  }
+  saySound() {
+    if (this.angry) return 'wolf_growl';
+    if (Math.random() < 1 / 3) return this.tamed && this.health < 10 ? 'wolf_whine' : 'wolf_pant';
+    return 'wolf_bark';
+  }
+  hurtSound() { return 'wolf_hurt'; }
+  deathSound() { return 'wolf_death'; }
+  soundVolume() { return 0.4; }
+  dropLoot() {}
+  shakeAngle(partial, off) {
+    if (!this.shaking) return 0;
+    const f = clamp((this.pshakeT + (this.shakeT - this.pshakeT) * partial + off) / 1.8, 0, 1);
+    return Math.sin(f * Math.PI) * Math.sin(f * Math.PI * 11) * 0.15 * Math.PI;
+  }
+  tailAngle() { return this.angry ? 1.54 : this.tamed ? (0.55 - (20 - this.health) * 0.02) * Math.PI : Math.PI / 5; }
+  render(er, rx, ry, rz, partial) {
+    const [sky, blk] = er.lightAt(this.x, this.y + 0.5, this.z);
+    const pose = this.quadPose(partial);
+    const head = this.baby ? pose.head.rot : pose.head;
+    head[2] = (this.pinterest + (this.interest - this.pinterest) * partial) * 0.15 * Math.PI + this.shakeAngle(partial, 0);
+    const swing = this.limbSwing - this.limbAmount * (1 - partial);
+    const amt = clamp(this.prevLimbAmount + (this.limbAmount - this.prevLimbAmount) * partial, 0, 1);
+    const wag = this.angry ? 0 : Math.cos(swing * 0.6662) * 1.4 * amt;
+    const tail = [-this.tailAngle(), wag, this.shakeAngle(partial, -0.2)];
+    pose.mane = [0, 0, this.shakeAngle(partial, -0.08)];
+    pose.body = [0, 0, this.shakeAngle(partial, -0.16)];
+    pose.tail = tail;
+    if (this.sitting) {
+      pose.mane = { rot: [0.31, 0, pose.mane[2]], off: [0, -2, 0.15] };
+      pose.body = { rot: [Math.PI / 4, 0, pose.body[2]], off: [0, -5.8, -2.7] };
+      pose.tail = { rot: [-Math.max(this.tailAngle(), 1.2), 0, tail[2]], off: [0, -9, -2] };
+      pose.leg0 = { rot: [Math.PI / 2, 0, 0], off: [0, -6, -5] };
+      pose.leg1 = { rot: [Math.PI / 2, 0, 0], off: [0, -6, -5] };
+      pose.leg2 = { rot: [0.47, 0, 0], off: [0, -1, 0] };
+      pose.leg3 = { rot: [0.47, 0, 0], off: [0, -1, 0] };
+    }
+    let col = er.entColor(this);
+    if (this.wet) { const f = 0.75 + (this.pshakeT + (this.shakeT - this.pshakeT) * partial) / 2 * 0.25; col = [col[0] * f, col[1] * f, col[2] * f, col[3]]; }
+    const base = er.baseMatrix(this, rx, ry, rz, partial, this.baby ? 0.5 : 1);
+    er.drawModel(MODELS.wolf, this.tamed ? 'wolf_tame' : this.angry ? 'wolf_angry' : 'wolf', base, pose, col, sky, blk);
+    if (this.tamed) {
+      const c = hexToRgb(COLOR_RGB[this.collar] || '#b02e26');
+      er.drawModel(MODELS.wolf, 'wolf_collar', base, pose, [c[0] * col[0] / 255, c[1] * col[1] / 255, c[2] * col[2] / 255, 255], sky, blk, { only: ['collar'], inflate: 0.3 });
+    }
+  }
+  save() { const d = super.save(); d.tamed = this.tamed; d.sitting = this.sitting; d.collar = this.collar; return d; }
+  load(d) { super.load(d); this.setTamed(!!d.tamed); if (d.health !== undefined) this.health = Math.min(d.health, this.maxHealth); this.sitting = !!d.sitting; if (d.collar !== undefined) this.collar = d.collar; }
+}
+// tamed wolves defend their owner and join in when the owner attacks
+function rallyWolves(game, foe) {
+  const p = game.player, w = game.world;
+  if (!p || !w || !foe || foe === p || foe.dead || !foe.hurt || foe.type === 'player' || foe.type === 'boomcap' || (foe.type === 'wolf' && foe.tamed)) return;
+  for (const e of w.entities) if (e.type === 'wolf' && e.tamed && !e.sitting && !e.dead && e !== foe && e.distSqTo(p) < 24 * 24) e.setTarget(foe);
+}
+
+// ---------------------------------------------------------------------------
+// Water creatures
+// ---------------------------------------------------------------------------
+class Squid extends Mob {
+  constructor(world) {
+    super(world, 'squid');
+    this.category = 'water';
+    this.maxHealth = this.health = 10;
+    this.w = 0.95; this.h = 0.95; this.eye = 0.47;
+    this.swims = false;
+    this.xpValue = () => 1 + this.rnd(3);
+    this.spin = 0; this.spinSpeed = 1 / (Math.random() + 1) * 0.2;
+    this.tentacle = 0; this.ptentacle = 0;
+    this.sPitch = 0; this.psPitch = 0; this.sRoll = 0; this.psRoll = 0;
+    this.swimSpeed = 0; this.rollSpeed = 0;
+    this.mvx = 0; this.mvy = 0; this.mvz = 0;
+    this.air = 300; this.inkCooldown = 0; this.flee = 0;
+  }
+  aiTick() {
+    if (this.flee > 0) { this.flee--; return; }
+    if (this.idleTime > 100) { this.mvx = this.mvy = this.mvz = 0; return; }
+    if (Math.random() < 1 / 50 || !this.inWater || (!this.mvx && !this.mvy && !this.mvz)) {
+      const a = Math.random() * TAU;
+      this.mvx = Math.cos(a) * 0.2; this.mvy = -0.1 + Math.random() * 0.2; this.mvz = Math.sin(a) * 0.2;
+    }
+  }
+  // the classic squid: a pulse of the tentacles drives each burst of speed
+  travel() {
+    this.ptentacle = this.tentacle; this.psPitch = this.sPitch; this.psRoll = this.sRoll;
+    this.spin += this.spinSpeed;
+    if (this.spin > TAU) { this.spin -= TAU; if (Math.random() < 0.1) this.spinSpeed = 1 / (Math.random() + 1) * 0.2; }
+    if (this.inWater) {
+      if (this.spin < Math.PI) {
+        const f = this.spin / Math.PI;
+        this.tentacle = Math.sin(f * f * Math.PI) * Math.PI * 0.25;
+        if (f > 0.75) { this.swimSpeed = 1; this.rollSpeed = 1; } else this.rollSpeed *= 0.8;
+      } else { this.tentacle = 0; this.swimSpeed *= 0.9; this.rollSpeed *= 0.99; }
+      const k = this.flee > 0 ? 2.2 : 1;
+      this.vx = this.mvx * this.swimSpeed * k; this.vy = this.mvy * this.swimSpeed * k; this.vz = this.mvz * this.swimSpeed * k;
+      this.move(this.vx, this.vy, this.vz);
+      const hs = Math.sqrt(this.vx * this.vx + this.vz * this.vz);
+      if (hs > 0.001) this.yaw += wrapRadians(Math.atan2(-this.vx, -this.vz) - this.yaw) * 0.1;
+      this.bodyYaw = this.yaw;
+      this.sRoll += 0.0822 * this.rollSpeed;
+      if (hs > 0.0001 || Math.abs(this.vy) > 0.0001) this.sPitch += (-Math.atan2(hs, this.vy) - this.sPitch) * 0.1;
+      this.fallDistance = 0;
+    } else {
+      this.tentacle = Math.abs(Math.sin(this.spin)) * Math.PI * 0.25;
+      this.vx = 0; this.vz = 0;
+      this.vy -= 0.08; this.vy *= 0.98;
+      this.move(this.vx, this.vy, this.vz);
+      this.sPitch += (-Math.PI / 2 - this.sPitch) * 0.02;
+    }
+  }
+  mobTick() {
+    if (this.inkCooldown > 0) this.inkCooldown--;
+    // out of the water a squid slowly suffocates
+    if (!this.inWater) { if (--this.air === -20) { this.air = 0; this.hurt(2, { type: 'drown' }); } }
+    else this.air = 300;
+  }
+  onHurt(amount, src) {
+    super.onHurt(amount, src);
+    if (!this.inWater || this.dead || this.health <= 0) return;
+    if (this.inkCooldown <= 0) {
+      this.game.particles.ink(this.x, this.y + 0.5, this.z, 24);
+      this.game.audio.play('swim', 0.5, 0.7, this.x, this.y, this.z);
+      this.inkCooldown = 40;
+    }
+    // dart away from whatever hurt it
+    const a = src && src.entity;
+    if (a) {
+      const dx = this.x - a.x, dy = this.y - a.y, dz = this.z - a.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+      this.mvx = dx / d * 0.25; this.mvy = Math.max(-0.1, dy / d * 0.25); this.mvz = dz / d * 0.25;
+      this.flee = 30; this.swimSpeed = 1; this.spin = Math.PI * 0.8;
+    }
+  }
+  knockback(dx, dz, strength) { if (!this.inWater) super.knockback(dx, dz, strength); }
+  dropLoot() { this.drop(ITEM_IDS.dye, 1 + this.rnd(3), 15); }
+  render(er, rx, ry, rz, partial) {
+    const [sky, blk] = er.lightAt(this.x, this.y + 0.5, this.z);
+    const yaw = this.pbodyYaw + wrapRadians(this.bodyYaw - this.pbodyYaw) * partial;
+    const pitch = this.psPitch + (this.sPitch - this.psPitch) * partial;
+    const roll = this.psRoll + (this.sRoll - this.psRoll) * partial;
+    let m = M3.trans(rx, ry + 0.5, rz);
+    m = M3.mul(m, M3.ry(yaw));
+    m = M3.mul(m, M3.rx(pitch));
+    m = M3.mul(m, M3.ry(roll));
+    if (this.dead && this.deathTime > 0) m = M3.mul(m, M3.rz(Math.min(1, Math.sqrt((this.deathTime + partial - 1) / 20 * 1.6)) * Math.PI / 2));
+    m = M3.mul(m, M3.scale(1 / 16, 1 / 16, 1 / 16));
+    const ta = this.ptentacle + (this.tentacle - this.ptentacle) * partial;
+    const pose = {};
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; pose['t' + i] = [ta, Math.atan2(-Math.cos(a), -Math.sin(a)), 0]; }
+    const fin = Math.sin((this.age + partial) * 0.25) * 0.25;
+    pose.finR = [0, 0, -fin]; pose.finL = [0, 0, fin];
+    er.drawModel(MODELS.squid, 'squid', m, pose, er.entColor(this), sky, blk);
+  }
+  save() { const d = super.save(); d.air = this.air; return d; }
+  load(d) { super.load(d); if (d.air !== undefined) this.air = d.air; }
+}
+
+// ---------------------------------------------------------------------------
 // Ambient creatures
 // ---------------------------------------------------------------------------
 class Bat extends Mob {
@@ -1381,7 +1692,7 @@ class Stranger extends Mob {
 // ---------------------------------------------------------------------------
 // Registry, creation & persistence
 // ---------------------------------------------------------------------------
-const MOB_CLASSES = { zombie: Zombie, skeleton: Skeleton, spider: Spider, boomcap: Boomcap, slime: Slime, mummy: Mummy, wraith: Wraith, pig: Pig, cow: Cow, sheep: Sheep, chicken: Chicken, deer: Deer, bat: Bat, wisp: Wisp, stranger: Stranger };
+const MOB_CLASSES = { zombie: Zombie, skeleton: Skeleton, spider: Spider, boomcap: Boomcap, slime: Slime, mummy: Mummy, wraith: Wraith, pig: Pig, cow: Cow, sheep: Sheep, chicken: Chicken, deer: Deer, bat: Bat, wisp: Wisp, stranger: Stranger, wolf: Wolf, squid: Squid };
 function createMob(type, world, extra) {
   const C = MOB_CLASSES[type];
   if (!C) return null;
@@ -1408,7 +1719,7 @@ function entityFromData(world, d) {
 class MobSpawner {
   constructor(game) { this.game = game; this.counts = { monster: 0, creature: 0, ambient: 0, wisp: 0, special: 0 }; this.t = 0; }
   count() {
-    const c = this.counts; c.monster = 0; c.creature = 0; c.ambient = 0; c.wisp = 0; c.special = 0; c.bat = 0; c.wraith = 0;
+    const c = this.counts; c.monster = 0; c.creature = 0; c.ambient = 0; c.wisp = 0; c.special = 0; c.bat = 0; c.wraith = 0; c.water = 0;
     for (const e of this.game.world.entities) {
       if (e.removed || !e.category) continue;
       c[e.category] = (c[e.category] || 0) + 1;
@@ -1430,6 +1741,7 @@ class MobSpawner {
       for (let i = 0; i < 2; i++) if (this.spawnMonsterPack(rd)) { this.counts.monster += 1; }
     }
     if (this.t % 20 === 7 && this.counts.bat < 5) this.spawnBat();
+    if (this.t % 40 === 19 && this.counts.water < Math.max(4, Math.round(6 * area / 169))) this.spawnSquid(rd);
     if (this.t % 400 === 13 && this.counts.creature < Math.round(14 * area / 169) + 4) this.spawnAnimals(rd);
     if (this.t % 100 === 31 && this.counts.wisp < 3) this.spawnWisp();
     if (this.t % 200 === 53 && this.counts.wraith < 2 && w.difficulty > 0) this.spawnWraith();
@@ -1516,6 +1828,23 @@ class MobSpawner {
       if (g2 !== B.GRASS && g2 !== B.PODZOL && g2 !== B.MYCELIUM && g2 !== B.SNOW) continue;
       if (!this.canStand(x, y, z, 2) || w.getLightLevel(x, y, z) < 9) continue;
       g.spawnMob(type, x + 0.5, y, z + 0.5);
+    }
+  }
+  // squid shoals: anywhere the water is at least two deep, between y 46 and the sea surface
+  spawnSquid(rd) {
+    const g = this.game, w = g.world, p = g.player;
+    const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
+    const cx = pcx + this.rnd(rd * 2 + 1) - rd, cz = pcz + this.rnd(rd * 2 + 1) - rd;
+    if (!w.getChunk(cx, cz)) return;
+    const x0 = cx * 16 + this.rnd(16), z0 = cz * 16 + this.rnd(16), y0 = 46 + this.rnd(SEA_LEVEL - 46);
+    if (w.getBlock(x0, y0, z0) !== B.WATER) return;
+    for (let i = 0; i < 4; i++) {
+      const x = x0 + this.rnd(5) - 2, z = z0 + this.rnd(5) - 2, y = y0 + this.rnd(3) - 1;
+      if ((x + 0.5 - p.x) ** 2 + (y - p.y) ** 2 + (z + 0.5 - p.z) ** 2 < 24 * 24 || !w.isLoaded(x, z)) continue;
+      if (y < 46 || y >= SEA_LEVEL || w.getBlock(x, y, z) !== B.WATER || w.getBlock(x, y - 1, z) !== B.WATER) continue;
+      const up = w.getBlock(x, y + 1, z);
+      if (up !== B.WATER && up !== 0) continue;
+      g.spawnMob('squid', x + 0.5, y, z + 0.5);
     }
   }
   spawnBat() {

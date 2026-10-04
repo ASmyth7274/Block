@@ -60,6 +60,7 @@ class EntityRenderer {
       const ps = pose[part.follow || name];
       if (ps && ps.hide) continue;
       if (opts.only && !opts.only.includes(name)) continue;
+      if (part.overlay && !opts.only) continue;
       if (part.antler && !opts.antlers) continue;
       if (part.translucent && opts.noTranslucent) continue;
       let m = M3.mul(base, M3.trans(part.pivot[0], part.pivot[1], part.pivot[2]));

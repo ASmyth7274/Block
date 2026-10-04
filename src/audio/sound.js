@@ -162,6 +162,50 @@ const SOUND_DEFS = (() => {
   S.wraith_say = () => { const bp = new Biquad('bp', 900, 4); return render(1.6, (t) => { bp.set(500 + Math.sin(t * 3) * 400, 4); return (bp.p(noise()) * 0.8 + Math.sin(2 * Math.PI * (620 + Math.sin(t * 6) * 30) * t) * 0.2) * Math.sin(Math.PI * t / 1.6); }); };
   S.wraith_hurt = S.wraith_say;
   S.bat_say = () => render(0.1, (t) => Math.sin(2 * Math.PI * (5000 - t * 20000) * t) * env(t, 0.002, 0.02));
+  // wolves: barks, growls, whines, panting, a yelp, a fur shake and a howl for moonlit nights
+  const bark = (f0, n, gap) => () => {
+    const f1 = new Biquad('bp', 900, 2.5), f2 = new Biquad('bp', 2100, 4);
+    let ph = 0;
+    const len = 0.11;
+    return render(n * (len + gap), (t) => {
+      const k = Math.floor(t / (len + gap)), tt = t - k * (len + gap);
+      if (tt > len) return 0;
+      const f = f0 * (1.15 - tt / len * 0.45) * (k % 2 ? 0.94 : 1);
+      ph += 2 * Math.PI * f / DSP.SR;
+      const src = ((ph / (2 * Math.PI)) % 1) * 2 - 1 + noise() * 0.6;
+      return (f1.p(src) * 1.1 + f2.p(src) * 0.6) * Math.sin(Math.PI * tt / len) * (tt < 0.01 ? tt / 0.01 : 1);
+    });
+  };
+  S.wolf_bark = bark(420, 2, 0.07);
+  S.wolf_growl = () => {
+    const lp = new Biquad('lp', 700, 1.5), bp = new Biquad('bp', 320, 2);
+    let ph = 0;
+    return render(1.1, (t) => {
+      ph += 2 * Math.PI * (88 + Math.sin(t * 31) * 9) / DSP.SR;
+      const src = ((ph / (2 * Math.PI)) % 1) * 2 - 1 + noise() * 0.9;
+      return (lp.p(src) * 0.7 + bp.p(src)) * (0.6 + 0.4 * Math.sin(t * 23)) * Math.sin(Math.PI * Math.min(1, t / 1.1));
+    });
+  };
+  // swept tones keep a running phase so the pitch glides cleanly
+  const glide = (dur, freq, shape, grit) => () => {
+    let ph = 0;
+    return render(dur, (t) => {
+      ph += 2 * Math.PI * freq(t) / DSP.SR;
+      return (Math.sin(ph) * 0.6 + Math.sin(ph * 2) * 0.15 + (grit ? noise() * grit : 0)) * shape(t);
+    });
+  };
+  S.wolf_whine = glide(0.75, (t) => 980 - t * 360 + Math.sin(t * 38) * 25, (t) => Math.sin(Math.PI * t / 0.75));
+  S.wolf_pant = () => {
+    const bp = new Biquad('bp', 1500, 1.2);
+    return render(0.8, (t) => { const k = (t * 6.5) % 1; return bp.p(noise()) * Math.sin(Math.PI * Math.min(1, k / 0.55)) * (k < 0.55 ? 1 : 0) * 0.9; });
+  };
+  S.wolf_hurt = glide(0.22, (t) => t < 0.05 ? 900 + t * 9000 : 1350 - (t - 0.05) * 3000, (t) => env(t, 0.004, 0.08), 0.15);
+  S.wolf_death = glide(1.0, (t) => 1050 - t * 600 + Math.sin(t * 30) * 30, (t) => Math.sin(Math.PI * t) * Math.exp(-t * 0.8), 0.08);
+  S.wolf_shake = () => {
+    const bp = new Biquad('bp', 2400, 0.9);
+    return render(0.7, (t) => bp.p(noise()) * (0.5 + 0.5 * Math.sin(t * 2 * Math.PI * 14)) * Math.sin(Math.PI * t / 0.7));
+  };
+  S.wolf_howl = glide(2.6, (t) => 380 + Math.min(1, t / 0.6) * 260 - Math.max(0, t - 1.8) * 220 + Math.sin(t * 11) * 6, (t) => Math.sin(Math.PI * t / 2.6) * 0.85, 0.03);
   S.boomcap_say = () => { const lp = new Biquad('lp', 600, 2); return render(0.4, (t) => lp.p(noise()) * env(t, 0.02, 0.1)); };
   S.wisp = () => render(1.2, (t) => { let s = 0; [2093, 2637, 3136].forEach((f, i) => { const st = i * 0.18; if (t > st) s += Math.sin(2 * Math.PI * f * (t - st)) * Math.exp(-(t - st) / 0.3); }); return s; });
   S.stranger = () => { const lp = new Biquad('lp', 300, 1); return render(3, (t) => (lp.p(noise()) * 0.6 + Math.sin(2 * Math.PI * 55 * t) * 0.3) * Math.sin(Math.PI * t / 3)); };

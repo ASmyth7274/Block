@@ -28,6 +28,7 @@ const MILESTONES = [
   { id: 'biomesAll', name: 'World Traveller', desc: 'Discover every biome', icon: () => [ITEM_IDS.wayfinder, 0] },
   { id: 'harvest', name: 'Green Thumb', desc: 'Harvest fully grown wheat', icon: () => [ITEM_IDS.wheat, 0] },
   { id: 'breed', name: 'Rancher', desc: 'Breed two animals', icon: () => [ITEM_IDS.wheat, 0] },
+  { id: 'tame', name: 'Best Friend', desc: 'Tame a wolf with bones', icon: () => [ITEM_IDS.bone, 0] },
   { id: 'tnt', name: 'Kaboom', desc: 'Craft TNT', icon: () => [B.TNT, 0] },
   { id: 'fish', name: 'Gone Fishing', desc: 'Catch a fish', icon: () => [ITEM_IDS.fish, 0] },
   { id: 'sail', name: 'Set Sail', desc: 'Row a boat 500 blocks', icon: () => [ITEM_IDS.boat, 0] },

@@ -109,6 +109,12 @@
   art('sulfur', DUST, { a: '#8a8a18', b: '#d4d43c', c: '#f8f89a' });
   art('salt', DUST, { a: '#c8c0c0', b: '#ebe6e6', c: '#ffffff' });
   art('bone_meal', DUST, { a: '#b8b4a8', b: '#e0ddd2', c: '#ffffff' });
+  // a glossy, drooping sac of squid ink
+  art('ink_sac', [
+    '................', '......oo........', '.....oaao.......', '.....oaao.......', '....oaabao......', '...oaabbbao.....',
+    '..oaabbcbbao....', '..oabbccbbbao...', '.oabbbcbbbbao...', '.oabbbbbbbbbo...', '.oaabbbbbbbao...', '..oaabbbbbaao...',
+    '...ooaaaaaoo....', '.....ooooo......', '................', '................'],
+    { o: '#07070b', a: '#1b1c26', b: '#2c2e3c', c: '#6a6e88' });
   art('string', [
     '................', '................', '...oo...........', '..o..o..........', '..o...o.........', '...o...o........',
     '....o...o.......', '.....o...o......', '......o...o.....', '.......o...o....', '........o...o...', '.........o...o..',

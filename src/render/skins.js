@@ -287,6 +287,94 @@ const Skins = (() => {
     s.box(16, 12, 2, 3, 1, () => vary(r, belly, 0.05));                     // tail
     return s;
   })();
+  // wolves: wild (amber-eyed), tame (soft eyes, tongue out) and angry (red eyes, bared teeth)
+  function wolfSkin(kind) {
+    const s = new Skin(); const r = rng('wolf');
+    const fur = C('#c6bfb5'), dark = C('#857c72'), light = C('#e9e5df'), nose = C('#262120');
+    const k = kind === 'angry' ? 0.86 : 1;
+    const v = (c, a) => { const q = vary(r, c, a || 0.07); return [q[0] * k, q[1] * k, q[2] * k]; };
+    // head
+    s.box(0, 0, 6, 6, 4, (f, x, y) => {
+      if (f === 'front') {
+        if (y === 2 && (x === 1 || x === 4)) return kind === 'angry' ? [220, 30, 24] : kind === 'tame' ? [40, 28, 20] : [214, 150, 40];
+        if (y === 1 && (x === 1 || x === 4)) return kind === 'angry' ? v(C('#3a2e28')) : v(dark);
+        if (kind === 'angry' && y === 1 && (x === 2 || x === 3)) return v(C('#4a3e36'));
+        if (y >= 4) return v(light);
+        return v(fur);
+      }
+      if (f === 'top') return v((x + y) % 3 === 0 ? dark : fur);
+      if (f === 'bottom') return v(light);
+      return v(y >= 4 ? light : fur);
+    });
+    // snout
+    s.box(0, 10, 3, 3, 4, (f, x, y) => {
+      if (f === 'front') {
+        if (y === 0 && x === 1) return nose;
+        if (y === 0) return v(C('#4a403a'));
+        if (y === 2 && kind === 'angry') return x === 1 ? [40, 20, 20] : [235, 230, 220];
+        if (y === 2 && kind === 'tame' && x === 1) return [214, 96, 110];
+        return v(light);
+      }
+      if (f === 'top') return v(y >= 3 ? C('#5a504a') : fur);
+      if (f === 'bottom') return (kind === 'tame' && y === 0 && x === 1) ? [214, 96, 110] : v(light);
+      if (kind === 'angry' && y === 2 && (f === 'left' || f === 'right')) return (x % 2) ? [235, 230, 220] : [60, 30, 30];
+      return v(y === 2 ? light : fur);
+    });
+    // ears
+    s.box(48, 0, 2, 2, 1, (f, x, y) => (f === 'front' && y === 1) ? [168, 120, 112] : v(dark));
+    // mane: shaggy, lighter at the throat
+    s.box(20, 0, 8, 7, 6, (f, x, y) => {
+      if (f === 'bottom' || (f === 'front' && y >= 4)) return v(light, 0.1);
+      if (f === 'top') return v((x * 7 + y * 3) % 5 === 0 ? dark : fur, 0.1);
+      if ((x * 5 + y * 3) % 7 === 0) return v(light, 0.1);
+      return v(y < 2 ? C('#a8a097') : fur, 0.1);
+    });
+    // body with a dark saddle along the back
+    s.box(18, 14, 6, 6, 9, (f, x, y, fw, fh) => {
+      if (f === 'top') return v((x === 0 || x === fw - 1) ? fur : dark);
+      if (f === 'bottom') return v(light);
+      if (y === 0) return v(dark);
+      if (y >= 4) return v(light);
+      return v(fur);
+    });
+    // tail with a dark tip
+    s.box(9, 18, 2, 8, 2, (f, x, y) => v(y >= 6 ? C('#4a423c') : y < 2 ? fur : (y % 2 ? fur : dark)));
+    // legs with darker paws
+    s.box(0, 18, 2, 8, 2, (f, x, y) => v(y >= 7 ? C('#6a6058') : y < 3 ? fur : light));
+    return s;
+  }
+  S.wolf = wolfSkin('wild');
+  S.wolf_tame = wolfSkin('tame');
+  S.wolf_angry = wolfSkin('angry');
+  // the collar (white, tinted with the dye colour when drawn) wraps the front of the mane
+  S.wolf_collar = (() => {
+    const s = new Skin();
+    s.box(0, 0, 8, 7, 1, (f, x, y) => f === 'back' ? null : ((x + y) % 4 === 0 ? [214, 214, 214] : [255, 255, 255]));
+    return s;
+  })();
+  S.squid = (() => {
+    const s = new Skin(); const r = rng('squid');
+    const skin = C('#2c3c5c'), deep = C('#1c2840'), pale = C('#5c7096'), spot = C('#7a5a8a');
+    s.box(0, 0, 12, 16, 12, (f, x, y) => {
+      if (f === 'front' || f === 'back') {
+        if (f === 'front' && y >= 9 && y <= 11 && (x === 2 || x === 3 || x === 8 || x === 9)) {
+          if (y === 10 && (x === 3 || x === 8)) return [12, 12, 16];
+          return y === 9 ? [230, 236, 240] : [196, 208, 220];
+        }
+      }
+      if (f === 'top') return vary(r, (x + y) % 4 === 0 ? spot : deep, 0.1);
+      if (f === 'bottom') return vary(r, deep, 0.1);
+      if (y < 4 && (x * 3 + y * 5) % 7 === 0) return vary(r, spot, 0.1);
+      if ((x * 5 + y * 7) % 11 === 0) return vary(r, pale, 0.1);
+      return vary(r, y > 12 ? deep : skin, 0.08);
+    });
+    s.box(48, 0, 2, 18, 2, (f, x, y) => {
+      if ((f === 'front' || f === 'left') && y > 3 && y % 3 === 0) return vary(r, C('#9aa8c8'), 0.08);
+      return vary(r, y > 14 ? deep : skin, 0.08);
+    });
+    s.box(48, 22, 1, 6, 4, () => vary(r, pale, 0.1));
+    return s;
+  })();
   S.bat = (() => {
     const s = new Skin(); const r = rng('bat');
     const fur = C('#3a2a1a');
