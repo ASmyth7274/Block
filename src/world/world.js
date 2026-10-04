@@ -220,6 +220,7 @@ class World {
     if (old === id && oldMeta === meta) return false;
     c.blocks[i] = id; c.meta[i] = meta;
     if (!(flags & 8)) c.modified = true;
+    c.mapDirty = true;
     // heightmap
     const hi = ((z & 15) << 4) | (x & 15);
     const h = c.heightmap[hi];

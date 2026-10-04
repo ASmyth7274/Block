@@ -155,7 +155,6 @@ defBlock(16, 'leaves', {
     const sap = kind === 3 ? 40 : 20;
     if (rng.nextInt(sap) === 0) out.push([B.SAPLING, 1, kind]);
     if ((kind === 0 || kind === 4 || kind === 6) && rng.nextInt(200) === 0) out.push([ITEM_IDS.apple, 1, 0]);
-    if (rng.nextInt(50) === 0) out.push([ITEM_IDS.stick, 1, 0]);
     return out;
   },
 });

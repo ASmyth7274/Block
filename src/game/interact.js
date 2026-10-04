@@ -237,6 +237,7 @@ class Interaction {
     if (held.id === I.prospector_rod) { g.useProspectorRod(); return; }
     if (held.id === I.wayfinder) { g.useWayfinder(); return; }
     if (held.id === I.journal) { g.openJournal(); return; }
+    if (held.id === I.map) { g.openMap(); return; }
     if (held.id === I.wisp_essence) { if (g.releaseWisp()) { if (!p.creative) p.inventory.decrementHeld(1); p.swing(); } return; }
     if (held.id === I.spawn_egg && this.hit) return;
     if (p.startUse(held)) return;

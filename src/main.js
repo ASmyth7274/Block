@@ -176,6 +176,7 @@ class Game {
   openChat(initial) { this.openScreen(new ChatScreen(this, initial || '')); }
   openInventory() { const p = this.player; if (!p || p.dead) return; this.openScreen(p.creative ? new CreativeScreen(this) : new InventoryScreen(this)); }
   openJournal() { this.openScreen(new JournalScreen(this, null)); }
+  openMap() { if (this.maps) this.openScreen(new MapScreen(this)); }
   onPointerLockLost() { if (!this.screen && this.player && !this.loading && !this.player.dead) this.openPause(); }
   isPaused() { return !!(this.screen && this.screen.pauses) || !!this.loading; }
 
@@ -201,6 +202,7 @@ class Game {
     this.thirdPerson = 0;
     this.loading = null;
     this.sleepFade = 0;
+    this.maps = null;
   }
   createWorld(opts) {
     const info = Object.assign({
@@ -233,6 +235,8 @@ class Game {
     w.onTileRemoved = (te, x, y, z) => this.onTileRemoved(te, x, y, z);
     const p = new Player(w, this);
     this.player = p;
+    this.maps = new MapStore(this, info.id);
+    this.maps.load(this.storage);
     this.settings.lastWorld = info.id; this.saveSettings();
     if (info.player) {
       p.load(info.player);
@@ -281,6 +285,8 @@ class Game {
       w.spawn = { x, y, z };
       w.info.spawn = w.spawn;
       if (L.isNew && w.info.bonusChest) this.placeBonusChest(x, y, z);
+      // like the old console editions, every new adventure starts with a map
+      if (L.isNew && !p.creative) p.inventory.main.set(8, new ItemStack(ITEM_IDS.map, 1, 0));
     }
     if (!w.spawn) w.spawn = { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) };
     this.loading = null;
@@ -329,6 +335,7 @@ class Game {
       info.lastPlayed = Date.now();
       w.saveAll();
       this.saveLoadedEntities();
+      if (this.maps) this.maps.save(this.storage);
       this.storage.putWorld(info);
       return this.storage.flush();
     } catch (e) { console.error('save failed', e); return Promise.resolve(); }
@@ -501,6 +508,11 @@ class Game {
     if (c === KEYS.chat) { e.preventDefault(); this.openChat(''); return; }
     if (c === KEYS.command) { e.preventDefault(); this.openChat('/'); return; }
     if (c === KEYS.journal) { this.openJournal(); return; }
+    if (c === KEYS.map) {
+      if (p.creative || p.inventory.findSlot(ITEM_IDS.map) >= 0) this.openMap();
+      else this.hud.showAction('You need an Explorer\'s Map (eight paper around a compass)');
+      return;
+    }
     if (c === KEYS.swapHands) {
       const inv = p.inventory, a = inv.held(), b = inv.offhandItem();
       inv.main.set(inv.selected, b); inv.offhand.set(0, a);
@@ -576,6 +588,7 @@ class Game {
     this.particles.tick();
     this.hud.tick();
     this.renderer.atlas.tickAnimations();
+    DynamicItems.update(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
     const h = p.inventory.held();
@@ -590,6 +603,7 @@ class Game {
     this.fovMod += (fm - this.fovMod) * 0.5;
     if (p.headInWater) this.waterTime = Math.min(600, this.waterTime + 1); else this.waterTime = 0;
     if (w.time % 10 === 0) this.checkDiscoveries();
+    if (w.time % 10 === 5 && this.maps) this.maps.tick();
     if (w.time % 20 === 0) this.checkMilestones();
     if (w.time % 600 === 0) this.saveWorld();
     // death

@@ -246,7 +246,7 @@ class TouchControls {
     m.x = x; m.y = y;
     g.input.mx = x; g.input.my = y;
     const far = Math.abs(y - m.sy) > 8 || Math.abs(x - m.sx) > 8;
-    if (far && !m.scroll && scr.wheel && Math.abs(y - m.sy) > Math.abs(x - m.sx) * 1.2 && (m.container ? !m.sent : !(scr.widgets || []).some((w) => w.dragging))) {
+    if (far && !m.scroll && scr.wheel && !scr.touchPan && Math.abs(y - m.sy) > Math.abs(x - m.sx) * 1.2 && (m.container ? !m.sent : !(scr.widgets || []).some((w) => w.dragging))) {
       if (!m.container || !this.overSlot(scr, m.sx, m.sy) || scr instanceof CreativeScreen) m.scroll = true;
     }
     if (m.scroll) {

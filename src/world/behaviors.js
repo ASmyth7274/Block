@@ -386,11 +386,12 @@ const Behaviors = (() => {
     if (id === B.ICE && !game.player.creative) {
       if (BT.solid[w.getBlock(x, y - 1, z)] || BT.fluid[w.getBlock(x, y - 1, z)]) { w.setBlock(x, y, z, B.WATER, 0); w.scheduleTick(x, y, z, 5); }
     }
-    if (id === B.LOG || id === B.LEAVES) markLeavesForDecay(w, x, y, z);
+    if (id === B.LOG || id === B.LEAVES) markLeavesForDecay(w, x, y, z, id === B.LOG ? 4 : 1);
     if (id === B.EMBER_ORE_LIT || id === B.EMBER_ORE) { /* nothing */ }
   }
-  function markLeavesForDecay(w, x, y, z) {
-    for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) for (let dz = -2; dz <= 2; dz++) {
+  function markLeavesForDecay(w, x, y, z, r) {
+    r = r || 1;
+    for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) for (let dz = -r; dz <= r; dz++) {
       const bx = x + dx, by = y + dy, bz = z + dz;
       if (w.getBlock(bx, by, bz) === B.LEAVES) {
         const m = w.getMeta(bx, by, bz);
@@ -625,6 +626,7 @@ const Behaviors = (() => {
         if (!logNearby(w, x, y, z)) {
           w.setBlock(x, y, z, 0);
           if (w.game) dropBlock(w.game, x, y, z, id, m, null);
+          markLeavesForDecay(w, x, y, z, 1);
         } else w.setMeta(x, y, z, m & ~16, 4);
         return;
       }

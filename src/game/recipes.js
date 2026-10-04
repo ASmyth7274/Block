@@ -151,6 +151,7 @@ const Recipes = (() => {
   shaped([I.prospector_rod], ['  J', ' S ', 'S  '], { J: I.jade, S: I.stick });
   shaped([I.wayfinder], [' J ', 'JCJ', ' J '], { J: I.jade, C: I.compass });
   shapeless([I.journal], [I.book, I.jade]);
+  shaped([I.map], ['PPP', 'PCP', 'PPP'], { P: I.paper, C: I.compass });
   shaped([B.SLAB, 6, 16], ['###'], { '#': B.THATCH });
 
   // ---------------- smelting ----------------

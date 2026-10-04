@@ -169,6 +169,7 @@ defItem('spawn_egg', {
 });
 defItem('glow_berries', { name: 'Glowcap Stew', maxStack: 1, food: { hunger: 6, sat: 7.2, nightVision: 1 }, container: 'bowl', tex: 'glowcap_stew' });
 defItem('journal', { name: "Explorer's Journal", maxStack: 1 });
+defItem('map', { name: "Explorer's Map", maxStack: 1 });
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -49,6 +49,6 @@ const Settings = {
 
 const KEYS = {
   forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', sneak: 'ShiftLeft', sprint: 'ControlLeft',
-  inventory: 'KeyE', drop: 'KeyQ', chat: 'KeyT', command: 'Slash', swapHands: 'KeyF', journal: 'KeyJ',
+  inventory: 'KeyE', drop: 'KeyQ', map: 'KeyM', chat: 'KeyT', command: 'Slash', swapHands: 'KeyF', journal: 'KeyJ',
   hideHud: 'F1', screenshot: 'F2', debug: 'F3', perspective: 'F5', fullscreen: 'F11', pick: 'Mouse1',
 };

@@ -13,19 +13,20 @@ class WorldStorage {
   open() {
     return new Promise((resolve) => {
       let req;
-      try { req = indexedDB.open('blocklands', 1); } catch (e) { this.useMemory(); resolve(); return; }
+      try { req = indexedDB.open('blocklands', 2); } catch (e) { this.useMemory(); resolve(); return; }
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains('worlds')) db.createObjectStore('worlds', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('chunks')) db.createObjectStore('chunks');
         if (!db.objectStoreNames.contains('entities')) db.createObjectStore('entities');
+        if (!db.objectStoreNames.contains('maps')) db.createObjectStore('maps');
       };
       req.onsuccess = () => { this.db = req.result; resolve(); };
       req.onerror = () => { console.warn('IndexedDB unavailable, worlds will not persist', req.error); this.useMemory(); resolve(); };
       req.onblocked = () => { console.warn('IndexedDB blocked'); };
     });
   }
-  useMemory() { this.mem = { worlds: new Map(), chunks: new Map(), entities: new Map() }; this.persistent = false; }
+  useMemory() { this.mem = { worlds: new Map(), chunks: new Map(), entities: new Map(), maps: new Map() }; this.persistent = false; }
   get isPersistent() { return !!this.db; }
   // ---------------------------------------------------------------- primitives
   tx(store, mode, fn) {
@@ -62,7 +63,7 @@ class WorldStorage {
   putWorld(info) { const copy = Object.assign({}, info); delete copy.savedKeys; delete copy.entityKeys; return this.put('worlds', copy); }
   renameWorld(id, name) { return this.getWorld(id).then((w) => { if (!w) return; w.name = name; return this.putWorld(w); }); }
   deleteWorld(id) {
-    return Promise.all([this.del('worlds', id), this.deletePrefix('chunks', id + ':'), this.deletePrefix('entities', id + ':')]);
+    return Promise.all([this.del('worlds', id), this.deletePrefix('chunks', id + ':'), this.deletePrefix('entities', id + ':'), this.deletePrefix('maps', id + ':')]);
   }
   chunkKeys(id) { return this.keysWithPrefix('chunks', id + ':').then((ks) => new Set(ks.map((k) => Number(String(k).split(':')[1])))); }
   entityKeys(id) { return this.keysWithPrefix('entities', id + ':').then((ks) => new Set(ks.map((k) => Number(String(k).split(':')[1])))); }
@@ -125,8 +126,17 @@ class WorldStorage {
     }
     const entities = [];
     for (const k of ekeys) { const list = await this.get('entities', k); if (list) entities.push({ k: Number(String(k).split(':')[1]), l: list }); }
+    // explorer's map regions
+    const maps = [];
+    for (const k of await this.keysWithPrefix('maps', id + ':')) {
+      const rec = await this.get('maps', k);
+      if (!rec || !rec.present) continue;
+      const pr = rec.present instanceof Uint8Array ? rec.present : new Uint8Array(rec.present), da = rec.data instanceof Uint8Array ? rec.data : new Uint8Array(rec.data);
+      maps.push({ rx: rec.rx, rz: rec.rz, o: offset, p: pr.length, d: da.length });
+      parts.push(pr, da); offset += pr.length + da.length;
+    }
     const meta = Object.assign({}, info); delete meta.id;
-    const header = new TextEncoder().encode(JSON.stringify({ format: 'blocklands-world', version: 1, info: meta, chunks, entities }));
+    const header = new TextEncoder().encode(JSON.stringify({ format: 'blocklands-world', version: 1, info: meta, chunks, entities, maps }));
     const head = new Uint8Array(12);
     head.set([66, 76, 75, 87]); // BLKW
     new DataView(head.buffer).setUint32(4, 1, true);
@@ -160,6 +170,10 @@ class WorldStorage {
       this.queue('chunks', id + ':' + c.k, rec);
     }
     for (const e of header.entities || []) this.queue('entities', id + ':' + e.k, e.l);
+    for (const m of header.maps || []) {
+      const o = base + m.o;
+      this.queue('maps', id + ':' + m.rx + ',' + m.rz, { rx: m.rx, rz: m.rz, present: buf.slice(o, o + m.p), data: buf.slice(o + m.p, o + m.p + m.d) });
+    }
     await this.flush();
     await this.putWorld(info);
     return info;

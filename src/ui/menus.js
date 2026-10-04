@@ -426,7 +426,7 @@ class ControlsScreen extends Screen {
   draw(gui, mx, my) {
     super.draw(gui, mx, my);
     const rows = [['Move', 'W A S D'], ['Jump / Swim / Fly up', 'Space'], ['Sneak / Fly down', 'Shift'], ['Sprint', 'Ctrl or double-tap W'], ['Inventory', 'E'], ['Drop item', 'Q (Ctrl+Q: stack)'],
-      ['Hotbar', '1-9 / mouse wheel'], ['Swap offhand', 'F'], ['Pick block', 'Middle click'], ['Chat / commands', 'T  /  /'], ['Explorer\'s Journal', 'J'], ['Hide HUD / Screenshot', 'F1 / F2'], ['Debug screen', 'F3'], ['Third person', 'F5'], ['Fullscreen', 'F11']];
+      ['Hotbar', '1-9 / mouse wheel'], ['Swap offhand', 'F'], ['Pick block', 'Middle click'], ['Chat / commands', 'T  /  /'], ['Explorer\'s Journal / Map', 'J / M'], ['Hide HUD / Screenshot', 'F1 / F2'], ['Debug screen', 'F3'], ['Third person', 'F5'], ['Fullscreen', 'F11']];
     let y = 86;
     for (const [a, b] of rows) {
       if (y > this.H - 40) break;
@@ -531,7 +531,7 @@ const HOW_TO_PLAY = [
   ['Survival', 'Your health regenerates while your hunger bar is nearly full. Eat by holding the right mouse button with food selected. Sprinting, jumping and fighting make you hungry faster.', 'Falling from high places, drowning, fire, lava and monsters all hurt. Wear armour to take less damage. If you die you drop your items where you fell.'],
   ['Mining & Smelting', 'Ores hide underground: coal, iron, gold, ember, lapis, diamonds - and new finds like cobalt deep in slate, sulfur near lava and jade in high places.', 'Smelt ores in a Furnace with fuel such as coal, charcoal, wood or peat. Better pickaxes mine harder materials: some ores need iron or diamond tools.'],
   ['Farming', 'Till grass or dirt with a hoe and plant seeds near water. Crops need light to grow. Bone meal speeds up growth.', 'Animals give food, leather and wool. Shear sheep for wool and use buckets to collect milk. Brambles in the forest give berries you can bake into pies.'],
-  ['Exploration', 'The world is huge. Biomes have their own plants, creatures and treasures: look for camps, ruined towers, hermit huts, desert wells and sunken ruins.', 'Your Explorer\'s Journal (J) records every biome and creature you discover. Some secrets are rare - keep travelling!'],
+  ['Exploration', 'The world is huge. Biomes have their own plants, creatures and treasures: look for camps, ruined towers, hermit huts, desert wells and sunken ruins.', 'Your Explorer\'s Map (M) fills in as you travel, and your Explorer\'s Journal (J) records every biome and creature you discover. Some secrets are rare - keep travelling!'],
   ['Mysteries', 'On clear nights, watch the sky. Falling stars leave craters lined with starmetal - the strongest material of all, but you will need a diamond pickaxe.', 'Lights drift over swamps after dark. Some say they lead to buried treasure. On the moors, ancient runestones hum when touched with jade...'],
   ['Creative Mode', 'In Creative mode you can fly (double-tap Space), break blocks instantly and take any block from the creative inventory (E).', 'Worlds with cheats enabled accept commands: open chat with T and type /help.'],
   ['Saving & Sharing', 'Your worlds save automatically in your browser. Use Export on the world list (or in the pause menu) to download a .blocklands file.', 'Import it on any device - including your phone - to continue where you left off or share your world with friends.'],

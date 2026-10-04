@@ -484,7 +484,7 @@ const CREATIVE_TABS = (() => {
     blk(B.LILY_PAD), blk(B.CATTAIL), blk(B.BRAMBLE), blk(B.LEAF_LITTER), ...all(B.FENCE), blk(B.FENCE_GATE), blk(B.TRAPDOOR), blk(B.GLASS_PANE), ...all(B.CARPET), blk(B.LUMITE_LAMP), blk(B.MOB_SPAWNER),
     [I.door_wood, 0], [I.door_iron, 0], [I.bed, 0]] });
   T.push({ name: 'Tools', icon: [I.iron_axe, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ['shovel', 'pickaxe', 'axe', 'hoe'].map((k) => [I[m + '_' + k], 0])),
-    ...items(['flint_and_steel', 'shears', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'compass', 'clock', 'prospector_rod', 'wayfinder', 'journal'])] });
+    ...items(['flint_and_steel', 'shears', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'compass', 'clock', 'map', 'prospector_rod', 'wayfinder', 'journal'])] });
   T.push({ name: 'Combat', icon: [I.gold_sword, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].map((m) => [I[m + '_sword'], 0]), [I.bow, 0], [I.arrow, 0],
     ...['leather', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ARMOR_SLOTS.map((s) => [I[m + '_' + s], 0])), [I.snowball, 0], [I.egg, 0]] });
   T.push({ name: 'Foodstuffs', icon: [I.apple, 0], list: items(['apple', 'golden_apple', 'bread', 'porkchop', 'cooked_porkchop', 'beef', 'steak', 'chicken', 'cooked_chicken', 'mutton', 'cooked_mutton', 'venison', 'cooked_venison', 'jerky',

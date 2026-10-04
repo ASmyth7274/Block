@@ -554,7 +554,6 @@ defBlock(16, 'leaves', {
     const sap = kind === 3 ? 40 : 20;
     if (rng.nextInt(sap) === 0) out.push([B.SAPLING, 1, kind]);
     if ((kind === 0 || kind === 4 || kind === 6) && rng.nextInt(200) === 0) out.push([ITEM_IDS.apple, 1, 0]);
-    if (rng.nextInt(50) === 0) out.push([ITEM_IDS.stick, 1, 0]);
     return out;
   },
 });
@@ -1123,6 +1122,7 @@ defItem('spawn_egg', {
 });
 defItem('glow_berries', { name: 'Glowcap Stew', maxStack: 1, food: { hunger: 6, sat: 7.2, nightVision: 1 }, container: 'bowl', tex: 'glowcap_stew' });
 defItem('journal', { name: "Explorer's Journal", maxStack: 1 });
+defItem('map', { name: "Explorer's Map", maxStack: 1 });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -3076,6 +3076,11 @@ const TexGen = (function () {
     '.......o........', '.......o........', '................'], { o: [180, 200, 255] });
   sprite('particle_glint', ['................', '................', '................', '................', '.......o........', '.......o........',
     '......ooo.......', '....ooooooo.....', '......ooo.......', '.......o........', '.......o........'], { o: [255, 255, 255] });
+  // explorer's map: parchment with a coastline and a red route
+  art('map', [
+    '................', '..oooooooooooo..', '..oppppppppppo..', '..opggpppbbppo..', '..opgggpbbbbpo..', '..oppggpbbbppo..',
+    '..opppgrrppppo..', '..oppppprpgppo..', '..opbbppprggpo..', '..opbbbpprrgpo..', '..oppbbppppxpo..', '..opppppggppxo..',
+    '..oppppggggppo..', '..oooooooooooo..', '................', '................'], { o: '#6a4a24', p: '#e8dcb4', g: '#7aa84a', b: '#5a86c8', r: '#c82020', x: '#2a2a2a' });
   // soft round glow (wisps)
   (() => {
     const g = new TexGen.Img();
@@ -5000,6 +5005,7 @@ class World {
     if (old === id && oldMeta === meta) return false;
     c.blocks[i] = id; c.meta[i] = meta;
     if (!(flags & 8)) c.modified = true;
+    c.mapDirty = true;
     // heightmap
     const hi = ((z & 15) << 4) | (x & 15);
     const h = c.heightmap[hi];
@@ -5215,6 +5221,146 @@ function deserializeChunk(rec) {
     tiles: rec.tiles || [],
     entities: [],
   };
+}
+
+// ---- src/world/mapdata.js
+// ---------------------------------------------------------------------------
+// The explorer's map: a top-down record of every chunk you have been near.
+// One byte per column (colour index * 4 + shade), stored in 32x32-chunk regions.
+// ---------------------------------------------------------------------------
+const MAP_COLORS = [
+  null,                                   // 0 unexplored
+  [127, 178, 56], [247, 233, 163], [112, 112, 112], [151, 109, 77], [143, 119, 72], [0, 124, 0],     // 1 grass 2 sand 3 stone 4 dirt 5 wood 6 foliage
+  [64, 64, 255], [255, 0, 0], [255, 255, 255], [160, 160, 255], [164, 168, 184], [127, 63, 178],     // 7 water 8 fire 9 snow 10 ice 11 clay 12 mycelium
+  [153, 51, 51], [229, 229, 51], [216, 127, 51], [153, 153, 153], [76, 76, 76], [255, 252, 245],     // 13 red 14 yellow 15 orange 16 light gray 17 dark gray 18 white quartz
+  [102, 76, 51], [129, 86, 49], [125, 202, 69], [99, 64, 46], [167, 167, 167], [92, 219, 213],       // 19 brown 20 podzol 21 lime 22 terracotta 23 iron 24 diamond
+  [74, 128, 255], [0, 217, 58], [178, 76, 216], [102, 153, 216], [242, 127, 165], [76, 127, 153],    // 25 lapis 26 emerald/jade 27 magenta 28 light blue 29 pink 30 cyan
+  [127, 63, 178], [51, 76, 178], [102, 127, 51], [25, 25, 25], [250, 238, 77], [180, 140, 90],       // 31 purple 32 blue 33 green 34 black 35 gold 36 sandstone
+  [130, 88, 62], [90, 120, 60],                                                                         // 37 redwood 38 dark foliage
+];
+const MAP_SHADE = [180, 220, 255, 135];
+const MapColors = (() => {
+  const T = new Uint8Array(256 * 16);
+  const set = (id, c, meta) => { if (id === undefined) return; if (meta === undefined) for (let m = 0; m < 16; m++) T[id * 16 + m] = c; else T[id * 16 + meta] = c; };
+  // sensible defaults from block properties
+  for (let id = 1; id < 256; id++) {
+    const d = BLOCKS[id]; if (!d) continue;
+    let c = 3;
+    if (d.sound === 'wood') c = 5; else if (d.sound === 'grass') c = 6; else if (d.sound === 'gravel') c = 4; else if (d.sound === 'sand') c = 2;
+    else if (d.sound === 'cloth') c = 18; else if (d.sound === 'snow') c = 9; else if (d.sound === 'glass') c = 10; else if (d.sound === 'metal') c = 23;
+    set(id, c);
+  }
+  set(B.GRASS, 1); set(B.SAND, 2, 0); set(B.SAND, 15, 1); set(B.GRAVEL, 3); set(B.DIRT, 4); set(B.FARMLAND, 4); set(B.PODZOL, 20);
+  set(B.WATER, 7); set(B.LAVA, 8); set(B.FIRE, 8); set(B.SNOW, 9); set(B.SNOW_LAYER, 9); set(B.ICE, 10); set(B.PACKED_ICE, 10);
+  set(B.CLAY, 11); set(B.MYCELIUM, 12); set(B.SANDSTONE, 36); set(B.RED_SANDSTONE, 15); set(B.TERRACOTTA, 22, 0);
+  set(B.ASH, 16); set(B.BASALT, 17); set(B.POLISHED_BASALT, 17); set(B.SALT, 18); set(B.PEAT, 19); set(B.QUICKSAND, 36);
+  set(B.HAY_BALE, 14); set(B.THATCH, 14); set(B.PUMPKIN, 15); set(B.MELON, 21); set(B.CACTUS, 6); set(B.OBSIDIAN, 34);
+  set(B.GOLD_BLOCK, 35); set(B.IRON_BLOCK, 23); set(B.DIAMOND_BLOCK, 24); set(B.LAPIS_BLOCK, 25); set(B.JADE_BLOCK, 26); set(B.COBALT_BLOCK, 32);
+  set(B.SCORCHED_STONE, 17); set(B.HUGE_MUSHROOM_RED, 13); set(B.HUGE_MUSHROOM_BROWN, 19); set(B.TNT, 8); set(B.BRICKS, 13);
+  set(B.SLATE, 17); set(B.SLATE_BRICKS, 17); set(B.MARBLE, 18); set(B.MARBLE_BRICKS, 18); set(B.LEAF_LITTER, 15);
+  // leaves by kind: oak, spruce, birch, jungle, maple, redwood, golden maple (+ flag bits)
+  const leaf = [6, 38, 21, 6, 13, 38, 14, 6];
+  for (let m = 0; m < 16; m++) set(B.LEAVES, leaf[m & 7], m);
+  // logs by wood
+  const logc = [5, 19, 18, 5, 4, 37];
+  for (let m = 0; m < 16; m++) set(B.LOG, logc[m & 7] || 5, m);
+  // dyed blocks
+  const dye = [18, 15, 27, 28, 14, 21, 29, 17, 16, 30, 31, 32, 19, 33, 13, 34];
+  for (let m = 0; m < 16; m++) { set(B.WOOL, dye[m], m); set(B.CARPET, dye[m], m); set(B.STAINED_GLASS, dye[m], m); if (m < 15) set(B.TERRACOTTA, dye[m], m + 1); }
+  return T;
+})();
+
+class MapStore {
+  constructor(game, worldId) {
+    this.game = game;
+    this.worldId = worldId;
+    this.chunks = new Map();          // chunk key -> Uint8Array(256)
+    this.dirtyRegions = new Set();
+    this.version = 0;                 // bumps when anything changes (screens redraw)
+    this.ready = false;
+    this.radius = 5;
+  }
+  regionKey(cx, cz) { return (cx >> 5) + ',' + (cz >> 5); }
+  load(storage) {
+    return storage.keysWithPrefix('maps', this.worldId + ':').then((keys) => Promise.all(keys.map((k) => storage.get('maps', k).then((rec) => this.loadRegion(rec))))).then(() => { this.ready = true; this.version++; })
+      .catch((e) => { console.warn('map data unavailable', e); this.ready = true; });
+  }
+  loadRegion(rec) {
+    if (!rec || !rec.present) return;
+    const present = rec.present instanceof Uint8Array ? rec.present : new Uint8Array(rec.present);
+    const data = rec.data instanceof Uint8Array ? rec.data : new Uint8Array(rec.data);
+    let o = 0;
+    for (let i = 0; i < 1024; i++) {
+      if (!present[i]) continue;
+      const cx = rec.rx * 32 + (i & 31), cz = rec.rz * 32 + (i >> 5);
+      this.chunks.set(ckey(cx, cz), data.slice(o, o + 256));
+      o += 256;
+    }
+  }
+  regionRecord(rx, rz) {
+    const present = new Uint8Array(1024), parts = [];
+    for (let i = 0; i < 1024; i++) {
+      const d = this.chunks.get(ckey(rx * 32 + (i & 31), rz * 32 + (i >> 5)));
+      if (d) { present[i] = 1; parts.push(d); }
+    }
+    const data = new Uint8Array(parts.length * 256);
+    parts.forEach((p, k) => data.set(p, k * 256));
+    return { rx, rz, present, data };
+  }
+  save(storage) {
+    for (const r of this.dirtyRegions) {
+      const [rx, rz] = r.split(',').map(Number);
+      storage.queue('maps', this.worldId + ':' + r, this.regionRecord(rx, rz));
+    }
+    this.dirtyRegions.clear();
+  }
+  // sample one chunk into map bytes
+  sample(c) {
+    const w = this.game.world;
+    const out = this.chunks.get(c.key) || new Uint8Array(256);
+    const north = w.getChunk(c.cx, c.cz - 1);
+    for (let lz = 0; lz < 16; lz++) for (let lx = 0; lx < 16; lx++) {
+      const i = (lz << 4) | lx;
+      let y = c.heightmap[i] - 1;
+      if (y < 0) { out[i] = 0; continue; }
+      let id = c.blocks[(y << 8) | i], meta = c.meta[(y << 8) | i];
+      let col = MapColors[id * 16 + (meta & 15)] || 3, shade = 1;
+      const odd = ((lx + lz) & 1);
+      if (id === B.WATER) {
+        let depth = 0;
+        while (y - depth > 0 && BT.fluid[c.blocks[((y - depth) << 8) | i]]) depth++;
+        const d1 = depth * 0.1 + odd * 0.2;
+        shade = d1 < 0.5 ? 2 : d1 > 0.9 ? 0 : 1;
+      } else {
+        const hn = lz > 0 ? c.heightmap[((lz - 1) << 4) | lx] : (north ? north.heightmap[(15 << 4) | lx] : c.heightmap[i]);
+        const d1 = (c.heightmap[i] - hn) * 0.8 + (odd - 0.5) * 0.4;
+        shade = d1 > 0.6 ? 2 : d1 < -0.6 ? 0 : 1;
+      }
+      out[i] = col * 4 + shade;
+    }
+    if (!this.chunks.has(c.key)) this.chunks.set(c.key, out);
+    this.dirtyRegions.add(this.regionKey(c.cx, c.cz));
+    this.version++;
+    c.mapDirty = false;
+    c.mapped = true;
+  }
+  tick() {
+    const g = this.game, w = g.world, p = g.player;
+    if (!w || !p || !this.ready) return;
+    const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
+    const R = Math.min(this.radius, g.settings.renderDistance);
+    let n = 0;
+    for (let dz = -R; dz <= R && n < 6; dz++) for (let dx = -R; dx <= R && n < 6; dx++) {
+      if (dx * dx + dz * dz > R * R + 1) continue;
+      const c = w.getChunk(pcx + dx, pcz + dz);
+      if (!c || (c.mapped && !c.mapDirty)) continue;
+      if (!c.mapped && this.chunks.has(c.key) && !c.mapDirty) { c.mapped = true; continue; }
+      this.sample(c); n++;
+    }
+  }
+  explored() { return this.chunks.size; }
+  // export helpers
+  allRegions() { const set = new Set(); for (const k of this.chunks.keys()) set.add(this.regionKey(ckeyX(k), ckeyZ(k))); return set; }
 }
 
 // ---- src/render/gl.js
@@ -6768,6 +6914,8 @@ const GLYPHS = (() => {
   g('…', ['#.#.#'], 6);                                                 // ellipsis
   g('°', ['.#.', '#.#', '.#.']);                                        // degree
   g('é', ['...#.', '..#..', '.###.', '#...#', '#####', '#....', '.####']);
+  g('²', ['##.', '..#', '.#.', '###']);                                 // squared
+  g('×', ['#...#', '.#.#.', '..#..', '.#.#.', '#...#'], 2);        // times
   return G;
 })();
 
@@ -7303,7 +7451,7 @@ const Settings = {
 
 const KEYS = {
   forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', sneak: 'ShiftLeft', sprint: 'ControlLeft',
-  inventory: 'KeyE', drop: 'KeyQ', chat: 'KeyT', command: 'Slash', swapHands: 'KeyF', journal: 'KeyJ',
+  inventory: 'KeyE', drop: 'KeyQ', map: 'KeyM', chat: 'KeyT', command: 'Slash', swapHands: 'KeyF', journal: 'KeyJ',
   hideHud: 'F1', screenshot: 'F2', debug: 'F3', perspective: 'F5', fullscreen: 'F11', pick: 'Mouse1',
 };
 
@@ -8639,6 +8787,7 @@ const Recipes = (() => {
   shaped([I.prospector_rod], ['  J', ' S ', 'S  '], { J: I.jade, S: I.stick });
   shaped([I.wayfinder], [' J ', 'JCJ', ' J '], { J: I.jade, C: I.compass });
   shapeless([I.journal], [I.book, I.jade]);
+  shaped([I.map], ['PPP', 'PCP', 'PPP'], { P: I.paper, C: I.compass });
   shaped([B.SLAB, 6, 16], ['###'], { '#': B.THATCH });
 
   // ---------------- smelting ----------------
@@ -9238,11 +9387,12 @@ const Behaviors = (() => {
     if (id === B.ICE && !game.player.creative) {
       if (BT.solid[w.getBlock(x, y - 1, z)] || BT.fluid[w.getBlock(x, y - 1, z)]) { w.setBlock(x, y, z, B.WATER, 0); w.scheduleTick(x, y, z, 5); }
     }
-    if (id === B.LOG || id === B.LEAVES) markLeavesForDecay(w, x, y, z);
+    if (id === B.LOG || id === B.LEAVES) markLeavesForDecay(w, x, y, z, id === B.LOG ? 4 : 1);
     if (id === B.EMBER_ORE_LIT || id === B.EMBER_ORE) { /* nothing */ }
   }
-  function markLeavesForDecay(w, x, y, z) {
-    for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) for (let dz = -2; dz <= 2; dz++) {
+  function markLeavesForDecay(w, x, y, z, r) {
+    r = r || 1;
+    for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) for (let dz = -r; dz <= r; dz++) {
       const bx = x + dx, by = y + dy, bz = z + dz;
       if (w.getBlock(bx, by, bz) === B.LEAVES) {
         const m = w.getMeta(bx, by, bz);
@@ -9477,6 +9627,7 @@ const Behaviors = (() => {
         if (!logNearby(w, x, y, z)) {
           w.setBlock(x, y, z, 0);
           if (w.game) dropBlock(w.game, x, y, z, id, m, null);
+          markLeavesForDecay(w, x, y, z, 1);
         } else w.setMeta(x, y, z, m & ~16, 4);
         return;
       }
@@ -9948,6 +10099,7 @@ class Interaction {
     if (held.id === I.prospector_rod) { g.useProspectorRod(); return; }
     if (held.id === I.wayfinder) { g.useWayfinder(); return; }
     if (held.id === I.journal) { g.openJournal(); return; }
+    if (held.id === I.map) { g.openMap(); return; }
     if (held.id === I.wisp_essence) { if (g.releaseWisp()) { if (!p.creative) p.inventory.decrementHeld(1); p.swing(); } return; }
     if (held.id === I.spawn_egg && this.hit) return;
     if (p.startUse(held)) return;
@@ -11357,6 +11509,96 @@ class EntityRenderer {
   }
 }
 
+// ---- src/render/dynitems.js
+// ---------------------------------------------------------------------------
+// Animated item textures: the compass needle swings towards the world spawn
+// and the clock dial turns with the sun, in the hotbar, the hand and on the
+// ground alike (the shared texture layer is rewritten in place).
+// ---------------------------------------------------------------------------
+const DynamicItems = (() => {
+  let compassBase = null, clockBase = null;
+  let angle = 0, delta = 0, lastC = null, lastK = null;
+  function bases() {
+    if (compassBase) return;
+    // compass: iron rim, pale face, small cardinal ticks
+    compassBase = new TexGen.Img();
+    clockBase = new TexGen.Img();
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const d = Math.hypot(x - 7.5, y - 7.5);
+      if (d < 4.6) compassBase.set(x, y, [222, 214, 196]);
+      else if (d < 5.7) compassBase.set(x, y, (x + y) % 5 === 0 ? [150, 150, 150] : [120, 120, 124]);
+      else if (d < 6.6) compassBase.set(x, y, [44, 44, 48]);
+      if (d >= 4.6 && d < 5.7) clockBase.set(x, y, (x * 3 + y) % 4 === 0 ? [255, 236, 120] : [230, 186, 40]);
+      else if (d >= 5.7 && d < 6.6) clockBase.set(x, y, [82, 62, 6]);
+    }
+    for (const [x, y] of [[7, 3], [8, 3], [12, 7], [12, 8], [7, 12], [8, 12], [3, 7], [3, 8]]) compassBase.set(x, y, [150, 140, 120]);
+  }
+  function drawCompass(img, a) {
+    img.d.set(compassBase.d);
+    const s = Math.sin(a), c = Math.cos(a);
+    // dark tail
+    for (let k = 0; k <= 12; k++) { const t = k / 12 * 3.2; img.set(Math.round(7.5 - s * t), Math.round(7.5 + c * t), [70, 70, 76]); }
+    // red point
+    for (let k = 0; k <= 16; k++) { const t = k / 16 * 4.2; img.set(Math.round(7.5 + s * t), Math.round(7.5 - c * t), k > 13 ? [255, 90, 80] : [210, 30, 30]); }
+    img.set(7, 7, [40, 40, 40]); img.set(8, 8, [40, 40, 40]);
+  }
+  function drawClock(img, f) {
+    img.d.set(clockBase.d);
+    const phi = f * Math.PI * 2;
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const dx = x - 7.5, dy = y - 7.5, d = Math.hypot(dx, dy);
+      if (d >= 4.6) continue;
+      const a = Math.atan2(dx, -dy) - phi;
+      const day = Math.cos(a) > 0;
+      let col = day ? [104, 170, 240] : [22, 32, 72];
+      // sun and moon sit opposite each other on the dial
+      const sx = Math.sin(phi) * 2.6, sy = -Math.cos(phi) * 2.6;
+      if (Math.hypot(dx - sx, dy - sy) < 1.3) col = [255, 226, 70];
+      if (Math.hypot(dx + sx, dy + sy) < 1.1) col = [236, 236, 230];
+      if (!day && ((x * 7 + y * 3) % 11 === 0)) col = [200, 210, 255];
+      img.set(x, y, col);
+    }
+    // fixed pointer at the top
+    img.set(7, 2, [60, 40, 0]); img.set(8, 2, [60, 40, 0]); img.set(7, 3, [40, 28, 0]); img.set(8, 3, [40, 28, 0]);
+  }
+  function invalidate(game, id) {
+    const icons = game.gui.icons, pre = id + ':';
+    for (const k of [...icons.cache.keys()]) if (k.startsWith(pre)) icons.cache.delete(k);
+  }
+  function update(game) {
+    const p = game.player, w = game.world;
+    if (!p || !w || w.menu) return;
+    bases();
+    const atlas = game.renderer.atlas;
+    // compass: springy needle like the classic one
+    const sp = w.spawn || { x: 0, z: 0 };
+    const dx = sp.x + 0.5 - p.x, dz = sp.z + 0.5 - p.z;
+    const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
+    const target = (dx * dx + dz * dz < 0.5) ? angle + 0.3 : Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz);
+    let d2 = wrapRadians(target - angle);
+    d2 = clamp(d2, -1, 1);
+    delta += d2 * 0.1; delta *= 0.8; angle = wrapRadians(angle + delta);
+    const cq = Math.round(angle / (Math.PI * 2) * 64);
+    if (cq !== lastC) {
+      lastC = cq;
+      const img = TexGen.T.compass;
+      drawCompass(img, cq / 64 * Math.PI * 2);
+      atlas.upload(atlas.layer('compass'), img);
+      invalidate(game, ITEM_IDS.compass);
+    }
+    // clock: dial follows the sun
+    const kq = Math.round(w.celestialAngle(0) * 64) % 64;
+    if (kq !== lastK) {
+      lastK = kq;
+      const img = TexGen.T.clock;
+      drawClock(img, kq / 64);
+      atlas.upload(atlas.layer('clock'), img);
+      invalidate(game, ITEM_IDS.clock);
+    }
+  }
+  return { update };
+})();
+
 // ---- src/audio/sound.js
 // ---------------------------------------------------------------------------
 // Procedural sound effects. Every sound is synthesised in JS into an
@@ -11971,19 +12213,20 @@ class WorldStorage {
   open() {
     return new Promise((resolve) => {
       let req;
-      try { req = indexedDB.open('blocklands', 1); } catch (e) { this.useMemory(); resolve(); return; }
+      try { req = indexedDB.open('blocklands', 2); } catch (e) { this.useMemory(); resolve(); return; }
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains('worlds')) db.createObjectStore('worlds', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('chunks')) db.createObjectStore('chunks');
         if (!db.objectStoreNames.contains('entities')) db.createObjectStore('entities');
+        if (!db.objectStoreNames.contains('maps')) db.createObjectStore('maps');
       };
       req.onsuccess = () => { this.db = req.result; resolve(); };
       req.onerror = () => { console.warn('IndexedDB unavailable, worlds will not persist', req.error); this.useMemory(); resolve(); };
       req.onblocked = () => { console.warn('IndexedDB blocked'); };
     });
   }
-  useMemory() { this.mem = { worlds: new Map(), chunks: new Map(), entities: new Map() }; this.persistent = false; }
+  useMemory() { this.mem = { worlds: new Map(), chunks: new Map(), entities: new Map(), maps: new Map() }; this.persistent = false; }
   get isPersistent() { return !!this.db; }
   // ---------------------------------------------------------------- primitives
   tx(store, mode, fn) {
@@ -12020,7 +12263,7 @@ class WorldStorage {
   putWorld(info) { const copy = Object.assign({}, info); delete copy.savedKeys; delete copy.entityKeys; return this.put('worlds', copy); }
   renameWorld(id, name) { return this.getWorld(id).then((w) => { if (!w) return; w.name = name; return this.putWorld(w); }); }
   deleteWorld(id) {
-    return Promise.all([this.del('worlds', id), this.deletePrefix('chunks', id + ':'), this.deletePrefix('entities', id + ':')]);
+    return Promise.all([this.del('worlds', id), this.deletePrefix('chunks', id + ':'), this.deletePrefix('entities', id + ':'), this.deletePrefix('maps', id + ':')]);
   }
   chunkKeys(id) { return this.keysWithPrefix('chunks', id + ':').then((ks) => new Set(ks.map((k) => Number(String(k).split(':')[1])))); }
   entityKeys(id) { return this.keysWithPrefix('entities', id + ':').then((ks) => new Set(ks.map((k) => Number(String(k).split(':')[1])))); }
@@ -12083,8 +12326,17 @@ class WorldStorage {
     }
     const entities = [];
     for (const k of ekeys) { const list = await this.get('entities', k); if (list) entities.push({ k: Number(String(k).split(':')[1]), l: list }); }
+    // explorer's map regions
+    const maps = [];
+    for (const k of await this.keysWithPrefix('maps', id + ':')) {
+      const rec = await this.get('maps', k);
+      if (!rec || !rec.present) continue;
+      const pr = rec.present instanceof Uint8Array ? rec.present : new Uint8Array(rec.present), da = rec.data instanceof Uint8Array ? rec.data : new Uint8Array(rec.data);
+      maps.push({ rx: rec.rx, rz: rec.rz, o: offset, p: pr.length, d: da.length });
+      parts.push(pr, da); offset += pr.length + da.length;
+    }
     const meta = Object.assign({}, info); delete meta.id;
-    const header = new TextEncoder().encode(JSON.stringify({ format: 'blocklands-world', version: 1, info: meta, chunks, entities }));
+    const header = new TextEncoder().encode(JSON.stringify({ format: 'blocklands-world', version: 1, info: meta, chunks, entities, maps }));
     const head = new Uint8Array(12);
     head.set([66, 76, 75, 87]); // BLKW
     new DataView(head.buffer).setUint32(4, 1, true);
@@ -12118,6 +12370,10 @@ class WorldStorage {
       this.queue('chunks', id + ':' + c.k, rec);
     }
     for (const e of header.entities || []) this.queue('entities', id + ':' + e.k, e.l);
+    for (const m of header.maps || []) {
+      const o = base + m.o;
+      this.queue('maps', id + ':' + m.rx + ',' + m.rz, { rx: m.rx, rz: m.rz, present: buf.slice(o, o + m.p), data: buf.slice(o + m.p, o + m.p + m.d) });
+    }
     await this.flush();
     await this.putWorld(info);
     return info;
@@ -13030,7 +13286,7 @@ class ControlsScreen extends Screen {
   draw(gui, mx, my) {
     super.draw(gui, mx, my);
     const rows = [['Move', 'W A S D'], ['Jump / Swim / Fly up', 'Space'], ['Sneak / Fly down', 'Shift'], ['Sprint', 'Ctrl or double-tap W'], ['Inventory', 'E'], ['Drop item', 'Q (Ctrl+Q: stack)'],
-      ['Hotbar', '1-9 / mouse wheel'], ['Swap offhand', 'F'], ['Pick block', 'Middle click'], ['Chat / commands', 'T  /  /'], ['Explorer\'s Journal', 'J'], ['Hide HUD / Screenshot', 'F1 / F2'], ['Debug screen', 'F3'], ['Third person', 'F5'], ['Fullscreen', 'F11']];
+      ['Hotbar', '1-9 / mouse wheel'], ['Swap offhand', 'F'], ['Pick block', 'Middle click'], ['Chat / commands', 'T  /  /'], ['Explorer\'s Journal / Map', 'J / M'], ['Hide HUD / Screenshot', 'F1 / F2'], ['Debug screen', 'F3'], ['Third person', 'F5'], ['Fullscreen', 'F11']];
     let y = 86;
     for (const [a, b] of rows) {
       if (y > this.H - 40) break;
@@ -13135,7 +13391,7 @@ const HOW_TO_PLAY = [
   ['Survival', 'Your health regenerates while your hunger bar is nearly full. Eat by holding the right mouse button with food selected. Sprinting, jumping and fighting make you hungry faster.', 'Falling from high places, drowning, fire, lava and monsters all hurt. Wear armour to take less damage. If you die you drop your items where you fell.'],
   ['Mining & Smelting', 'Ores hide underground: coal, iron, gold, ember, lapis, diamonds - and new finds like cobalt deep in slate, sulfur near lava and jade in high places.', 'Smelt ores in a Furnace with fuel such as coal, charcoal, wood or peat. Better pickaxes mine harder materials: some ores need iron or diamond tools.'],
   ['Farming', 'Till grass or dirt with a hoe and plant seeds near water. Crops need light to grow. Bone meal speeds up growth.', 'Animals give food, leather and wool. Shear sheep for wool and use buckets to collect milk. Brambles in the forest give berries you can bake into pies.'],
-  ['Exploration', 'The world is huge. Biomes have their own plants, creatures and treasures: look for camps, ruined towers, hermit huts, desert wells and sunken ruins.', 'Your Explorer\'s Journal (J) records every biome and creature you discover. Some secrets are rare - keep travelling!'],
+  ['Exploration', 'The world is huge. Biomes have their own plants, creatures and treasures: look for camps, ruined towers, hermit huts, desert wells and sunken ruins.', 'Your Explorer\'s Map (M) fills in as you travel, and your Explorer\'s Journal (J) records every biome and creature you discover. Some secrets are rare - keep travelling!'],
   ['Mysteries', 'On clear nights, watch the sky. Falling stars leave craters lined with starmetal - the strongest material of all, but you will need a diamond pickaxe.', 'Lights drift over swamps after dark. Some say they lead to buried treasure. On the moors, ancient runestones hum when touched with jade...'],
   ['Creative Mode', 'In Creative mode you can fly (double-tap Space), break blocks instantly and take any block from the creative inventory (E).', 'Worlds with cheats enabled accept commands: open chat with T and type /help.'],
   ['Saving & Sharing', 'Your worlds save automatically in your browser. Use Export on the world list (or in the pause menu) to download a .blocklands file.', 'Import it on any device - including your phone - to continue where you left off or share your world with friends.'],
@@ -13652,7 +13908,7 @@ const CREATIVE_TABS = (() => {
     blk(B.LILY_PAD), blk(B.CATTAIL), blk(B.BRAMBLE), blk(B.LEAF_LITTER), ...all(B.FENCE), blk(B.FENCE_GATE), blk(B.TRAPDOOR), blk(B.GLASS_PANE), ...all(B.CARPET), blk(B.LUMITE_LAMP), blk(B.MOB_SPAWNER),
     [I.door_wood, 0], [I.door_iron, 0], [I.bed, 0]] });
   T.push({ name: 'Tools', icon: [I.iron_axe, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ['shovel', 'pickaxe', 'axe', 'hoe'].map((k) => [I[m + '_' + k], 0])),
-    ...items(['flint_and_steel', 'shears', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'compass', 'clock', 'prospector_rod', 'wayfinder', 'journal'])] });
+    ...items(['flint_and_steel', 'shears', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'compass', 'clock', 'map', 'prospector_rod', 'wayfinder', 'journal'])] });
   T.push({ name: 'Combat', icon: [I.gold_sword, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].map((m) => [I[m + '_sword'], 0]), [I.bow, 0], [I.arrow, 0],
     ...['leather', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ARMOR_SLOTS.map((s) => [I[m + '_' + s], 0])), [I.snowball, 0], [I.egg, 0]] });
   T.push({ name: 'Foodstuffs', icon: [I.apple, 0], list: items(['apple', 'golden_apple', 'bread', 'porkchop', 'cooked_porkchop', 'beef', 'steak', 'chicken', 'cooked_chicken', 'mutton', 'cooked_mutton', 'venison', 'cooked_venison', 'jerky',
@@ -14090,6 +14346,139 @@ class JournalScreen extends Screen {
   }
 }
 
+// ---- src/ui/mapscreen.js
+// ---------------------------------------------------------------------------
+// Explorer's Map screen: pan (drag), zoom (wheel / buttons), markers.
+// ---------------------------------------------------------------------------
+class MapScreen extends Screen {
+  constructor(game) {
+    super(game);
+    this.background = 'world';
+    this.pauses = false;
+    this.touchPan = true;
+    const p = game.player;
+    this.cx = p ? p.x : 0; this.cz = p ? p.z : 0;
+    this.zoom = 2;                   // GUI pixels per block
+    this.dragging = null;
+    this.regions = new Map();        // "rx,rz" -> { cv, version }
+    this.hover = null;
+  }
+  init() {
+    const W = this.W, H = this.H;
+    this.mx0 = 8; this.my0 = 22; this.mw = W - 16; this.mh = H - 52;
+    const by = H - 26;
+    this.add(new Button(W / 2 - 154, by, 50, 20, '-', () => this.setZoom(this.zoom / 2)));
+    this.add(new Button(W / 2 - 100, by, 50, 20, '+', () => this.setZoom(this.zoom * 2)));
+    this.add(new Button(W / 2 - 46, by, 92, 20, 'Center', () => { const p = this.game.player; this.cx = p.x; this.cz = p.z; }));
+    this.add(new Button(W / 2 + 50, by, 104, 20, 'Done', () => this.close()));
+  }
+  setZoom(z) { this.zoom = clamp(z, 0.25, 8); }
+  close() { this.game.closeScreen(); }
+  regionCanvas(rx, rz) {
+    const store = this.game.maps;
+    const key = rx + ',' + rz;
+    let r = this.regions.get(key);
+    if (r && r.version === store.version) return r.cv;
+    if (!r) { const cv = document.createElement('canvas'); cv.width = 512; cv.height = 512; r = { cv, ctx: cv.getContext('2d'), img: null, version: -1, has: false }; this.regions.set(key, r); }
+    if (!r.img) r.img = r.ctx.createImageData(512, 512);
+    const d = r.img.data;
+    let any = false;
+    for (let lcz = 0; lcz < 32; lcz++) for (let lcx = 0; lcx < 32; lcx++) {
+      const ch = store.chunks.get(ckey(rx * 32 + lcx, rz * 32 + lcz));
+      for (let lz = 0; lz < 16; lz++) for (let lx = 0; lx < 16; lx++) {
+        const o = (((lcz * 16 + lz) * 512) + lcx * 16 + lx) * 4;
+        const v = ch ? ch[(lz << 4) | lx] : 0;
+        const c = v ? MAP_COLORS[v >> 2] : null;
+        if (!c) { d[o + 3] = 0; continue; }
+        const k = MAP_SHADE[v & 3] / 255;
+        d[o] = c[0] * k; d[o + 1] = c[1] * k; d[o + 2] = c[2] * k; d[o + 3] = 255;
+        any = true;
+      }
+    }
+    r.ctx.putImageData(r.img, 0, 0);
+    r.version = store.version; r.has = any;
+    return r.cv;
+  }
+  toWorld(mx, my) { return [this.cx + (mx - (this.mx0 + this.mw / 2)) / this.zoom, this.cz + (my - (this.my0 + this.mh / 2)) / this.zoom]; }
+  toScreen(x, z) { return [this.mx0 + this.mw / 2 + (x - this.cx) * this.zoom, this.my0 + this.mh / 2 + (z - this.cz) * this.zoom]; }
+  draw(gui, mx, my) {
+    gui.worldOverlay();
+    const ctx = gui.ctx, g = this.game, store = g.maps, p = g.player;
+    const x0 = this.mx0, y0 = this.my0, w = this.mw, h = this.mh;
+    // parchment frame
+    ctx.fillStyle = '#5a3e1c'; ctx.fillRect(x0 - 4, y0 - 4, w + 8, h + 8);
+    ctx.fillStyle = '#8a6a3a'; ctx.fillRect(x0 - 3, y0 - 3, w + 6, h + 6);
+    ctx.fillStyle = '#e4d6ac'; ctx.fillRect(x0, y0, w, h);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x0, y0, w, h); ctx.clip();
+    // parchment texture
+    ctx.fillStyle = 'rgba(160,130,80,0.10)';
+    for (let i = 0; i < 60; i++) { const px = x0 + ((i * 97) % w), py = y0 + ((i * 53) % h); ctx.fillRect(px, py, 2 + (i % 3), 1); }
+    if (store) {
+      const [wx0, wz0] = this.toWorld(x0, y0), [wx1, wz1] = this.toWorld(x0 + w, y0 + h);
+      const rx0 = Math.floor(wx0 / 512), rx1 = Math.floor(wx1 / 512), rz0 = Math.floor(wz0 / 512), rz1 = Math.floor(wz1 / 512);
+      ctx.imageSmoothingEnabled = false;
+      for (let rz = rz0; rz <= rz1; rz++) for (let rx = rx0; rx <= rx1; rx++) {
+        const cv = this.regionCanvas(rx, rz);
+        const r = this.regions.get(rx + ',' + rz);
+        if (!r || !r.has) continue;
+        const [sx, sy] = this.toScreen(rx * 512, rz * 512);
+        ctx.drawImage(cv, Math.round(sx), Math.round(sy), Math.round(512 * this.zoom), Math.round(512 * this.zoom));
+      }
+    }
+    // markers
+    const mark = (x, z, fn) => { const [sx, sy] = this.toScreen(x, z); if (sx >= x0 - 8 && sy >= y0 - 8 && sx < x0 + w + 8 && sy < y0 + h + 8) fn(Math.round(sx), Math.round(sy)); };
+    const w0 = g.world;
+    if (w0 && w0.spawn) mark(w0.spawn.x + 0.5, w0.spawn.z + 0.5, (sx, sy) => { ctx.fillStyle = '#202020'; ctx.fillRect(sx - 3, sy - 1, 7, 3); ctx.fillRect(sx - 1, sy - 3, 3, 7); ctx.fillStyle = '#f0e8d0'; ctx.fillRect(sx - 2, sy, 5, 1); ctx.fillRect(sx, sy - 2, 1, 5); });
+    const sp = p && p.spawnPoint && !Array.isArray(p.spawnPoint) && !p.spawnPoint.forced ? p.spawnPoint : null;
+    if (sp) mark(sp.x + 0.5, sp.z + 0.5, (sx, sy) => { ctx.fillStyle = '#202020'; ctx.fillRect(sx - 3, sy - 2, 7, 5); ctx.fillStyle = '#c02020'; ctx.fillRect(sx - 2, sy - 1, 5, 3); ctx.fillStyle = '#ffffff'; ctx.fillRect(sx - 2, sy - 1, 2, 1); });
+    if (p) mark(p.x, p.z, (sx, sy) => {
+      // arrow pointing where the player looks
+      const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
+      for (let t = -3; t <= 4; t++) {
+        const half = Math.max(0, (4 - t) * 0.6);
+        for (let s = -half; s <= half; s += 0.5) {
+          const px = sx + fx * t + fz * s, py = sy + fz * t - fx * s;
+          ctx.fillStyle = t > 1 ? '#ffffff' : '#d02020';
+          ctx.fillRect(Math.round(px), Math.round(py), 1, 1);
+        }
+      }
+    });
+    ctx.restore();
+    // header & hover readout
+    gui.textCentered("Explorer's Map", this.W / 2, 6, '#ffffff');
+    const explored = store ? store.explored() : 0;
+    gui.text(Math.round(explored * 256 / 1000) / 1000 + ' km² explored', 8, 6, '#a0a0a0');
+    if (mx >= x0 && my >= y0 && mx < x0 + w && my < y0 + h) {
+      const [wx, wz] = this.toWorld(mx, my);
+      const bx = Math.floor(wx), bz = Math.floor(wz);
+      const known = store && store.chunks.has(ckey(bx >> 4, bz >> 4));
+      const bio = known && w0 ? BIOMES[w0.biomeAt(bx, bz)] : null;
+      gui.textRight('X ' + bx + '  Z ' + bz + (bio ? '  ' + bio.name : known ? '' : '  (unexplored)'), this.W - 8, 6, '#e0e0e0');
+    }
+    for (const wd of this.widgets) wd.draw(gui, mx, my);
+  }
+  mouseDown(mx, my, btn) {
+    if (super.mouseDown(mx, my, btn)) return true;
+    if (mx >= this.mx0 && my >= this.my0 && mx < this.mx0 + this.mw && my < this.my0 + this.mh) this.dragging = { mx, my, cx: this.cx, cz: this.cz };
+    return true;
+  }
+  mouseMove(mx, my) {
+    super.mouseMove(mx, my);
+    if (this.dragging) { this.cx = this.dragging.cx - (mx - this.dragging.mx) / this.zoom; this.cz = this.dragging.cz - (my - this.dragging.my) / this.zoom; }
+  }
+  mouseUp(mx, my, btn) { super.mouseUp(mx, my, btn); this.dragging = null; }
+  wheel(d) { this.setZoom(d < 0 ? this.zoom * 2 : this.zoom / 2); }
+  keyDown(e) {
+    if (e.key === 'Escape' || e.code === 'KeyM' || e.code === KEYS.inventory) { this.close(); return; }
+    if (e.key === '+' || e.key === '=') this.setZoom(this.zoom * 2);
+    if (e.key === '-') this.setZoom(this.zoom / 2);
+    const step = 32 / this.zoom;
+    if (e.key === 'ArrowLeft') this.cx -= step; if (e.key === 'ArrowRight') this.cx += step;
+    if (e.key === 'ArrowUp') this.cz -= step; if (e.key === 'ArrowDown') this.cz += step;
+  }
+}
+
 // ---- src/ui/touch.js
 // ---------------------------------------------------------------------------
 // Touch controls (pocket-edition style): D-pad, jump/fly, sneak toggle,
@@ -14338,7 +14727,7 @@ class TouchControls {
     m.x = x; m.y = y;
     g.input.mx = x; g.input.my = y;
     const far = Math.abs(y - m.sy) > 8 || Math.abs(x - m.sx) > 8;
-    if (far && !m.scroll && scr.wheel && Math.abs(y - m.sy) > Math.abs(x - m.sx) * 1.2 && (m.container ? !m.sent : !(scr.widgets || []).some((w) => w.dragging))) {
+    if (far && !m.scroll && scr.wheel && !scr.touchPan && Math.abs(y - m.sy) > Math.abs(x - m.sx) * 1.2 && (m.container ? !m.sent : !(scr.widgets || []).some((w) => w.dragging))) {
       if (!m.container || !this.overSlot(scr, m.sx, m.sy) || scr instanceof CreativeScreen) m.scroll = true;
     }
     if (m.scroll) {
@@ -16154,6 +16543,7 @@ class Game {
   openChat(initial) { this.openScreen(new ChatScreen(this, initial || '')); }
   openInventory() { const p = this.player; if (!p || p.dead) return; this.openScreen(p.creative ? new CreativeScreen(this) : new InventoryScreen(this)); }
   openJournal() { this.openScreen(new JournalScreen(this, null)); }
+  openMap() { if (this.maps) this.openScreen(new MapScreen(this)); }
   onPointerLockLost() { if (!this.screen && this.player && !this.loading && !this.player.dead) this.openPause(); }
   isPaused() { return !!(this.screen && this.screen.pauses) || !!this.loading; }
 
@@ -16179,6 +16569,7 @@ class Game {
     this.thirdPerson = 0;
     this.loading = null;
     this.sleepFade = 0;
+    this.maps = null;
   }
   createWorld(opts) {
     const info = Object.assign({
@@ -16211,6 +16602,8 @@ class Game {
     w.onTileRemoved = (te, x, y, z) => this.onTileRemoved(te, x, y, z);
     const p = new Player(w, this);
     this.player = p;
+    this.maps = new MapStore(this, info.id);
+    this.maps.load(this.storage);
     this.settings.lastWorld = info.id; this.saveSettings();
     if (info.player) {
       p.load(info.player);
@@ -16259,6 +16652,8 @@ class Game {
       w.spawn = { x, y, z };
       w.info.spawn = w.spawn;
       if (L.isNew && w.info.bonusChest) this.placeBonusChest(x, y, z);
+      // like the old console editions, every new adventure starts with a map
+      if (L.isNew && !p.creative) p.inventory.main.set(8, new ItemStack(ITEM_IDS.map, 1, 0));
     }
     if (!w.spawn) w.spawn = { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) };
     this.loading = null;
@@ -16307,6 +16702,7 @@ class Game {
       info.lastPlayed = Date.now();
       w.saveAll();
       this.saveLoadedEntities();
+      if (this.maps) this.maps.save(this.storage);
       this.storage.putWorld(info);
       return this.storage.flush();
     } catch (e) { console.error('save failed', e); return Promise.resolve(); }
@@ -16479,6 +16875,11 @@ class Game {
     if (c === KEYS.chat) { e.preventDefault(); this.openChat(''); return; }
     if (c === KEYS.command) { e.preventDefault(); this.openChat('/'); return; }
     if (c === KEYS.journal) { this.openJournal(); return; }
+    if (c === KEYS.map) {
+      if (p.creative || p.inventory.findSlot(ITEM_IDS.map) >= 0) this.openMap();
+      else this.hud.showAction('You need an Explorer\'s Map (eight paper around a compass)');
+      return;
+    }
     if (c === KEYS.swapHands) {
       const inv = p.inventory, a = inv.held(), b = inv.offhandItem();
       inv.main.set(inv.selected, b); inv.offhand.set(0, a);
@@ -16554,6 +16955,7 @@ class Game {
     this.particles.tick();
     this.hud.tick();
     this.renderer.atlas.tickAnimations();
+    DynamicItems.update(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
     const h = p.inventory.held();
@@ -16568,6 +16970,7 @@ class Game {
     this.fovMod += (fm - this.fovMod) * 0.5;
     if (p.headInWater) this.waterTime = Math.min(600, this.waterTime + 1); else this.waterTime = 0;
     if (w.time % 10 === 0) this.checkDiscoveries();
+    if (w.time % 10 === 5 && this.maps) this.maps.tick();
     if (w.time % 20 === 0) this.checkMilestones();
     if (w.time % 600 === 0) this.saveWorld();
     // death

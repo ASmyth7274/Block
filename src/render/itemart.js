@@ -367,6 +367,11 @@
     '.......o........', '.......o........', '................'], { o: [180, 200, 255] });
   sprite('particle_glint', ['................', '................', '................', '................', '.......o........', '.......o........',
     '......ooo.......', '....ooooooo.....', '......ooo.......', '.......o........', '.......o........'], { o: [255, 255, 255] });
+  // explorer's map: parchment with a coastline and a red route
+  art('map', [
+    '................', '..oooooooooooo..', '..oppppppppppo..', '..opggpppbbppo..', '..opgggpbbbbpo..', '..oppggpbbbppo..',
+    '..opppgrrppppo..', '..oppppprpgppo..', '..opbbppprggpo..', '..opbbbpprrgpo..', '..oppbbppppxpo..', '..opppppggppxo..',
+    '..oppppggggppo..', '..oooooooooooo..', '................', '................'], { o: '#6a4a24', p: '#e8dcb4', g: '#7aa84a', b: '#5a86c8', r: '#c82020', x: '#2a2a2a' });
   // soft round glow (wisps)
   (() => {
     const g = new TexGen.Img();
