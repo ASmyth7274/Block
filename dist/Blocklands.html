@@ -1024,6 +1024,11 @@ defBlock(129, 'sticky_piston', { name: 'Sticky Piston', render: R.CIRCUIT, tex: 
 defBlock(130, 'piston_head', { name: 'Piston Head', render: R.CIRCUIT, tex: 'piston_side', opaque: false, opacity: 0, hardness: 0.5, sound: 'stone',
   collide: (m) => pistonHeadBoxes(m), select: (m) => pistonHeadBoxes(m)[0], drops: () => [] });
 defBlock(131, 'piston_moving', { name: 'Moving Block', render: R.NONE, tex: 'piston_side', opaque: false, solid: false, opacity: 0, hardness: -1, tileEntity: 'moving', select: () => null, drops: () => [] });
+defBlock(132, 'enchanting_table', {
+  name: 'Enchanting Table', render: R.MODEL, tex: { top: 'enchanting_top', side: 'enchanting_side', bottom: 'enchanting_bottom' }, opaque: false, opacity: 0,
+  hardness: 5, resistance: 2000, tool: 'pickaxe', needsTool: true, tileEntity: 'enchanting', light: 0,
+  model: () => [{ b: [0, 0, 0, 16, 12, 16] }], collide: () => [box16(0, 0, 0, 16, 12, 16)], select: () => box16(0, 0, 0, 16, 12, 16),
+});
 defBlock(127, 'note_block', { name: 'Note Block', tex: 'note_block', hardness: 0.8, tool: 'axe', sound: 'wood', flammable: 5, burnSpeed: 5, drops: () => [[B.NOTE_BLOCK, 1, 0]] });
 
 // -------------------------------------------------------------------------
@@ -3412,6 +3417,66 @@ const TexGen = (function () {
   })());
 })();
 
+// ---------------------------------------------------------------------------
+// Enchanting: the table, the floating book, the glint and the flying glyphs
+// ---------------------------------------------------------------------------
+(function () {
+  const { Img, reg, pal, rngFor, sprite, C } = TexGen;
+  const obsidian = (name) => {
+    const img = new Img(), rng = rngFor(name);
+    const P = pal(['#0d0a14', '#130f1e', '#1a1428', '#241c36', '#3a2c52']);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) img.set(x, y, P[Math.min(4, Math.floor(rng.nextFloat() * rng.nextFloat() * 5))]);
+    return img;
+  };
+  reg('enchanting_bottom', obsidian('ench_bottom'));
+  reg('enchanting_side', (() => {
+    const img = obsidian('ench_side'), rng = rngFor('ench_side2');
+    const R = pal(['#5a0c0c', '#7a1414', '#9a1e1e', '#b82a2a']);
+    for (let y = 0; y < 5; y++) for (let x = 0; x < 16; x++) img.set(x, y, y === 4 ? C('#e8b830') : R[Math.min(3, (x + y * 3 + rng.nextInt(2)) % 4)]);
+    for (const x of [2, 7, 12]) { img.set(x, 5, R[1]); img.set(x + 1, 5, R[2]); img.set(x, 6, R[0]); }
+    return img;
+  })());
+  reg('enchanting_top', (() => {
+    const img = obsidian('ench_top'), rng = rngFor('ench_top2');
+    const R = pal(['#6a1010', '#8a1818', '#a82222', '#c03030']);
+    for (let y = 2; y < 14; y++) for (let x = 2; x < 14; x++) img.set(x, y, R[(x * 3 + y * 5 + rng.nextInt(2)) % 4]);
+    for (let i = 2; i < 14; i++) { img.set(i, 2, C('#e8b830')); img.set(i, 13, C('#a87818')); img.set(2, i, C('#e8b830')); img.set(13, i, C('#a87818')); }
+    for (const [x, y] of [[0, 0], [14, 0], [0, 14], [14, 14]]) { img.set(x, y, C('#d5fffa')); img.set(x + 1, y, C('#5decf5')); img.set(x, y + 1, C('#5decf5')); img.set(x + 1, y + 1, C('#1fa8b0')); }
+    return img;
+  })());
+  reg('book_cover', (() => {
+    const img = TexGen.noiseImg('book_cover', ['#5a2a10', '#6e3416', '#7e3e1a', '#8e4a22'], { scales: [4, 1], weights: [0.4, 0.6] });
+    for (let i = 0; i < 16; i++) { img.set(i, 0, C('#3a1a08')); img.set(i, 15, C('#3a1a08')); img.set(0, i, C('#3a1a08')); img.set(15, i, C('#3a1a08')); }
+    for (let x = 5; x < 11; x++) { img.set(x, 6, C('#c8a040')); img.set(x, 9, C('#c8a040')); }
+    return img;
+  })());
+  reg('book_pages', (() => {
+    const img = new Img().fill(C('#ece4cc'));
+    for (let y = 2; y < 15; y += 2) for (let x = 2; x < 14; x++) if ((x * 7 + y * 3) % 9 > 1) img.set(x, y, C('#b8ac90'));
+    return img;
+  })());
+  // the shimmer that runs over enchanted things
+  reg('enchant_glint', (() => {
+    const img = new Img();
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const d = ((x + y) % 16) / 16, band = Math.max(0, 1 - Math.abs(d - 0.5) * 3.2);
+      const k = band * (0.7 + 0.3 * Math.sin((x - y) * 0.8));
+      img.set(x, y, [Math.round(128 * k), Math.round(64 * k), Math.round(204 * k)], 255);
+    }
+    return img;
+  })());
+  // glyphs drifting from bookshelves into the table
+  const GLYPH = [
+    ['.#.', '#.#', '.#.', '.#.'], ['#.#', '.#.', '#.#'], ['###', '..#', '.#.', '#..'], ['#..', '###', '..#'],
+    ['.#.', '###', '.#.'], ['##.', '#.#', '.##'], ['#.#', '#.#', '.#.'], ['.##', '#..', '.##'],
+  ];
+  GLYPH.forEach((rows, i) => {
+    const pad = ['................', '................', '................', '................', '................', '................'];
+    const full = pad.concat(rows.map((r) => '......' + r.replace(/#/g, 'o') + '.'.repeat(10 - r.length)));
+    sprite('particle_glyph' + i, full, { o: [255, 255, 255] });
+  });
+})();
+
 // ---- src/world/worldgen.js
 // ---------------------------------------------------------------------------
 // World generation. Self-contained factory (no outer references) so it can be
@@ -5092,8 +5157,18 @@ class MovingTE extends TileEntity {
   load(d) { this.id = d.id | 0; this.meta = d.meta | 0; }
 }
 
+// the enchanting table only keeps the floating book's animation state
+class EnchantTE extends TileEntity {
+  constructor(x, y, z) {
+    super('enchanting', x, y, z);
+    this.ticks = 0; this.spread = 0; this.pSpread = 0; this.rot = 0; this.pRot = 0; this.tRot = 0;
+    this.flip = 0; this.pFlip = 0; this.flipT = 0; this.flipA = 0;
+  }
+}
+
 function makeTileEntity(type, x, y, z) {
   switch (type) {
+    case 'enchanting': return new EnchantTE(x, y, z);
     case 'moving': return new MovingTE(x, y, z);
     case 'sign': return new SignTE(x, y, z);
     case 'chest': return new ChestTE(x, y, z);
@@ -7800,6 +7875,7 @@ class GuiRenderer {
     const ctx = this.ctx;
     const icon = this.icons.get(stack.id, stack.dmg, this.scale);
     ctx.drawImage(icon, x, y, 16, 16);
+    if (stack.tag && stack.tag.ench && stack.tag.ench.length) this.glint(icon, x, y);
     opts = opts || {};
     const md = maxDamageOf(stack.id);
     if (md > 0 && stack.dmg > 0) {
@@ -7814,6 +7890,31 @@ class GuiRenderer {
       const s = String(stack.count);
       this.textRight(s, x + 17, y + 9, '#ffffff');
     }
+  }
+  // enchantment shimmer over an icon: purple bands sliding across, added on top
+  glint(icon, x, y) {
+    const size = icon.width;
+    let c = this._glint;
+    if (!c) c = this._glint = document.createElement('canvas');
+    if (c.width !== size) { c.width = size; c.height = size; }
+    const g = c.getContext('2d');
+    g.globalCompositeOperation = 'source-over';
+    g.clearRect(0, 0, size, size);
+    g.drawImage(icon, 0, 0);
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = 'rgba(70,30,130,0.55)';
+    g.fillRect(0, 0, size, size);
+    const t = (performance.now() % 3000) / 3000;
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = 'rgba(170,100,255,0.9)';
+    for (const k of [0, 0.5]) {
+      const o = ((t + k) % 1) * size * 2.4 - size * 0.7;
+      g.beginPath(); g.moveTo(o, 0); g.lineTo(o + size * 0.32, 0); g.lineTo(o + size * 0.32 - size, size); g.lineTo(o - size, size); g.closePath(); g.fill();
+    }
+    const ctx = this.ctx;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.drawImage(c, x, y, 16, 16);
+    ctx.globalCompositeOperation = 'source-over';
   }
   // tooltip box in the classic dark purple style
   tooltip(lines, mx, my) {
@@ -8343,6 +8444,7 @@ class Living extends Entity {
       amount = amount * (25 - Math.min(20, armor)) / 25;
       if (this.damageArmor) this.damageArmor(amount);
     }
+    if (this.enchantReduction) amount *= 1 - this.enchantReduction(src);
     this.health = Math.max(0, this.health - amount);
   }
   knockback(dx, dz, strength) {
@@ -8694,7 +8796,7 @@ class Arrow extends Entity {
     if (target) {
       let dmg = Math.ceil(len * this.damage);
       if (this.crit) dmg += Math.floor(Math.random() * (dmg / 2 + 2));
-      if (target.hurt(dmg, { type: 'arrow', entity: this.shooter || this, knockback: 0.3 })) {
+      if (target.hurt(dmg, { type: 'arrow', entity: this.shooter || this, knockback: 0.3 + (this.punch || 0) * 0.6 })) {
         if (target.type !== 'player') game.audio.play('arrow_hit', 1, 1.2 / (Math.random() * 0.2 + 0.9), this.x, this.y, this.z);
         if (this.fire) target.fire = 100;
         this.removed = true;
@@ -8828,6 +8930,8 @@ class FishHook extends Entity {
     this.caught = null;
     this.caughtDelay = 0; this.catchableDelay = 0; this.catchable = 0; this.approach = 0;
     this.inWaterNow = false;
+    const rod = angler.inventory ? angler.inventory.held() : null;
+    this.luck = Enchant.level(rod, 'luck_of_the_sea'); this.lure = Enchant.level(rod, 'lure');
   }
   discard() {
     this.removed = true;
@@ -8936,7 +9040,7 @@ class FishHook extends Entity {
       }
       if (this.caughtDelay <= 0) { this.approach = R() * 360; this.catchableDelay = 20 + Math.floor(R() * 61); }
     } else {
-      this.caughtDelay = 100 + Math.floor(R() * 801);
+      this.caughtDelay = Math.max(1, 100 + Math.floor(R() * 801) - this.lure * 100);
     }
     if (this.catchable > 0) this.vy -= R() * R() * R() * 0.2;
   }
@@ -8984,13 +9088,14 @@ const Fishing = (() => {
     const sea = key === 'ocean' || key === 'deep_ocean';
     const S = (id, n, d) => () => new ItemStack(id, typeof n === 'function' ? n() : (n || 1), d || 0);
     const worn = (id) => () => { const s = new ItemStack(id, 1, 0); const m = maxDamageOf(id); if (m) s.dmg = Math.floor(m * (0.25 + R() * 0.65)); return s; };
+    const junkP = Math.max(0, 0.1 - (hook.luck || 0) * 0.025 - (hook.lure || 0) * 0.01), treasureP = Math.max(0, 0.05 + (hook.luck || 0) * 0.01 - (hook.lure || 0) * 0.01);
     let f = R();
-    if (f < 0.1) {
+    if (f < junkP) {
       return pick([[worn(I.leather_boots), 10], [S(I.leather), 10], [S(I.bone), 10], [S(I.string), 5], [S(I.stick), 5], [S(I.bowl), 10], [S(I.rotten_flesh), 10],
         [S(I.dye, 3, 15), 3], [S(B.LILY_PAD), 8], [S(I.cattail_fiber, () => 1 + Math.floor(R() * 3)), 5]]);
     }
-    f -= 0.1;
-    if (f < 0.05) {
+    f -= junkP;
+    if (f < treasureP) {
       return pick([[S(I.message_bottle), sea ? 40 : 25], [worn(I.bow), 8], [worn(I.fishing_rod), 8], [S(B.LILY_PAD), 5], [S(I.gold_nugget, () => 2 + Math.floor(R() * 5)), 10],
         [S(I.jade), 6], [S(I.golden_apple), 2], [S(I.diamond), 1], [S(I.wisp_essence), 4], [S(I.compass), 3]]);
     }
@@ -9283,6 +9388,7 @@ class Player extends Living {
     this.achievements = {};
     this.lastBiome = -1;
     this.riding = null; this.fishHook = null; this.pendingMount = null; this.prevSneakKey = false;
+    this.enchantSeed = (Math.random() * 2147483647) | 0;
   }
   get creative() { return this.gameMode === 'creative'; }
   get survivalLike() { return this.gameMode === 'survival' || this.gameMode === 'hardcore'; }
@@ -9438,7 +9544,8 @@ class Player extends Living {
     } else this.foodTimer = 0;
     // air
     if (this.headInWater) {
-      this.air--;
+      const resp = Enchant.level(this.inventory.armor.items[0], 'respiration');
+      if (!(resp > 0 && Math.random() < resp / (resp + 1))) this.air--;
       if (this.air <= -20) { this.air = 0; this.hurt(2, { type: 'drown' }); }
     } else this.air = 300;
     if (this.effects.poison && this.age % 25 === 0 && this.health > 1) this.hurt(1, { type: 'magic' });
@@ -9451,23 +9558,38 @@ class Player extends Living {
     this.xp += n / cap;
     while (this.xp >= 1) { this.xp = (this.xp - 1) * cap; this.xpLevel++; cap = xpBarCap(this.xpLevel); this.xp /= cap; if (this.xpLevel % 5 === 0) this.game.audio.play('levelup', 0.75); }
   }
+  // spend whole levels (enchanting)
+  removeLevels(n) {
+    this.xpLevel = Math.max(0, this.xpLevel - n);
+    if (this.xpLevel === 0) this.xp = 0;
+  }
   addFood(hunger, sat) {
     this.food = Math.min(20, this.food + hunger);
     this.saturation = Math.min(this.food, this.saturation + hunger * sat * 2);
   }
   onHurt(amount, src) {
     this.stats.damageTaken += amount;
+    // thorns: attackers sometimes get hurt back
+    const att = src && src.entity;
+    if (att && att !== this && att.hurt && src.type !== 'thorns') {
+      for (const a of this.inventory.armor.items) {
+        const t = Enchant.level(a, 'thorns');
+        if (t && Math.random() < 0.15 * t) { att.hurt(1 + Math.floor(Math.random() * 4), { type: 'thorns', entity: this, knockback: 0.2 }); a.dmg = Math.min(maxDamageOf(a.id) - 1, a.dmg + 2); break; }
+      }
+    }
     if (src.entity) this.hurtDir = Math.atan2(src.entity.z - this.z, src.entity.x - this.x) * 180 / Math.PI - this.yaw * 180 / Math.PI;
     else this.hurtDir = 0;
     this.exhaust(0.3);
     this.game.audio.play('hurt', 1, 1 + (Math.random() - 0.5) * 0.2);
     if (this.sleeping) this.game.wakeUp();
   }
+  // protection enchantments on top of the armour itself
+  enchantReduction(src) { return Enchant.protection(this.inventory.armor.items, src); }
   damageArmor(amount) {
     const n = Math.max(1, Math.floor(amount / 4));
     for (let i = 0; i < 4; i++) {
       const a = this.inventory.armor.items[i];
-      if (!a) continue;
+      if (!a || !Enchant.wears(a, true)) continue;
       a.dmg += n;
       if (a.dmg >= maxDamageOf(a.id)) { this.inventory.armor.items[i] = null; this.game.audio.play('break_tool', 0.8); }
     }
@@ -9557,6 +9679,7 @@ class Player extends Living {
       exhaustion: this.exhaustion, air: this.air, xpLevel: this.xpLevel, xp: this.xp, xpTotal: this.xpTotal, score: this.score,
       gameMode: this.gameMode, flying: this.flying, inventory: this.inventory.toJSON(), spawnPoint: this.spawnPoint, fire: this.fire,
       fallDistance: this.fallDistance, stats: this.stats, discovered: this.discovered, achievements: this.achievements, effects: this.effects,
+      enchantSeed: this.enchantSeed,
     };
   }
   load(d) {
@@ -9576,6 +9699,7 @@ class Player extends Living {
     if (d.discovered) this.discovered = Object.assign({ biomes: {}, mobs: {}, items: {}, structures: {} }, d.discovered);
     if (d.achievements) this.achievements = d.achievements;
     if (d.effects) this.effects = d.effects;
+    if (d.enchantSeed !== undefined) this.enchantSeed = d.enchantSeed;
     this.pendingMount = d.mount ? { x: d.mount.x, y: d.mount.y, z: d.mount.z, t: 200 } : null;
   }
 }
@@ -9663,6 +9787,7 @@ const Recipes = (() => {
   shaped([B.NOTE_BLOCK, 1], ['PPP', 'PEP', 'PPP'], { P: B.PLANKS, E: I.ember_dust });
   shaped([B.PISTON, 1], ['PPP', 'CIC', 'CEC'], { P: B.PLANKS, C: B.COBBLESTONE, I: I.iron_ingot, E: I.ember_dust });
   shapeless([B.STICKY_PISTON, 1], [I.slimeball, B.PISTON]);
+  shaped([B.ENCHANTING_TABLE, 1], [' B ', 'DOD', 'OOO'], { B: I.book, D: I.diamond, O: B.OBSIDIAN });
   shaped([I.compass], [' I ', 'IEI', ' I '], { I: I.iron_ingot, E: I.ember_dust });
   shaped([I.clock], [' G ', 'GEG', ' G '], { G: I.gold_ingot, E: I.ember_dust });
 
@@ -9932,7 +10057,10 @@ class PlayerInventory {
     if (!s) return;
     const md = maxDamageOf(s.id);
     if (md <= 0) return;
-    s.dmg += amount || 1;
+    let n = 0;
+    for (let i = 0; i < (amount || 1); i++) if (Enchant.wears(s)) n++;
+    if (!n) return;
+    s.dmg += n;
     if (s.dmg >= md) { this.main.items[this.selected] = null; if (player.onToolBreak) player.onToolBreak(s); }
     this.main.changed();
   }
@@ -9962,6 +10090,169 @@ class Slot {
   accepts(s) { return !this.output && (!this.filter || this.filter(s)); }
   limit(s) { return Math.min(this.maxStack, maxStackOf(s.id)); }
 }
+
+// ---- src/game/enchant.js
+// ---------------------------------------------------------------------------
+// Enchanting, following the classic table: bookshelves raise the power,
+// three offers cost 1-3 levels (and lapis), the enchantments rolled depend
+// on the item's enchantability. Enchantments live in stack.tag.ench.
+// ---------------------------------------------------------------------------
+const Enchant = (() => {
+  // [id, key, name, max level, weight, applies-to, min(l), max(l)]
+  const DEFS = [
+    [0, 'protection', 'Protection', 4, 10, 'armor', (l) => 1 + (l - 1) * 11, (l) => 21 + (l - 1) * 11],
+    [1, 'fire_protection', 'Fire Protection', 4, 5, 'armor', (l) => 10 + (l - 1) * 8, (l) => 22 + (l - 1) * 8],
+    [2, 'feather_falling', 'Feather Falling', 4, 5, 'boots', (l) => 5 + (l - 1) * 6, (l) => 15 + (l - 1) * 6],
+    [3, 'blast_protection', 'Blast Protection', 4, 2, 'armor', (l) => 5 + (l - 1) * 8, (l) => 17 + (l - 1) * 8],
+    [4, 'projectile_protection', 'Projectile Protection', 4, 5, 'armor', (l) => 3 + (l - 1) * 6, (l) => 18 + (l - 1) * 6],
+    [5, 'respiration', 'Respiration', 3, 2, 'helmet', (l) => 10 * l, (l) => 10 * l + 30],
+    [6, 'aqua_affinity', 'Aqua Affinity', 1, 2, 'helmet', () => 1, () => 41],
+    [7, 'thorns', 'Thorns', 3, 1, 'chest', (l) => 10 + 20 * (l - 1), (l) => 60 + 20 * (l - 1)],
+    [16, 'sharpness', 'Sharpness', 5, 10, 'weapon', (l) => 1 + (l - 1) * 11, (l) => 21 + (l - 1) * 11],
+    [17, 'smite', 'Smite', 5, 5, 'weapon', (l) => 5 + (l - 1) * 8, (l) => 25 + (l - 1) * 8],
+    [18, 'bane_of_arthropods', 'Bane of Arthropods', 5, 5, 'weapon', (l) => 5 + (l - 1) * 8, (l) => 25 + (l - 1) * 8],
+    [19, 'knockback', 'Knockback', 2, 5, 'weapon', (l) => 5 + 20 * (l - 1), (l) => 55 + 20 * (l - 1)],
+    [20, 'fire_aspect', 'Fire Aspect', 2, 2, 'weapon', (l) => 10 + 20 * (l - 1), (l) => 60 + 20 * (l - 1)],
+    [21, 'looting', 'Looting', 3, 2, 'weapon', (l) => 15 + (l - 1) * 9, (l) => 65 + (l - 1) * 9],
+    [32, 'efficiency', 'Efficiency', 5, 10, 'digger', (l) => 1 + 10 * (l - 1), (l) => 51 + 10 * (l - 1)],
+    [33, 'silk_touch', 'Silk Touch', 1, 1, 'digger', () => 15, () => 65],
+    [34, 'unbreaking', 'Unbreaking', 3, 5, 'breakable', (l) => 5 + (l - 1) * 8, (l) => 55 + (l - 1) * 8],
+    [35, 'fortune', 'Fortune', 3, 2, 'digger', (l) => 15 + (l - 1) * 9, (l) => 65 + (l - 1) * 9],
+    [48, 'power', 'Power', 5, 10, 'bow', (l) => 1 + (l - 1) * 10, (l) => 16 + (l - 1) * 10],
+    [49, 'punch', 'Punch', 2, 2, 'bow', (l) => 12 + (l - 1) * 20, (l) => 37 + (l - 1) * 20],
+    [50, 'flame', 'Flame', 1, 2, 'bow', () => 20, () => 50],
+    [51, 'infinity', 'Infinity', 1, 1, 'bow', () => 20, () => 50],
+    [61, 'luck_of_the_sea', 'Luck of the Sea', 3, 2, 'rod', (l) => 15 + (l - 1) * 9, (l) => 65 + (l - 1) * 9],
+    [62, 'lure', 'Lure', 3, 2, 'rod', (l) => 15 + (l - 1) * 9, (l) => 65 + (l - 1) * 9],
+  ];
+  const E = {}, BY_ID = {};
+  for (const d of DEFS) { const o = { id: d[0], key: d[1], name: d[2], max: d[3], weight: d[4], type: d[5], min: d[6], maxc: d[7] }; E[d[1]] = o; BY_ID[d[0]] = o; }
+  const GROUPS = [['protection', 'fire_protection', 'blast_protection', 'projectile_protection'], ['sharpness', 'smite', 'bane_of_arthropods'], ['silk_touch', 'fortune']];
+  const compatible = (a, b) => a !== b && !GROUPS.some((g) => g.includes(a.key) && g.includes(b.key));
+  const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+  const MAT_ENCH = { wood: 15, stone: 5, iron: 14, gold: 22, diamond: 10, cobalt: 12, starmetal: 18, leather: 15 };
+  const ARMOR_ENCH = { leather: 15, iron: 9, gold: 25, diamond: 10, cobalt: 11, starmetal: 16 };
+
+  function kindOf(id) {
+    const t = toolOf(id), a = armorOf(id);
+    if (a) return ['helmet', 'chest', 'legs', 'boots'][a.slot];
+    if (t) { if (t.kind === 'sword') return 'weapon'; if (t.kind === 'pickaxe' || t.kind === 'axe' || t.kind === 'shovel') return 'digger'; if (t.kind === 'hoe') return 'hoe'; return null; }
+    if (id === ITEM_IDS.bow) return 'bow';
+    if (id === ITEM_IDS.fishing_rod) return 'rod';
+    return null;
+  }
+  function enchantability(id) {
+    const t = toolOf(id), a = armorOf(id);
+    if (a) return ARMOR_ENCH[a.mat] || 10;
+    if (t && t.mat) return MAT_ENCH[t.mat] || 10;
+    if (id === ITEM_IDS.bow || id === ITEM_IDS.fishing_rod) return 1;
+    return 0;
+  }
+  function applies(def, kind) {
+    if (!kind) return false;
+    switch (def.type) {
+      case 'armor': return kind === 'helmet' || kind === 'chest' || kind === 'legs' || kind === 'boots';
+      case 'boots': case 'helmet': case 'chest': return kind === def.type;
+      case 'breakable': return true;
+      default: return def.type === kind;
+    }
+  }
+  function list(stack) { return (stack && stack.tag && stack.tag.ench) || []; }
+  function level(stack, key) {
+    if (!stack || !stack.tag || !stack.tag.ench) return 0;
+    const id = E[key].id;
+    for (const e of stack.tag.ench) if (e[0] === id) return e[1];
+    return 0;
+  }
+  function has(stack) { return !!(stack && stack.tag && stack.tag.ench && stack.tag.ench.length); }
+  function name(id, lvl) { const d = BY_ID[id]; return d ? d.name + (d.max > 1 || lvl > 1 ? ' ' + (ROMAN[lvl] || lvl) : '') : 'Unknown'; }
+  function canEnchant(stack) { return stack && stack.count === 1 && !has(stack) && kindOf(stack.id) && enchantability(stack.id) > 0; }
+
+  // the classic three costs for the given bookshelf power
+  function offerCost(rng, slot, power, stack) {
+    if (enchantability(stack.id) <= 0) return 0;
+    power = Math.min(power, 15);
+    const k = rng.nextInt(8) + 1 + (power >> 1) + rng.nextInt(power + 1);
+    const c = slot === 0 ? Math.max(Math.floor(k / 3), 1) : slot === 1 ? Math.floor(k * 2 / 3) + 1 : Math.max(k, power * 2);
+    return c < slot + 1 ? 0 : c;
+  }
+  function pickWeighted(rng, arr) {
+    let tot = 0; for (const a of arr) tot += a.def.weight;
+    let r = rng.nextInt(tot);
+    for (const a of arr) { r -= a.def.weight; if (r < 0) return a; }
+    return arr[arr.length - 1];
+  }
+  // what a given cost buys (deterministic for the seed)
+  function roll(rng, stack, cost) {
+    let j = enchantability(stack.id);
+    if (j <= 0) return [];
+    j = Math.floor(j / 2);
+    j = 1 + rng.nextInt((j >> 1) + 1) + rng.nextInt((j >> 1) + 1);
+    const k = j + cost;
+    const f = (rng.nextFloat() + rng.nextFloat() - 1) * 0.15;
+    const l = Math.max(1, Math.floor(k * (1 + f) + 0.5));
+    const kind = kindOf(stack.id);
+    let avail = [];
+    for (const def of DEFS.map((d) => E[d[1]])) {
+      if (!applies(def, kind)) continue;
+      for (let lv = def.max; lv >= 1; lv--) if (l >= def.min(lv) && l <= def.maxc(lv)) { avail.push({ def, lvl: lv }); break; }
+    }
+    if (!avail.length) return [];
+    const out = [pickWeighted(rng, avail)];
+    for (let i = l; rng.nextInt(50) <= i; i >>= 1) {
+      avail = avail.filter((a) => out.every((o) => compatible(o.def, a.def)));
+      if (!avail.length) break;
+      out.push(pickWeighted(rng, avail));
+    }
+    return out.map((a) => [a.def.id, a.lvl]);
+  }
+  function apply(stack, ench) { stack.tag = Object.assign({}, stack.tag || {}, { ench: ench.map((e) => [e[0], e[1]]) }); }
+  // bookshelves around a table, in the classic pattern
+  function shelves(w, x, y, z) {
+    const out = [];
+    const shelf = (dx, dy, dz) => { if (w.getBlock(x + dx, y + dy, z + dz) === B.BOOKSHELF) out.push([x + dx, y + dy, z + dz]); };
+    for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) {
+      if ((j === 0 && k === 0) || w.getBlock(x + k, y, z + j) !== 0 || w.getBlock(x + k, y + 1, z + j) !== 0) continue;
+      shelf(k * 2, 0, j * 2); shelf(k * 2, 1, j * 2);
+      if (k !== 0 && j !== 0) { shelf(k * 2, 0, j); shelf(k * 2, 1, j); shelf(k, 0, j * 2); shelf(k, 1, j * 2); }
+    }
+    return out;
+  }
+  function power(w, x, y, z) { return Math.min(15, shelves(w, x, y, z).length); }
+  // damage modifiers and the like
+  function attackBonus(stack, target) {
+    let b = 0;
+    const s = level(stack, 'sharpness'); if (s) b += s * 1.25;
+    const sm = level(stack, 'smite'); if (sm && target && target.undead) b += sm * 2.5;
+    const ba = level(stack, 'bane_of_arthropods'); if (ba && target && target.arthropod) b += ba * 2.5;
+    return b;
+  }
+  // classic enchantment protection factor for a damage source
+  function protection(armorItems, src) {
+    let epf = 0;
+    const t = src && src.type;
+    for (const a of armorItems) {
+      if (!a) continue;
+      const p = level(a, 'protection'); if (p && t !== 'void' && t !== 'starve') epf += Math.floor((6 + p * p) * 0.75 / 3);
+      const fp = level(a, 'fire_protection'); if (fp && (t === 'fire' || t === 'lava')) epf += Math.floor((6 + fp * fp) * 1.25 / 3);
+      const ff = level(a, 'feather_falling'); if (ff && t === 'fall') epf += Math.floor((6 + ff * ff) * 2.5 / 3);
+      const bp = level(a, 'blast_protection'); if (bp && t === 'explosion') epf += Math.floor((6 + bp * bp) * 1.5 / 3);
+      const pp = level(a, 'projectile_protection'); if (pp && t === 'arrow') epf += Math.floor((6 + pp * pp) * 1.5 / 3);
+    }
+    if (epf <= 0) return 0;
+    epf = Math.min(25, epf);
+    epf = ((epf + 1) >> 1) + Math.floor(Math.random() * ((epf >> 1) + 1));
+    return Math.min(20, epf) * 0.04;
+  }
+  // unbreaking: true if this use should cost durability
+  function wears(stack, armor) {
+    const u = level(stack, 'unbreaking');
+    if (!u) return true;
+    if (armor) return Math.random() < 0.6 + 0.4 / (u + 1);
+    return Math.random() < 1 / (u + 1);
+  }
+  return { E, BY_ID, list, level, has, name, canEnchant, kindOf, enchantability, offerCost, roll, apply, power, shelves, attackBonus, protection, wears };
+})();
 
 // ---- src/world/behaviors.js
 // ---------------------------------------------------------------------------
@@ -10360,6 +10651,7 @@ const Behaviors = (() => {
         return false;
       }
       case B.RUNESTONE: game.useRunestone(x, y, z); return true;
+      case B.ENCHANTING_TABLE: game.openScreen(new EnchantScreen(game, x, y, z)); return true;
       case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: case B.RELAY: case B.RELAY_ON: case B.NOTE_BLOCK:
         return Circuits.use(game, x, y, z, id);
       case B.BRAMBLE: {
@@ -10377,13 +10669,24 @@ const Behaviors = (() => {
     e.vx = (Math.random() - 0.5) * 0.2; e.vy = 0.2; e.vz = (Math.random() - 0.5) * 0.2;
     game.spawnEntity(e);
   }
-  function dropBlock(game, x, y, z, id, meta, tool) {
+  function dropBlock(game, x, y, z, id, meta, tool, held) {
     const d = BLOCKS[id];
     if (!d) return;
     const rng = game.world.rng;
     let drops;
-    if (d.drops) drops = d.drops(meta, rng, tool);
+    const silk = held && Enchant.level(held, 'silk_touch') && d.render === R.CUBE && !d.tileEntity && d.hardness >= 0;
+    if (silk) { const pk = pickBlockItem(id, meta); drops = pk ? [[pk[0], 1, pk[1]]] : []; }
+    else if (d.drops) drops = d.drops(meta, rng, tool);
     else { const pk = pickBlockItem(id, meta); drops = pk ? [[pk[0], 1, pk[1]]] : []; }
+    // fortune multiplies what ores give
+    const fortune = held && !silk ? Enchant.level(held, 'fortune') : 0;
+    if (fortune && (d.key.endsWith('_ore') || d.key.endsWith('_ore_lit') || id === B.LUMITE_CRYSTAL)) {
+      drops = drops.map(([did, n, dd]) => did === id || did === B.EMBER_ORE ? [did, n, dd] : [did, n * (Math.max(0, rng.nextInt(fortune + 2) - 1) + 1), dd]);
+    }
+    if (silk) {
+      for (const [did, n, dd] of drops) dropStack(game, x + 0.5, y + 0.5, z + 0.5, new ItemStack(did, n, dd));
+      return;
+    }
     for (const [did, n, dd] of drops) {
       if (n <= 0 || !itemExists(did)) continue;
       const s = new ItemStack(did, n, dd);
@@ -11494,7 +11797,9 @@ class Interaction {
       if (tool.kind === 'shears' && id === B.VINE) speed = 2;
       if (tool.kind === 'axe' && (id === B.LEAVES || id === B.HUGE_MUSHROOM_BROWN || id === B.HUGE_MUSHROOM_RED)) speed = Math.max(speed, tool.speed * 0.5);
     }
-    if (p.headInWater) speed *= 0.2;
+    const eff = Enchant.level(held, 'efficiency');
+    if (eff && speed > 1) speed += eff * eff + 1;
+    if (p.headInWater && !Enchant.level(p.inventory.armor.items[0], 'aqua_affinity')) speed *= 0.2;
     if (!p.onGround && !p.flying) speed *= 0.2;
     if (p.effects.haste) speed *= 1.4;
     const can = this.canHarvest(id, tool);
@@ -11572,7 +11877,7 @@ class Interaction {
     w.setBlock(x, y, z, 0, 0);
     Behaviors.onBroken(g, x, y, z, id, meta);
     if (!p.creative) {
-      if (this.canHarvest(id, tool)) Behaviors.dropBlock(g, x, y, z, id, meta, tool);
+      if (this.canHarvest(id, tool)) Behaviors.dropBlock(g, x, y, z, id, meta, tool, held);
       if (tool && d.hardness > 0) p.inventory.damageHeld(p, tool.kind === 'sword' ? 2 : 1);
       else if (tool && tool.kind === 'shears' && (id === B.LEAVES || id === B.COBWEB || id === B.VINE || id === B.TALL_GRASS)) p.inventory.damageHeld(p, 1);
       p.exhaust(0.025);
@@ -11590,11 +11895,16 @@ class Interaction {
     let dmg = tool ? tool.attack : 1;
     const crit = p.fallDistance > 0 && !p.onGround && !p.onLadder() && !p.inWater && !p.flying;
     if (crit) dmg *= 1.5;
-    let kb = 0.4;
+    const bonus = Enchant.attackBonus(held, e);
+    dmg += bonus;
+    let kb = 0.4 + Enchant.level(held, 'knockback') * 0.5;
     if (p.sprinting) { kb += 0.5; p.sprinting = false; p.vx *= 0.6; p.vz *= 0.6; }
     const ok = e.hurt(dmg, { type: 'player', entity: p, knockback: kb });
     if (ok) {
       if (crit) g.particles.crit(e.x, e.y + e.h * 0.6, e.z, 12);
+      if (bonus > 0) g.particles.crit(e.x, e.y + e.h * 0.6, e.z, 10, true);
+      const fa = Enchant.level(held, 'fire_aspect');
+      if (fa) e.fire = Math.max(e.fire || 0, fa * 80);
       if (tool && !p.creative) p.inventory.damageHeld(p, tool.kind === 'sword' ? 1 : 2);
       p.exhaust(0.3);
       if (e.onAttackedByPlayer) e.onAttackedByPlayer(p);
@@ -11791,6 +12101,14 @@ class Particles {
     for (let i = 0; i < n; i++) this.add({ x: x + (Math.random() - 0.5) * 0.8, y, z: z + (Math.random() - 0.5) * 0.8, vx: (Math.random() - 0.5) * 0.15, vy: 0.1 + Math.random() * 0.2, vz: (Math.random() - 0.5) * 0.15, size: 0.06, life: 10 + Math.floor(Math.random() * 10), gravity: 0.04, layer: L, r: 0.55, g: 0.65, b: 1, lit: true });
     this.bubble(x, y - 0.5, z, 6);
   }
+  // runes floating from a bookshelf into the enchanting table
+  glyph(sx, sy, sz, tx, ty, tz) {
+    const life = 30 + Math.floor(Math.random() * 15);
+    const p = this.add({ x: sx + (Math.random() - 0.5) * 0.6, y: sy + Math.random() * 0.5, z: sz + (Math.random() - 0.5) * 0.6, vx: 0, vy: 0, vz: 0, size: 0.06, life,
+      layer: this.layer('particle_glyph' + Math.floor(Math.random() * 8)), r: 0.95, g: 0.9, b: 1, collide: false, bright: true, drag: 1 });
+    p.seek = [tx, ty, tz, p.x, p.y, p.z];
+    return p;
+  }
   // flat white flecks drifting on the water surface (boat wakes, approaching fish)
   wake(x, y, z, vx, vz) {
     this.add({ x, y: y + 0.02, z, vx, vy: 0, vz, size: 0.05, life: 8 + Math.floor(Math.random() * 8), layer: this.layer('particle_drip'), r: 0.9, g: 0.95, b: 1, drag: 0.92, collide: false, lit: true, fade: true });
@@ -11806,9 +12124,10 @@ class Particles {
   drip(x, y, z, lava) {
     this.add({ x, y, z, vx: 0, vy: 0, vz: 0, size: 0.04, life: 60, gravity: 0.02, layer: this.layer('particle_drip'), r: lava ? 1 : 0.3, g: lava ? 0.4 : 0.45, b: lava ? 0.1 : 1, bright: lava, splashOnLand: true });
   }
-  crit(x, y, z, n) {
+  crit(x, y, z, n, magic) {
     const L = this.layer('particle_crit');
-    for (let i = 0; i < n; i++) this.add({ x: x + (Math.random() - 0.5) * 0.6, y: y + (Math.random() - 0.5) * 0.6, z: z + (Math.random() - 0.5) * 0.6, vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4 + 0.1, vz: (Math.random() - 0.5) * 0.4, size: 0.08, life: 10 + Math.floor(Math.random() * 6), gravity: 0.04, layer: L, r: 0.9, g: 0.85, b: 0.6, drag: 0.7, collide: false });
+    for (let i = 0; i < n; i++) this.add({ x: x + (Math.random() - 0.5) * 0.6, y: y + (Math.random() - 0.5) * 0.6, z: z + (Math.random() - 0.5) * 0.6, vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4 + 0.1, vz: (Math.random() - 0.5) * 0.4, size: 0.08, life: 10 + Math.floor(Math.random() * 6), gravity: 0.04, layer: L,
+      r: magic ? 0.55 : 0.9, g: magic ? 0.35 : 0.85, b: magic ? 1 : 0.6, drag: 0.7, collide: false, bright: !!magic });
   }
   happy(x, y, z) {
     const L = this.layer('particle_glint');
@@ -11869,6 +12188,14 @@ class Particles {
         }
       }
       if (p.water && w && w.getBlock(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)) !== B.WATER) continue;
+      if (p.seek) {
+        // classic enchanting glyphs: start at the shelf, rise, then fall into the table
+        const k = p.age / p.life, s = p.seek, e = 1 - k;
+        p.x = s[0] + (s[3] - s[0]) * e; p.z = s[2] + (s[5] - s[2]) * e;
+        p.y = s[1] + (s[4] - s[1]) * e + (1 - e * e) * 0.6 * e * 4;
+        keep.push(p);
+        continue;
+      }
       p.x += p.vx; p.y += p.vy; p.z += p.vz;
       p.vx *= p.drag; p.vy *= p.drag; p.vz *= p.drag;
       if (p.onGround) { p.vx *= 0.7; p.vz *= 0.7; }
@@ -12227,8 +12554,9 @@ const Skins = (() => {
     const [b, l, d] = colors.map(C);
     const pick = (x, y) => vary(r, (x + y) % 5 === 0 ? l : ((x * 3 + y) % 7 === 0 ? d : b), 0.06);
     s.box(0, 0, 8, 8, 8, (f, x, y) => (f === 'front' && y > 1 && x > 0 && x < 7) ? (y >= 6 ? null : (y <= 2 ? pick(x, y) : null)) : (f === 'bottom' ? null : pick(x, y)));
-    s.box(16, 16, 8, 12, 4, (f, x, y) => y > 10 ? null : pick(x, y));
-    s.box(40, 16, 4, 12, 4, (f, x, y) => y > 5 ? null : pick(x, y));
+    // the chest piece and sleeves stop short, so their bottom faces stay open
+    s.box(16, 16, 8, 12, 4, (f, x, y) => (f === 'bottom' || y > 10) ? null : pick(x, y));
+    s.box(40, 16, 4, 12, 4, (f, x, y) => (f === 'bottom' || y > 5) ? null : pick(x, y));
     s.box(0, 16, 4, 12, 4, (f, x, y) => y < 9 ? null : pick(x, y));
     // leggings live in the second layer (offset by 32 in y within the atlas slot)
     return s;
@@ -12938,6 +13266,7 @@ class EntityRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     this.skinBatch = new DynBatch(gl, [[3, 'f'], [3, 'f'], [4, 'ub'], [2, 'f']], 65536);
+    this.glintBatch = new DynBatch(gl, [[3, 'f'], [3, 'f'], [4, 'ub'], [2, 'f']], 16384);
     this.extrudeCache = new Map();
     this.tmp = [0, 0, 0];
     this.handProj = Mat4.create();
@@ -13043,6 +13372,36 @@ class EntityRenderer {
   }
   // m: transform (item space: sprite 0..1 square / block -0.5..0.5 cube)
   drawItem(stack, m, sky, blk, alpha, flat) {
+    const n0 = this.r.batch.n;
+    this.drawItemQuads(stack, m, sky, blk, alpha, flat);
+    if (Enchant.has(stack)) this.glintCopy(this.r.batch, n0, this.r.batch.n);
+  }
+  // the enchantment shimmer: the same triangles again, with a sliding purple texture
+  glintCopy(b, n0, n1, scale) {
+    const g = this.glintBatch, L = this.r.atlas.layer('enchant_glint'), f = b.f32, k = scale || 1;
+    const t = (performance.now() % 6000) / 6000;
+    const col = [255, 255, 255, 255];
+    for (let i = n0; i < n1; i++) {
+      const o = i * 9, u = f[o + 3] * k, v = f[o + 4] * k;
+      this.vtx(g, f[o], f[o + 1], f[o + 2], (u + v) * 0.5 + t, (v - u) * 0.5 + t * 0.6, L, col, -1, 0);
+    }
+  }
+  flushGlint(vp) {
+    const g = this.glintBatch, gl = this.r.gl;
+    if (!g.n) return;
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_COLOR, gl.ONE);
+    gl.depthMask(false);
+    // only where the item itself was drawn (not on see-through texels)
+    gl.depthFunc(gl.EQUAL);
+    this.r.useEnt(vp, 0, -1, false);
+    g.flush();
+    g.reset();
+    gl.depthFunc(gl.LEQUAL);
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+  }
+  drawItemQuads(stack, m, sky, blk, alpha, flat) {
     const icons = this.game.gui.icons;
     const atlas = this.r.atlas;
     const b = this.r.batch;
@@ -13117,11 +13476,13 @@ class EntityRenderer {
       if (p.fire > 0 && !p.inWater && !p.creative) this.drawFire(p, x - cam.x, y - cam.y, z - cam.z);
     }
     this.drawSigns(cam);
+    this.drawEnchantBooks(cam, partial);
     gl.disable(gl.CULL_FACE);
     this.r.useEnt(this.r.vp, 1, 0.1, true);
     this.skinBatch.flush();
     this.r.useEnt(this.r.vp, 0, 0.1, true);
     this.r.batch.flush();
+    this.flushGlint(this.r.vp);
     // fishing lines
     if (this.lines.length) {
       const b = this.r.batch;
@@ -13421,6 +13782,41 @@ class EntityRenderer {
     const m = M3.trans(rx, ry + 0.5, rz);
     this.drawItem(new ItemStack(e.block, 1, blockItemDamage(e.block, e.meta)), m, sky, blk, 255);
   }
+  // the classic floating book over each enchanting table
+  drawEnchantBooks(cam, partial) {
+    const w = this.game.world;
+    for (const c of w.chunks.values()) {
+      if (!c.tiles.size) continue;
+      const dx = c.cx * 16 + 8 - cam.x, dz = c.cz * 16 + 8 - cam.z;
+      if (dx * dx + dz * dz > 48 * 48) continue;
+      for (const te of c.tiles.values()) if (te.type === 'enchanting') this.drawBook(te, cam, partial);
+    }
+  }
+  drawBook(te, cam, partial) {
+    const b = this.r.batch, atlas = this.r.atlas;
+    const t = te.ticks + partial;
+    const spread = te.pSpread + (te.spread - te.pSpread) * partial;
+    const rot = te.pRot + wrapRadians(te.rot - te.pRot) * partial;
+    const [sky, blk] = this.lightAt(te.x + 0.5, te.y + 1, te.z + 0.5);
+    let m = M3.trans(te.x + 0.5 - cam.x, te.y + 0.75 + 0.1 + Math.sin(t * 0.1) * 0.01 - cam.y, te.z + 0.5 - cam.z);
+    m = M3.mul(m, M3.ry(-rot));
+    m = M3.mul(m, M3.rz(80 * DEG));
+    m = M3.mul(m, M3.scale(1 / 16, 1 / 16, 1 / 16));
+    const f = (Math.sin(t * 0.02) * 0.1 + 1.25) * spread;
+    const flip = te.pFlip + (te.flip - te.pFlip) * partial;
+    const fr = (x) => { x -= Math.floor(x); return x; };
+    const cover = atlas.layer('book_cover'), pages = atlas.layer('book_pages');
+    const part = (pre, box, layer) => this.texBox(b, M3.mul(m, pre), box, layer, sky, blk, 1 / 12);
+    part(M3.mul(M3.trans(0, 0, -1), M3.ry(Math.PI + f)), [-6, -5, 0, 0, 5, 0.2], cover);
+    part(M3.mul(M3.trans(0, 0, 1), M3.ry(-f)), [0, -5, -0.2, 6, 5, 0], cover);
+    part(M3.ry(Math.PI / 2), [-1, -5, -0.1, 1, 5, 0.1], cover);
+    const sf = Math.sin(f);
+    part(M3.mul(M3.trans(sf, 0, 0), M3.ry(f)), [0, -4, -0.99, 5, 4, 0.01], pages);
+    part(M3.mul(M3.trans(sf, 0, 0), M3.ry(-f)), [0, -4, -0.01, 5, 4, 0.99], pages);
+    const p1 = clamp(fr(flip + 0.25) * 1.6 - 0.3, 0, 1), p2 = clamp(fr(flip + 0.75) * 1.6 - 0.3, 0, 1);
+    part(M3.mul(M3.trans(sf, 0, 0), M3.ry(f - f * 2 * p1)), [0, -4, -0.02, 5, 4, 0.02], pages);
+    part(M3.mul(M3.trans(sf, 0, 0), M3.ry(f - f * 2 * p2)), [0, -4, -0.02, 5, 4, 0.02], pages);
+  }
   drawSigns(cam) {
     const w = this.game.world, R = 64;
     for (const c of w.chunks.values()) {
@@ -13567,7 +13963,9 @@ class EntityRenderer {
         const ad = armorOf(a.id); if (!ad) continue;
         const parts = [['head', 'hat'], ['body', 'rarm', 'larm'], ['body', 'rleg', 'lleg'], ['rleg', 'lleg']][i];
         const sk = (i === 2 ? 'legs_' : 'armor_') + ad.mat;
+        const n0 = this.skinBatch.n;
         this.drawModel(model, sk, base, pose, col, lsky, lblk, { only: parts, inflate: i === 2 ? 0.5 : 1 });
+        if (Enchant.has(a)) this.glintCopy(this.skinBatch, n0, this.skinBatch.n, 20);
       }
     }
     // held item (right hand)
@@ -13720,6 +14118,7 @@ class EntityRenderer {
     sb.flush();
     r.useEnt(vp, 0, 0.1, false);
     b.flush();
+    this.flushGlint(vp);
     gl.enable(gl.CULL_FACE);
   }
 
@@ -14799,7 +15198,7 @@ class Hud {
       this.lastHealth = p.health;
     }
   }
-  setItemName(stack) { if (stack) { this.itemName = stack.name; this.itemNameTimer = 50; this.itemNameColor = isRare(stack.id) ? '#55ffff' : '#ffffff'; } else this.itemNameTimer = 0; }
+  setItemName(stack) { if (stack) { this.itemName = stack.name; this.itemNameTimer = 50; this.itemNameColor = (isRare(stack.id) || Enchant.has(stack)) ? '#55ffff' : '#ffffff'; } else this.itemNameTimer = 0; }
 
   draw(gui, partial) {
     const g = this.game, p = g.player;
@@ -15702,6 +16101,7 @@ const HOW_TO_PLAY = [
   ['Exploration', 'The world is huge. Biomes have their own plants, creatures and treasures: look for camps, ruined towers, hermit huts, desert wells and sunken ruins.', 'Your Explorer\'s Map (M) fills in as you travel, and your Explorer\'s Journal (J) records every biome and creature you discover. Some secrets are rare - keep travelling!'],
   ['Waterways', 'Craft a boat from five planks to cross lakes and seas: right-click to climb in, steer with W and the mouse, and press Shift to hop out. Do not ram the shore at full speed!', 'Cast a fishing rod into water and wait for the float to dip, then reel in. Different waters hold different fish, and now and then a bottle washes up with a note about buried treasure.'],
   ['Ember Circuits', 'Ember dust laid on the ground carries power from levers, buttons, pressure plates and ember torches, growing weaker with every block. Ember torches invert a signal, relays repeat and delay it.', 'Powered lamps light up, doors and trapdoors swing open, TNT ignites, note blocks sing and pistons push (sticky pistons pull too). Build gates, clocks and secret doors - just like the old days.'],
+  ['Enchanting', 'Build an enchanting table from a book, two diamonds and obsidian. Surround it with bookshelves (one block of air between them and the table) and it grows stronger - fifteen shelves is the most it can use.', 'Put in a tool, weapon, armour piece, bow or rod and some lapis lazuli, then choose one of three offers. Stronger offers cost more experience levels and lapis. The runes only hint at what you will get...'],
   ['Mysteries', 'On clear nights, watch the sky. Falling stars leave craters lined with starmetal - the strongest material of all, but you will need a diamond pickaxe.', 'Lights drift over swamps after dark. Some say they lead to buried treasure. On the moors, ancient runestones hum when touched with jade...'],
   ['Creative Mode', 'In Creative mode you can fly (double-tap Space), break blocks instantly and take any block from the creative inventory (E).', 'Worlds with cheats enabled accept commands: open chat with T and type /help.'],
   ['Saving & Sharing', 'Your worlds save automatically in your browser. Use Export on the world list (or in the pause menu) to download a .blocklands file.', 'Import it on any device - including your phone - to continue where you left off or share your world with friends.'],
@@ -15792,7 +16192,8 @@ class ContainerScreen extends Screen {
     } else if (this.hover && this.hover.stack) gui.tooltip(this.tooltipFor(this.hover.stack), mx, my);
   }
   tooltipFor(st) {
-    const lines = [(isRare(st.id) ? '§b' : '') + st.name];
+    const lines = [(Enchant.has(st) ? '§b' : isRare(st.id) ? '§b' : '') + st.name];
+    for (const [eid, lv] of Enchant.list(st)) lines.push('§7' + Enchant.name(eid, lv));
     const t = toolOf(st.id), a = armorOf(st.id), f = foodOf(st.id);
     if (t && t.kind !== 'shears') lines.push('§9+' + t.attack + ' Attack Damage');
     if (a) lines.push('§9+' + a.points + ' Armor');
@@ -16214,7 +16615,7 @@ const CREATIVE_TABS = (() => {
     blk(B.BASALT), blk(B.POLISHED_BASALT), blk(B.ASH), blk(B.PEAT), blk(B.SALT), blk(B.SCORCHED_STONE), blk(B.THATCH), blk(B.QUICKSAND), blk(B.HAY_BALE), blk(B.HUGE_MUSHROOM_BROWN), blk(B.HUGE_MUSHROOM_RED), blk(B.RUNESTONE)] });
   T.push({ name: 'Decoration', icon: [B.FLOWER, 0], list: [
     ...all(B.SAPLING), ...all(B.LEAVES), blk(B.COBWEB), ...all(B.TALL_GRASS), blk(B.DEAD_BUSH), ...all(B.FLOWER), blk(B.MUSHROOM_BROWN), blk(B.MUSHROOM_RED), blk(B.GLOWSHROOM), blk(B.LUMITE_CRYSTAL),
-    blk(B.TORCH), blk(B.CHEST), blk(B.CRAFTING_TABLE), blk(B.FURNACE), blk(B.LADDER), blk(B.ROPE), blk(B.SNOW_LAYER), blk(B.CACTUS), blk(B.PUMPKIN), blk(B.JACK_O_LANTERN), blk(B.MELON), blk(B.VINE),
+    blk(B.TORCH), blk(B.CHEST), blk(B.CRAFTING_TABLE), blk(B.FURNACE), blk(B.ENCHANTING_TABLE), blk(B.LADDER), blk(B.ROPE), blk(B.SNOW_LAYER), blk(B.CACTUS), blk(B.PUMPKIN), blk(B.JACK_O_LANTERN), blk(B.MELON), blk(B.VINE),
     blk(B.LILY_PAD), blk(B.CATTAIL), blk(B.BRAMBLE), blk(B.LEAF_LITTER), ...all(B.FENCE), blk(B.FENCE_GATE), blk(B.TRAPDOOR), blk(B.GLASS_PANE), ...all(B.CARPET), blk(B.LUMITE_LAMP), blk(B.MOB_SPAWNER),
     [I.door_wood, 0], [I.door_iron, 0], [I.bed, 0], ...WOOD.map((w, i) => [I.sign, i]), [I.painting, 0]] });
   T.push({ name: 'Tools', icon: [I.iron_axe, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ['shovel', 'pickaxe', 'axe', 'hoe'].map((k) => [I[m + '_' + k], 0])),
@@ -16590,6 +16991,7 @@ const MILESTONES = [
   { id: 'fish', name: 'Gone Fishing', desc: 'Catch a fish', icon: () => [ITEM_IDS.fish, 0] },
   { id: 'sail', name: 'Set Sail', desc: 'Row a boat 500 blocks', icon: () => [ITEM_IDS.boat, 0] },
   { id: 'bottle', name: 'Message Received', desc: 'Read a message in a bottle', icon: () => [ITEM_IDS.message_bottle, 0] },
+  { id: 'enchant', name: 'Enchanter', desc: 'Enchant an item at an enchanting table', icon: () => [B.ENCHANTING_TABLE, 0] },
   { id: 'lamp', name: 'Bright Idea', desc: 'Light an ember lamp with a circuit', icon: () => [B.EMBER_LAMP_ON, 0] },
 ];
 const BIOME_DESCRIPTIONS = {
@@ -16880,6 +17282,166 @@ class SignEditScreen extends Screen {
       gui.textCentered(s, this.W / 2, by + 10 + j * 10, '#000000', false);
     }
     for (const wd of this.widgets) wd.draw(gui, mx, my);
+  }
+}
+
+// ---- src/ui/enchantscreen.js
+// ---------------------------------------------------------------------------
+// The enchanting table screen: an item, some lapis and three offers written
+// in an old runic script. Offers stay the same until you enchant something.
+// ---------------------------------------------------------------------------
+const RUNE_WORDS = ('ember wane drift hollow kindle sear frost veil root stone tide gale ash bloom thread echo lumen marrow dusk hearth vow shard wisp rune '
+  + 'grave crest spire sunder bind mend quell rouse deep far old night dawn moor salt jade star fall sing hum keep turn wake sleep bright dim fire '
+  + 'water earth sky iron gold cold warm wild still swift slow kin wyrd lore oath mark sigil gleam murmur hush').split(' ');
+// a little runic font, one 4x7 glyph per letter
+const RUNE_GLYPHS = (() => {
+  const out = {};
+  'abcdefghijklmnopqrstuvwxyz'.split('').forEach((ch, i) => {
+    const r = new Noise.Random(stringHash('rune:' + ch) >>> 0);
+    const px = [];
+    const stem = r.nextInt(4);
+    for (let y = 0; y < 7; y++) px.push([stem, y]);
+    for (let k = 0; k < 3 + r.nextInt(3); k++) {
+      const y = r.nextInt(7), x0 = r.nextInt(4), len = 1 + r.nextInt(3);
+      for (let x = x0; x < Math.min(4, x0 + len); x++) px.push([x, y]);
+    }
+    if (i % 3 === 0) { const y = r.nextInt(5); px.push([(stem + 1) % 4, y], [(stem + 2) % 4, y + 1]); }
+    out[ch] = px;
+  });
+  return out;
+})();
+function drawRunes(gui, text, x, y, color, maxW) {
+  const ctx = gui.ctx;
+  ctx.fillStyle = color;
+  let cx = x, cy = y;
+  for (const word of text.split(' ')) {
+    const w = word.length * 5;
+    if (cx > x && cx + w > x + maxW) { cx = x; cy += 9; }
+    for (const ch of word) { const g = RUNE_GLYPHS[ch]; if (g) for (const [px, py] of g) ctx.fillRect(cx + px, cy + py, 1, 1); cx += 5; }
+    cx += 4;
+  }
+}
+
+class EnchantScreen extends ContainerScreen {
+  constructor(game, x, y, z) {
+    super(game, 176, 166);
+    this.pos = [x, y, z];
+    this.inv = new Inventory(2);
+    this.inv.listeners.push(() => this.refresh());
+    this.slots.push(new Slot(this.inv, 0, 15, 47, { group: 'item', maxStack: 1 }));
+    this.slots.push(new Slot(this.inv, 1, 35, 47, { group: 'lapis', filter: (s) => s.id === ITEM_IDS.dye && s.dmg === 11, icon: 'lapis' }));
+    this.addPlayerSlots(84);
+    this.power = Enchant.power(game.world, x, y, z);
+    this.costs = [0, 0, 0]; this.hints = [null, null, null]; this.texts = ['', '', ''];
+    this.refresh();
+  }
+  refresh() {
+    const st = this.inv.items[0], p = this.player;
+    this.costs = [0, 0, 0]; this.hints = [null, null, null];
+    if (!st || !Enchant.canEnchant(st)) return;
+    const rng = new Noise.Random(p.enchantSeed >>> 0);
+    for (let i = 0; i < 3; i++) this.costs[i] = Enchant.offerCost(rng, i, this.power, st);
+    for (let i = 0; i < 3; i++) {
+      if (this.costs[i] <= 0) continue;
+      const list = Enchant.roll(new Noise.Random((p.enchantSeed + i) >>> 0), st, this.costs[i]);
+      if (!list.length) { this.costs[i] = 0; continue; }
+      this.hints[i] = list[0];
+      const r = new Noise.Random((p.enchantSeed * 31 + i * 977) >>> 0);
+      const n = 2 + r.nextInt(3), words = [];
+      for (let k = 0; k < n; k++) words.push(RUNE_WORDS[r.nextInt(RUNE_WORDS.length)]);
+      this.texts[i] = words.join(' ');
+    }
+  }
+  optionRect(i) { return [this.left + 60, this.top + 14 + i * 19, 108, 19]; }
+  affordable(i) {
+    const p = this.player, lap = this.inv.items[1];
+    return this.costs[i] > 0 && (p.creative || (p.xpLevel >= this.costs[i] && lap && lap.count >= i + 1));
+  }
+  choose(i) {
+    const p = this.player, st = this.inv.items[0];
+    if (!st || !this.affordable(i)) return;
+    const list = Enchant.roll(new Noise.Random((p.enchantSeed + i) >>> 0), st, this.costs[i]);
+    if (!list.length) return;
+    Enchant.apply(st, list);
+    if (!p.creative) {
+      p.removeLevels(i + 1);
+      const lap = this.inv.items[1];
+      lap.count -= i + 1;
+      if (lap.count <= 0) this.inv.items[1] = null;
+    }
+    p.enchantSeed = (Math.random() * 2147483647) | 0;
+    this.game.audio.play('levelup', 0.4, 1.4);
+    this.game.audio.play('chime', 0.5, 0.7);
+    const [x, y, z] = this.pos;
+    for (let k = 0; k < 16; k++) this.game.particles.sparkle(x + 0.5, y + 1.2, z + 0.5, 0.7, 0.4, 1, 1, 1);
+    this.game.achieve('enchant');
+    this.inv.changed();
+  }
+  mouseDown(mx, my, btn, e) {
+    for (let i = 0; i < 3; i++) {
+      const [x, y, w, h] = this.optionRect(i);
+      if (mx >= x && my >= y && mx < x + w && my < y + h) { if (btn === 0) this.choose(i); return true; }
+    }
+    return super.mouseDown(mx, my, btn, e);
+  }
+  quickTargets(s, st) {
+    if (s.group === 'main' || s.group === 'hotbar') {
+      if (st.id === ITEM_IDS.dye && st.dmg === 11) return { slots: [this.slots[1]] };
+      if (!this.inv.items[0] && st.count === 1 && Enchant.canEnchant(st)) return { slots: [this.slots[0]] };
+      return super.quickTargets(s, st);
+    }
+    return { slots: this.slots.filter((x) => x.group === 'hotbar' || x.group === 'main'), reverse: true };
+  }
+  drawForeground(gui, mx, my) {
+    const ctx = gui.ctx;
+    this.label(gui, 'Enchant', 12, 5);
+    this.label(gui, 'Inventory', 8, 72);
+    // an open book on the left
+    const bx = this.left + 14, by = this.top + 15;
+    ctx.fillStyle = '#5a2a10'; ctx.fillRect(bx, by + 2, 36, 22);
+    ctx.fillStyle = '#ece4cc'; ctx.fillRect(bx + 2, by, 15, 22); ctx.fillRect(bx + 19, by, 15, 22);
+    ctx.fillStyle = '#b8ac90';
+    for (let k = 0; k < 6; k++) { ctx.fillRect(bx + 4, by + 3 + k * 3, 10 + (k % 2), 1); ctx.fillRect(bx + 21, by + 3 + k * 3, 9 + ((k + 1) % 2) * 2, 1); }
+    ctx.fillStyle = '#3a1a08'; ctx.fillRect(bx + 17, by, 2, 24);
+    this.hoverTip = null;
+    for (let i = 0; i < 3; i++) {
+      const [x, y, w, h] = this.optionRect(i);
+      const has = this.costs[i] > 0, ok = this.affordable(i), hov = mx >= x && my >= y && mx < x + w && my < y + h;
+      ctx.fillStyle = !has ? '#8b8b8b' : !ok ? '#a99ea0' : hov ? '#d8c8e8' : '#c4b8d4';
+      ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = '#373737'; ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y, 1, h);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 1, y + h - 1, w - 1, 1); ctx.fillRect(x + w - 1, y + 1, 1, h - 1);
+      if (!has) continue;
+      // lapis badge with the slot number
+      ctx.fillStyle = ok ? '#2f62c8' : '#5a6a8a'; ctx.fillRect(x + 3, y + 3, 11, 13);
+      gui.text(String(i + 1), x + 6, y + 6, ok ? '#ffffff' : '#a0a0a0', false);
+      drawRunes(gui, this.texts[i], x + 18, y + 3, ok ? (hov ? '#5a4a2a' : '#685e4a') : '#8a8070', 64);
+      gui.textRight(String(this.costs[i]), x + w - 3, y + 9, ok ? '#80ff20' : '#407f10');
+      if (hov) {
+        const [eid, lv] = this.hints[i];
+        const p = this.player, lap = this.inv.items[1];
+        const lines = [Enchant.name(eid, lv) + ' . . . ?'];
+        if (!p.creative) {
+          lines.push('');
+          lines.push(((lap && lap.count >= i + 1) ? '§7' : '§c') + (i + 1) + ' Lapis Lazuli');
+          lines.push((p.xpLevel >= this.costs[i] ? '§7' : '§c') + (i + 1) + (i === 0 ? ' Enchantment Level' : ' Enchantment Levels'));
+          if (p.xpLevel < this.costs[i]) lines.push('§cLevel Requirement: ' + this.costs[i]);
+        }
+        this.hoverTip = [lines, mx, my];
+      }
+    }
+  }
+  draw(gui, mx, my) {
+    super.draw(gui, mx, my);
+    if (this.hoverTip && !this.cursor) gui.tooltip(this.hoverTip[0], this.hoverTip[1], this.hoverTip[2]);
+  }
+  tick() {
+    const [x, y, z] = this.pos;
+    if (this.game.world.getBlock(x, y, z) !== B.ENCHANTING_TABLE || this.player.distanceSq(x + 0.5, y + 0.5, z + 0.5) > 64) this.game.closeScreen();
+  }
+  onClose() {
+    super.onClose();
+    for (let i = 0; i < 2; i++) if (this.inv.items[i]) { this.game.giveItem(this.inv.items[i]); this.inv.items[i] = null; }
   }
 }
 
@@ -17542,6 +18104,8 @@ class Mob extends Living {
     const byPlayer = this.recentlyHit > 0;
     const s = this.deathSound();
     if (s) game.audio.play(s, this.soundVolume(), this.soundPitch(), this.x, this.y + this.eye, this.z);
+    this.looting = 0;
+    if (byPlayer && src && src.entity && src.entity.type === 'player' && src.entity.inventory) this.looting = Enchant.level(src.entity.inventory.held(), 'looting');
     if (game.world.gameRules.doMobLoot !== false) this.dropLoot(game, byPlayer, src);
     if (byPlayer && this.xpValue > 0 && !this.baby) {
       const n = typeof this.xpValue === 'function' ? this.xpValue() : this.xpValue;
@@ -17551,6 +18115,7 @@ class Mob extends Living {
   }
   dropLoot() {}
   drop(id, count, dmg) {
+    if (this.looting > 0 && id >= 256) count += Math.floor(Math.random() * (this.looting + 1));
     if (count <= 0) return;
     Behaviors.dropStack(this.game, this.x, this.y + 0.5, this.z, new ItemStack(id, count, dmg || 0));
   }
@@ -17702,6 +18267,7 @@ class Monster extends Mob {
 class Zombie extends Monster {
   constructor(world, type) {
     super(world, type || 'zombie');
+    this.undead = true;
     this.maxHealth = this.health = 20;
     this.baseSpeed = 0.23; this.damage = 3;
     this.w = 0.6; this.h = 1.95; this.eye = 1.74;
@@ -17753,6 +18319,7 @@ class Mummy extends Zombie {
 class Skeleton extends Monster {
   constructor(world) {
     super(world, 'skeleton');
+    this.undead = true;
     this.maxHealth = this.health = 20;
     this.baseSpeed = 0.25;
     this.w = 0.6; this.h = 1.99; this.eye = 1.74;
@@ -17816,6 +18383,7 @@ class Skeleton extends Monster {
 class Spider extends Monster {
   constructor(world) {
     super(world, 'spider');
+    this.arthropod = true;
     this.maxHealth = this.health = 16;
     this.baseSpeed = 0.3; this.damage = 2;
     this.w = 1.4; this.h = 0.9; this.eye = 0.65;
@@ -18023,6 +18591,7 @@ class Slime extends Monster {
 class Wraith extends Monster {
   constructor(world) {
     super(world, 'wraith');
+    this.undead = true;
     this.maxHealth = this.health = 14;
     this.w = 0.6; this.h = 1.8; this.eye = 1.6;
     this.noGravity = true; this.swims = false;
@@ -19557,6 +20126,7 @@ class Game {
       if (!c.tiles.size) continue;
       for (const te of c.tiles.values()) {
         if (te.type === 'furnace') this.tickFurnace(te, c);
+        else if (te.type === 'enchanting') this.tickEnchantTable(te);
         else if (te.type === 'spawner') { const dx = te.x + 0.5 - p.x, dy = te.y + 0.5 - p.y, dz = te.z + 0.5 - p.z; if (dx * dx + dy * dy + dz * dz < 256) this.tickSpawner(te); }
       }
     }
@@ -19597,6 +20167,27 @@ class Game {
       dirty = true;
     }
     if (dirty) c.modified = true;
+  }
+  // the floating book turns to face you and opens; glyphs drift in from bookshelves
+  tickEnchantTable(te) {
+    const p = this.player;
+    const dx = p.x - (te.x + 0.5), dy = p.y - (te.y + 0.5), dz = p.z - (te.z + 0.5), d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 > 1024) return;
+    te.pSpread = te.spread; te.pRot = te.rot;
+    if (d2 < 9 && !p.dead) {
+      te.tRot = Math.atan2(dz, dx);
+      te.spread += 0.1;
+      if (te.spread < 0.5 || Math.random() < 1 / 40) { const f1 = te.flipT; do { te.flipT += Math.floor(Math.random() * 4) - Math.floor(Math.random() * 4); } while (f1 === te.flipT); }
+    } else { te.tRot += 0.02; te.spread -= 0.1; }
+    te.rot += wrapRadians(te.tRot - te.rot) * 0.4;
+    te.spread = clamp(te.spread, 0, 1);
+    te.ticks++;
+    te.pFlip = te.flip;
+    const f = clamp((te.flipT - te.flip) * 0.4, -0.2, 0.2);
+    te.flipA += (f - te.flipA) * 0.9; te.flip += te.flipA;
+    if (d2 < 256 && this.settings.particles !== 'minimal' && te.ticks % 2 === 0) {
+      for (const s of Enchant.shelves(this.world, te.x, te.y, te.z)) if (Math.random() < 1 / 16) this.particles.glyph(s[0] + 0.5, s[1] + 1, s[2] + 0.5, te.x + 0.5, te.y + 1.25, te.z + 0.5);
+    }
   }
   tickSpawner(te) {
     const w = this.world;
@@ -19838,14 +20429,18 @@ class Game {
     f = (f * f + f * 2) / 3;
     if (f < 0.1) return;
     if (f > 1) f = 1;
-    const hasArrow = p.creative || p.inventory.main.count(ITEM_IDS.arrow) > 0;
+    const infinity = Enchant.level(held, 'infinity') > 0;
+    const hasArrow = p.creative || infinity || p.inventory.main.count(ITEM_IDS.arrow) > 0;
     if (!hasArrow) return;
     const a = new Arrow(this.world, p, f * 3, 1);
     if (f >= 1) a.crit = true;
-    a.pickup = !p.creative;
+    a.pickup = !p.creative && !infinity;
+    const pw = Enchant.level(held, 'power'); if (pw) a.damage += pw * 0.5 + 0.5;
+    a.punch = Enchant.level(held, 'punch');
+    if (Enchant.level(held, 'flame')) a.fire = 2000;
     this.spawnEntity(a);
     this.audio.play('bow', 1, 1 / (Math.random() * 0.4 + 1.2) + f * 0.5);
-    if (!p.creative) { p.inventory.main.removeItems(ITEM_IDS.arrow, undefined, 1); if (held) p.inventory.damageHeld(p, 1); }
+    if (!p.creative) { if (!infinity) p.inventory.main.removeItems(ITEM_IDS.arrow, undefined, 1); if (held) p.inventory.damageHeld(p, 1); }
   }
   tryUseBed(x, y, z, m) {
     const p = this.player, w = this.world;
@@ -20300,6 +20895,7 @@ class Game {
     gl.disable(gl.CULL_FACE);
     r.useEnt(proj, 1, 0.1, false); er.skinBatch.flush();
     r.useEnt(proj, 0, 0.1, false); r.batch.flush();
+    er.flushGlint(proj);
     gl.enable(gl.CULL_FACE);
     gl.disable(gl.SCISSOR_TEST);
     gl.viewport(0, 0, r.width, r.height);

@@ -343,6 +343,8 @@ class Mob extends Living {
     const byPlayer = this.recentlyHit > 0;
     const s = this.deathSound();
     if (s) game.audio.play(s, this.soundVolume(), this.soundPitch(), this.x, this.y + this.eye, this.z);
+    this.looting = 0;
+    if (byPlayer && src && src.entity && src.entity.type === 'player' && src.entity.inventory) this.looting = Enchant.level(src.entity.inventory.held(), 'looting');
     if (game.world.gameRules.doMobLoot !== false) this.dropLoot(game, byPlayer, src);
     if (byPlayer && this.xpValue > 0 && !this.baby) {
       const n = typeof this.xpValue === 'function' ? this.xpValue() : this.xpValue;
@@ -352,6 +354,7 @@ class Mob extends Living {
   }
   dropLoot() {}
   drop(id, count, dmg) {
+    if (this.looting > 0 && id >= 256) count += Math.floor(Math.random() * (this.looting + 1));
     if (count <= 0) return;
     Behaviors.dropStack(this.game, this.x, this.y + 0.5, this.z, new ItemStack(id, count, dmg || 0));
   }
@@ -503,6 +506,7 @@ class Monster extends Mob {
 class Zombie extends Monster {
   constructor(world, type) {
     super(world, type || 'zombie');
+    this.undead = true;
     this.maxHealth = this.health = 20;
     this.baseSpeed = 0.23; this.damage = 3;
     this.w = 0.6; this.h = 1.95; this.eye = 1.74;
@@ -554,6 +558,7 @@ class Mummy extends Zombie {
 class Skeleton extends Monster {
   constructor(world) {
     super(world, 'skeleton');
+    this.undead = true;
     this.maxHealth = this.health = 20;
     this.baseSpeed = 0.25;
     this.w = 0.6; this.h = 1.99; this.eye = 1.74;
@@ -617,6 +622,7 @@ class Skeleton extends Monster {
 class Spider extends Monster {
   constructor(world) {
     super(world, 'spider');
+    this.arthropod = true;
     this.maxHealth = this.health = 16;
     this.baseSpeed = 0.3; this.damage = 2;
     this.w = 1.4; this.h = 0.9; this.eye = 0.65;
@@ -824,6 +830,7 @@ class Slime extends Monster {
 class Wraith extends Monster {
   constructor(world) {
     super(world, 'wraith');
+    this.undead = true;
     this.maxHealth = this.health = 14;
     this.w = 0.6; this.h = 1.8; this.eye = 1.6;
     this.noGravity = true; this.swims = false;

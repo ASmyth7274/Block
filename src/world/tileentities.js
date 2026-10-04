@@ -55,8 +55,18 @@ class MovingTE extends TileEntity {
   load(d) { this.id = d.id | 0; this.meta = d.meta | 0; }
 }
 
+// the enchanting table only keeps the floating book's animation state
+class EnchantTE extends TileEntity {
+  constructor(x, y, z) {
+    super('enchanting', x, y, z);
+    this.ticks = 0; this.spread = 0; this.pSpread = 0; this.rot = 0; this.pRot = 0; this.tRot = 0;
+    this.flip = 0; this.pFlip = 0; this.flipT = 0; this.flipA = 0;
+  }
+}
+
 function makeTileEntity(type, x, y, z) {
   switch (type) {
+    case 'enchanting': return new EnchantTE(x, y, z);
     case 'moving': return new MovingTE(x, y, z);
     case 'sign': return new SignTE(x, y, z);
     case 'chest': return new ChestTE(x, y, z);

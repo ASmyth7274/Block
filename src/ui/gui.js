@@ -137,6 +137,7 @@ class GuiRenderer {
     const ctx = this.ctx;
     const icon = this.icons.get(stack.id, stack.dmg, this.scale);
     ctx.drawImage(icon, x, y, 16, 16);
+    if (stack.tag && stack.tag.ench && stack.tag.ench.length) this.glint(icon, x, y);
     opts = opts || {};
     const md = maxDamageOf(stack.id);
     if (md > 0 && stack.dmg > 0) {
@@ -151,6 +152,31 @@ class GuiRenderer {
       const s = String(stack.count);
       this.textRight(s, x + 17, y + 9, '#ffffff');
     }
+  }
+  // enchantment shimmer over an icon: purple bands sliding across, added on top
+  glint(icon, x, y) {
+    const size = icon.width;
+    let c = this._glint;
+    if (!c) c = this._glint = document.createElement('canvas');
+    if (c.width !== size) { c.width = size; c.height = size; }
+    const g = c.getContext('2d');
+    g.globalCompositeOperation = 'source-over';
+    g.clearRect(0, 0, size, size);
+    g.drawImage(icon, 0, 0);
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = 'rgba(70,30,130,0.55)';
+    g.fillRect(0, 0, size, size);
+    const t = (performance.now() % 3000) / 3000;
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = 'rgba(170,100,255,0.9)';
+    for (const k of [0, 0.5]) {
+      const o = ((t + k) % 1) * size * 2.4 - size * 0.7;
+      g.beginPath(); g.moveTo(o, 0); g.lineTo(o + size * 0.32, 0); g.lineTo(o + size * 0.32 - size, size); g.lineTo(o - size, size); g.closePath(); g.fill();
+    }
+    const ctx = this.ctx;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.drawImage(c, x, y, 16, 16);
+    ctx.globalCompositeOperation = 'source-over';
   }
   // tooltip box in the classic dark purple style
   tooltip(lines, mx, my) {

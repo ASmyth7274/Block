@@ -302,8 +302,9 @@ const Skins = (() => {
     const [b, l, d] = colors.map(C);
     const pick = (x, y) => vary(r, (x + y) % 5 === 0 ? l : ((x * 3 + y) % 7 === 0 ? d : b), 0.06);
     s.box(0, 0, 8, 8, 8, (f, x, y) => (f === 'front' && y > 1 && x > 0 && x < 7) ? (y >= 6 ? null : (y <= 2 ? pick(x, y) : null)) : (f === 'bottom' ? null : pick(x, y)));
-    s.box(16, 16, 8, 12, 4, (f, x, y) => y > 10 ? null : pick(x, y));
-    s.box(40, 16, 4, 12, 4, (f, x, y) => y > 5 ? null : pick(x, y));
+    // the chest piece and sleeves stop short, so their bottom faces stay open
+    s.box(16, 16, 8, 12, 4, (f, x, y) => (f === 'bottom' || y > 10) ? null : pick(x, y));
+    s.box(40, 16, 4, 12, 4, (f, x, y) => (f === 'bottom' || y > 5) ? null : pick(x, y));
     s.box(0, 16, 4, 12, 4, (f, x, y) => y < 9 ? null : pick(x, y));
     // leggings live in the second layer (offset by 32 in y within the atlas slot)
     return s;

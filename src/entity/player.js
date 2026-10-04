@@ -32,6 +32,7 @@ class Player extends Living {
     this.achievements = {};
     this.lastBiome = -1;
     this.riding = null; this.fishHook = null; this.pendingMount = null; this.prevSneakKey = false;
+    this.enchantSeed = (Math.random() * 2147483647) | 0;
   }
   get creative() { return this.gameMode === 'creative'; }
   get survivalLike() { return this.gameMode === 'survival' || this.gameMode === 'hardcore'; }
@@ -187,7 +188,8 @@ class Player extends Living {
     } else this.foodTimer = 0;
     // air
     if (this.headInWater) {
-      this.air--;
+      const resp = Enchant.level(this.inventory.armor.items[0], 'respiration');
+      if (!(resp > 0 && Math.random() < resp / (resp + 1))) this.air--;
       if (this.air <= -20) { this.air = 0; this.hurt(2, { type: 'drown' }); }
     } else this.air = 300;
     if (this.effects.poison && this.age % 25 === 0 && this.health > 1) this.hurt(1, { type: 'magic' });
@@ -200,23 +202,38 @@ class Player extends Living {
     this.xp += n / cap;
     while (this.xp >= 1) { this.xp = (this.xp - 1) * cap; this.xpLevel++; cap = xpBarCap(this.xpLevel); this.xp /= cap; if (this.xpLevel % 5 === 0) this.game.audio.play('levelup', 0.75); }
   }
+  // spend whole levels (enchanting)
+  removeLevels(n) {
+    this.xpLevel = Math.max(0, this.xpLevel - n);
+    if (this.xpLevel === 0) this.xp = 0;
+  }
   addFood(hunger, sat) {
     this.food = Math.min(20, this.food + hunger);
     this.saturation = Math.min(this.food, this.saturation + hunger * sat * 2);
   }
   onHurt(amount, src) {
     this.stats.damageTaken += amount;
+    // thorns: attackers sometimes get hurt back
+    const att = src && src.entity;
+    if (att && att !== this && att.hurt && src.type !== 'thorns') {
+      for (const a of this.inventory.armor.items) {
+        const t = Enchant.level(a, 'thorns');
+        if (t && Math.random() < 0.15 * t) { att.hurt(1 + Math.floor(Math.random() * 4), { type: 'thorns', entity: this, knockback: 0.2 }); a.dmg = Math.min(maxDamageOf(a.id) - 1, a.dmg + 2); break; }
+      }
+    }
     if (src.entity) this.hurtDir = Math.atan2(src.entity.z - this.z, src.entity.x - this.x) * 180 / Math.PI - this.yaw * 180 / Math.PI;
     else this.hurtDir = 0;
     this.exhaust(0.3);
     this.game.audio.play('hurt', 1, 1 + (Math.random() - 0.5) * 0.2);
     if (this.sleeping) this.game.wakeUp();
   }
+  // protection enchantments on top of the armour itself
+  enchantReduction(src) { return Enchant.protection(this.inventory.armor.items, src); }
   damageArmor(amount) {
     const n = Math.max(1, Math.floor(amount / 4));
     for (let i = 0; i < 4; i++) {
       const a = this.inventory.armor.items[i];
-      if (!a) continue;
+      if (!a || !Enchant.wears(a, true)) continue;
       a.dmg += n;
       if (a.dmg >= maxDamageOf(a.id)) { this.inventory.armor.items[i] = null; this.game.audio.play('break_tool', 0.8); }
     }
@@ -306,6 +323,7 @@ class Player extends Living {
       exhaustion: this.exhaustion, air: this.air, xpLevel: this.xpLevel, xp: this.xp, xpTotal: this.xpTotal, score: this.score,
       gameMode: this.gameMode, flying: this.flying, inventory: this.inventory.toJSON(), spawnPoint: this.spawnPoint, fire: this.fire,
       fallDistance: this.fallDistance, stats: this.stats, discovered: this.discovered, achievements: this.achievements, effects: this.effects,
+      enchantSeed: this.enchantSeed,
     };
   }
   load(d) {
@@ -325,6 +343,7 @@ class Player extends Living {
     if (d.discovered) this.discovered = Object.assign({ biomes: {}, mobs: {}, items: {}, structures: {} }, d.discovered);
     if (d.achievements) this.achievements = d.achievements;
     if (d.effects) this.effects = d.effects;
+    if (d.enchantSeed !== undefined) this.enchantSeed = d.enchantSeed;
     this.pendingMount = d.mount ? { x: d.mount.x, y: d.mount.y, z: d.mount.z, t: 200 } : null;
   }
 }

@@ -81,6 +81,7 @@ const Recipes = (() => {
   shaped([B.NOTE_BLOCK, 1], ['PPP', 'PEP', 'PPP'], { P: B.PLANKS, E: I.ember_dust });
   shaped([B.PISTON, 1], ['PPP', 'CIC', 'CEC'], { P: B.PLANKS, C: B.COBBLESTONE, I: I.iron_ingot, E: I.ember_dust });
   shapeless([B.STICKY_PISTON, 1], [I.slimeball, B.PISTON]);
+  shaped([B.ENCHANTING_TABLE, 1], [' B ', 'DOD', 'OOO'], { B: I.book, D: I.diamond, O: B.OBSIDIAN });
   shaped([I.compass], [' I ', 'IEI', ' I '], { I: I.iron_ingot, E: I.ember_dust });
   shaped([I.clock], [' G ', 'GEG', ' G '], { G: I.gold_ingot, E: I.ember_dust });
 

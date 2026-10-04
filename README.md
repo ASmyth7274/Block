@@ -105,6 +105,10 @@ splash text and a slowly turning live panorama.
   they flicker too fast), relays with four delays, lamps, note blocks with
   five instruments, and pistons and sticky pistons that drive doors, TNT and
   hidden machines.
+- Enchanting the classic way: an enchanting table, bookshelves for power,
+  three runic offers paid for in levels and lapis, and the familiar purple
+  shimmer — Sharpness, Efficiency, Fortune, Silk Touch, Protection, Infinity,
+  Luck of the Sea and the rest, each with its classic effect.
 - Generative music: calm piano pieces composed on the fly, different by day,
   by night and underground.
 

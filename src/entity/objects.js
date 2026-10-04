@@ -198,7 +198,7 @@ class Arrow extends Entity {
     if (target) {
       let dmg = Math.ceil(len * this.damage);
       if (this.crit) dmg += Math.floor(Math.random() * (dmg / 2 + 2));
-      if (target.hurt(dmg, { type: 'arrow', entity: this.shooter || this, knockback: 0.3 })) {
+      if (target.hurt(dmg, { type: 'arrow', entity: this.shooter || this, knockback: 0.3 + (this.punch || 0) * 0.6 })) {
         if (target.type !== 'player') game.audio.play('arrow_hit', 1, 1.2 / (Math.random() * 0.2 + 0.9), this.x, this.y, this.z);
         if (this.fire) target.fire = 100;
         this.removed = true;

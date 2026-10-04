@@ -14,6 +14,7 @@ class EntityRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     this.skinBatch = new DynBatch(gl, [[3, 'f'], [3, 'f'], [4, 'ub'], [2, 'f']], 65536);
+    this.glintBatch = new DynBatch(gl, [[3, 'f'], [3, 'f'], [4, 'ub'], [2, 'f']], 16384);
     this.extrudeCache = new Map();
     this.tmp = [0, 0, 0];
     this.handProj = Mat4.create();
@@ -119,6 +120,36 @@ class EntityRenderer {
   }
   // m: transform (item space: sprite 0..1 square / block -0.5..0.5 cube)
   drawItem(stack, m, sky, blk, alpha, flat) {
+    const n0 = this.r.batch.n;
+    this.drawItemQuads(stack, m, sky, blk, alpha, flat);
+    if (Enchant.has(stack)) this.glintCopy(this.r.batch, n0, this.r.batch.n);
+  }
+  // the enchantment shimmer: the same triangles again, with a sliding purple texture
+  glintCopy(b, n0, n1, scale) {
+    const g = this.glintBatch, L = this.r.atlas.layer('enchant_glint'), f = b.f32, k = scale || 1;
+    const t = (performance.now() % 6000) / 6000;
+    const col = [255, 255, 255, 255];
+    for (let i = n0; i < n1; i++) {
+      const o = i * 9, u = f[o + 3] * k, v = f[o + 4] * k;
+      this.vtx(g, f[o], f[o + 1], f[o + 2], (u + v) * 0.5 + t, (v - u) * 0.5 + t * 0.6, L, col, -1, 0);
+    }
+  }
+  flushGlint(vp) {
+    const g = this.glintBatch, gl = this.r.gl;
+    if (!g.n) return;
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_COLOR, gl.ONE);
+    gl.depthMask(false);
+    // only where the item itself was drawn (not on see-through texels)
+    gl.depthFunc(gl.EQUAL);
+    this.r.useEnt(vp, 0, -1, false);
+    g.flush();
+    g.reset();
+    gl.depthFunc(gl.LEQUAL);
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+  }
+  drawItemQuads(stack, m, sky, blk, alpha, flat) {
     const icons = this.game.gui.icons;
     const atlas = this.r.atlas;
     const b = this.r.batch;
@@ -193,11 +224,13 @@ class EntityRenderer {
       if (p.fire > 0 && !p.inWater && !p.creative) this.drawFire(p, x - cam.x, y - cam.y, z - cam.z);
     }
     this.drawSigns(cam);
+    this.drawEnchantBooks(cam, partial);
     gl.disable(gl.CULL_FACE);
     this.r.useEnt(this.r.vp, 1, 0.1, true);
     this.skinBatch.flush();
     this.r.useEnt(this.r.vp, 0, 0.1, true);
     this.r.batch.flush();
+    this.flushGlint(this.r.vp);
     // fishing lines
     if (this.lines.length) {
       const b = this.r.batch;
@@ -497,6 +530,41 @@ class EntityRenderer {
     const m = M3.trans(rx, ry + 0.5, rz);
     this.drawItem(new ItemStack(e.block, 1, blockItemDamage(e.block, e.meta)), m, sky, blk, 255);
   }
+  // the classic floating book over each enchanting table
+  drawEnchantBooks(cam, partial) {
+    const w = this.game.world;
+    for (const c of w.chunks.values()) {
+      if (!c.tiles.size) continue;
+      const dx = c.cx * 16 + 8 - cam.x, dz = c.cz * 16 + 8 - cam.z;
+      if (dx * dx + dz * dz > 48 * 48) continue;
+      for (const te of c.tiles.values()) if (te.type === 'enchanting') this.drawBook(te, cam, partial);
+    }
+  }
+  drawBook(te, cam, partial) {
+    const b = this.r.batch, atlas = this.r.atlas;
+    const t = te.ticks + partial;
+    const spread = te.pSpread + (te.spread - te.pSpread) * partial;
+    const rot = te.pRot + wrapRadians(te.rot - te.pRot) * partial;
+    const [sky, blk] = this.lightAt(te.x + 0.5, te.y + 1, te.z + 0.5);
+    let m = M3.trans(te.x + 0.5 - cam.x, te.y + 0.75 + 0.1 + Math.sin(t * 0.1) * 0.01 - cam.y, te.z + 0.5 - cam.z);
+    m = M3.mul(m, M3.ry(-rot));
+    m = M3.mul(m, M3.rz(80 * DEG));
+    m = M3.mul(m, M3.scale(1 / 16, 1 / 16, 1 / 16));
+    const f = (Math.sin(t * 0.02) * 0.1 + 1.25) * spread;
+    const flip = te.pFlip + (te.flip - te.pFlip) * partial;
+    const fr = (x) => { x -= Math.floor(x); return x; };
+    const cover = atlas.layer('book_cover'), pages = atlas.layer('book_pages');
+    const part = (pre, box, layer) => this.texBox(b, M3.mul(m, pre), box, layer, sky, blk, 1 / 12);
+    part(M3.mul(M3.trans(0, 0, -1), M3.ry(Math.PI + f)), [-6, -5, 0, 0, 5, 0.2], cover);
+    part(M3.mul(M3.trans(0, 0, 1), M3.ry(-f)), [0, -5, -0.2, 6, 5, 0], cover);
+    part(M3.ry(Math.PI / 2), [-1, -5, -0.1, 1, 5, 0.1], cover);
+    const sf = Math.sin(f);
+    part(M3.mul(M3.trans(sf, 0, 0), M3.ry(f)), [0, -4, -0.99, 5, 4, 0.01], pages);
+    part(M3.mul(M3.trans(sf, 0, 0), M3.ry(-f)), [0, -4, -0.01, 5, 4, 0.99], pages);
+    const p1 = clamp(fr(flip + 0.25) * 1.6 - 0.3, 0, 1), p2 = clamp(fr(flip + 0.75) * 1.6 - 0.3, 0, 1);
+    part(M3.mul(M3.trans(sf, 0, 0), M3.ry(f - f * 2 * p1)), [0, -4, -0.02, 5, 4, 0.02], pages);
+    part(M3.mul(M3.trans(sf, 0, 0), M3.ry(f - f * 2 * p2)), [0, -4, -0.02, 5, 4, 0.02], pages);
+  }
   drawSigns(cam) {
     const w = this.game.world, R = 64;
     for (const c of w.chunks.values()) {
@@ -643,7 +711,9 @@ class EntityRenderer {
         const ad = armorOf(a.id); if (!ad) continue;
         const parts = [['head', 'hat'], ['body', 'rarm', 'larm'], ['body', 'rleg', 'lleg'], ['rleg', 'lleg']][i];
         const sk = (i === 2 ? 'legs_' : 'armor_') + ad.mat;
+        const n0 = this.skinBatch.n;
         this.drawModel(model, sk, base, pose, col, lsky, lblk, { only: parts, inflate: i === 2 ? 0.5 : 1 });
+        if (Enchant.has(a)) this.glintCopy(this.skinBatch, n0, this.skinBatch.n, 20);
       }
     }
     // held item (right hand)
@@ -796,6 +866,7 @@ class EntityRenderer {
     sb.flush();
     r.useEnt(vp, 0, 0.1, false);
     b.flush();
+    this.flushGlint(vp);
     gl.enable(gl.CULL_FACE);
   }
 

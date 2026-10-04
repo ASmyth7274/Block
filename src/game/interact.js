@@ -82,7 +82,9 @@ class Interaction {
       if (tool.kind === 'shears' && id === B.VINE) speed = 2;
       if (tool.kind === 'axe' && (id === B.LEAVES || id === B.HUGE_MUSHROOM_BROWN || id === B.HUGE_MUSHROOM_RED)) speed = Math.max(speed, tool.speed * 0.5);
     }
-    if (p.headInWater) speed *= 0.2;
+    const eff = Enchant.level(held, 'efficiency');
+    if (eff && speed > 1) speed += eff * eff + 1;
+    if (p.headInWater && !Enchant.level(p.inventory.armor.items[0], 'aqua_affinity')) speed *= 0.2;
     if (!p.onGround && !p.flying) speed *= 0.2;
     if (p.effects.haste) speed *= 1.4;
     const can = this.canHarvest(id, tool);
@@ -160,7 +162,7 @@ class Interaction {
     w.setBlock(x, y, z, 0, 0);
     Behaviors.onBroken(g, x, y, z, id, meta);
     if (!p.creative) {
-      if (this.canHarvest(id, tool)) Behaviors.dropBlock(g, x, y, z, id, meta, tool);
+      if (this.canHarvest(id, tool)) Behaviors.dropBlock(g, x, y, z, id, meta, tool, held);
       if (tool && d.hardness > 0) p.inventory.damageHeld(p, tool.kind === 'sword' ? 2 : 1);
       else if (tool && tool.kind === 'shears' && (id === B.LEAVES || id === B.COBWEB || id === B.VINE || id === B.TALL_GRASS)) p.inventory.damageHeld(p, 1);
       p.exhaust(0.025);
@@ -178,11 +180,16 @@ class Interaction {
     let dmg = tool ? tool.attack : 1;
     const crit = p.fallDistance > 0 && !p.onGround && !p.onLadder() && !p.inWater && !p.flying;
     if (crit) dmg *= 1.5;
-    let kb = 0.4;
+    const bonus = Enchant.attackBonus(held, e);
+    dmg += bonus;
+    let kb = 0.4 + Enchant.level(held, 'knockback') * 0.5;
     if (p.sprinting) { kb += 0.5; p.sprinting = false; p.vx *= 0.6; p.vz *= 0.6; }
     const ok = e.hurt(dmg, { type: 'player', entity: p, knockback: kb });
     if (ok) {
       if (crit) g.particles.crit(e.x, e.y + e.h * 0.6, e.z, 12);
+      if (bonus > 0) g.particles.crit(e.x, e.y + e.h * 0.6, e.z, 10, true);
+      const fa = Enchant.level(held, 'fire_aspect');
+      if (fa) e.fire = Math.max(e.fire || 0, fa * 80);
       if (tool && !p.creative) p.inventory.damageHeld(p, tool.kind === 'sword' ? 1 : 2);
       p.exhaust(0.3);
       if (e.onAttackedByPlayer) e.onAttackedByPlayer(p);

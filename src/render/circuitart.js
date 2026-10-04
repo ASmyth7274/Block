@@ -122,3 +122,63 @@
     return img;
   })());
 })();
+
+// ---------------------------------------------------------------------------
+// Enchanting: the table, the floating book, the glint and the flying glyphs
+// ---------------------------------------------------------------------------
+(function () {
+  const { Img, reg, pal, rngFor, sprite, C } = TexGen;
+  const obsidian = (name) => {
+    const img = new Img(), rng = rngFor(name);
+    const P = pal(['#0d0a14', '#130f1e', '#1a1428', '#241c36', '#3a2c52']);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) img.set(x, y, P[Math.min(4, Math.floor(rng.nextFloat() * rng.nextFloat() * 5))]);
+    return img;
+  };
+  reg('enchanting_bottom', obsidian('ench_bottom'));
+  reg('enchanting_side', (() => {
+    const img = obsidian('ench_side'), rng = rngFor('ench_side2');
+    const R = pal(['#5a0c0c', '#7a1414', '#9a1e1e', '#b82a2a']);
+    for (let y = 0; y < 5; y++) for (let x = 0; x < 16; x++) img.set(x, y, y === 4 ? C('#e8b830') : R[Math.min(3, (x + y * 3 + rng.nextInt(2)) % 4)]);
+    for (const x of [2, 7, 12]) { img.set(x, 5, R[1]); img.set(x + 1, 5, R[2]); img.set(x, 6, R[0]); }
+    return img;
+  })());
+  reg('enchanting_top', (() => {
+    const img = obsidian('ench_top'), rng = rngFor('ench_top2');
+    const R = pal(['#6a1010', '#8a1818', '#a82222', '#c03030']);
+    for (let y = 2; y < 14; y++) for (let x = 2; x < 14; x++) img.set(x, y, R[(x * 3 + y * 5 + rng.nextInt(2)) % 4]);
+    for (let i = 2; i < 14; i++) { img.set(i, 2, C('#e8b830')); img.set(i, 13, C('#a87818')); img.set(2, i, C('#e8b830')); img.set(13, i, C('#a87818')); }
+    for (const [x, y] of [[0, 0], [14, 0], [0, 14], [14, 14]]) { img.set(x, y, C('#d5fffa')); img.set(x + 1, y, C('#5decf5')); img.set(x, y + 1, C('#5decf5')); img.set(x + 1, y + 1, C('#1fa8b0')); }
+    return img;
+  })());
+  reg('book_cover', (() => {
+    const img = TexGen.noiseImg('book_cover', ['#5a2a10', '#6e3416', '#7e3e1a', '#8e4a22'], { scales: [4, 1], weights: [0.4, 0.6] });
+    for (let i = 0; i < 16; i++) { img.set(i, 0, C('#3a1a08')); img.set(i, 15, C('#3a1a08')); img.set(0, i, C('#3a1a08')); img.set(15, i, C('#3a1a08')); }
+    for (let x = 5; x < 11; x++) { img.set(x, 6, C('#c8a040')); img.set(x, 9, C('#c8a040')); }
+    return img;
+  })());
+  reg('book_pages', (() => {
+    const img = new Img().fill(C('#ece4cc'));
+    for (let y = 2; y < 15; y += 2) for (let x = 2; x < 14; x++) if ((x * 7 + y * 3) % 9 > 1) img.set(x, y, C('#b8ac90'));
+    return img;
+  })());
+  // the shimmer that runs over enchanted things
+  reg('enchant_glint', (() => {
+    const img = new Img();
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const d = ((x + y) % 16) / 16, band = Math.max(0, 1 - Math.abs(d - 0.5) * 3.2);
+      const k = band * (0.7 + 0.3 * Math.sin((x - y) * 0.8));
+      img.set(x, y, [Math.round(128 * k), Math.round(64 * k), Math.round(204 * k)], 255);
+    }
+    return img;
+  })());
+  // glyphs drifting from bookshelves into the table
+  const GLYPH = [
+    ['.#.', '#.#', '.#.', '.#.'], ['#.#', '.#.', '#.#'], ['###', '..#', '.#.', '#..'], ['#..', '###', '..#'],
+    ['.#.', '###', '.#.'], ['##.', '#.#', '.##'], ['#.#', '#.#', '.#.'], ['.##', '#..', '.##'],
+  ];
+  GLYPH.forEach((rows, i) => {
+    const pad = ['................', '................', '................', '................', '................', '................'];
+    const full = pad.concat(rows.map((r) => '......' + r.replace(/#/g, 'o') + '.'.repeat(10 - r.length)));
+    sprite('particle_glyph' + i, full, { o: [255, 255, 255] });
+  });
+})();

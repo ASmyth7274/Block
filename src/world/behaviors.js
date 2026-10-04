@@ -395,6 +395,7 @@ const Behaviors = (() => {
         return false;
       }
       case B.RUNESTONE: game.useRunestone(x, y, z); return true;
+      case B.ENCHANTING_TABLE: game.openScreen(new EnchantScreen(game, x, y, z)); return true;
       case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: case B.RELAY: case B.RELAY_ON: case B.NOTE_BLOCK:
         return Circuits.use(game, x, y, z, id);
       case B.BRAMBLE: {
@@ -412,13 +413,24 @@ const Behaviors = (() => {
     e.vx = (Math.random() - 0.5) * 0.2; e.vy = 0.2; e.vz = (Math.random() - 0.5) * 0.2;
     game.spawnEntity(e);
   }
-  function dropBlock(game, x, y, z, id, meta, tool) {
+  function dropBlock(game, x, y, z, id, meta, tool, held) {
     const d = BLOCKS[id];
     if (!d) return;
     const rng = game.world.rng;
     let drops;
-    if (d.drops) drops = d.drops(meta, rng, tool);
+    const silk = held && Enchant.level(held, 'silk_touch') && d.render === R.CUBE && !d.tileEntity && d.hardness >= 0;
+    if (silk) { const pk = pickBlockItem(id, meta); drops = pk ? [[pk[0], 1, pk[1]]] : []; }
+    else if (d.drops) drops = d.drops(meta, rng, tool);
     else { const pk = pickBlockItem(id, meta); drops = pk ? [[pk[0], 1, pk[1]]] : []; }
+    // fortune multiplies what ores give
+    const fortune = held && !silk ? Enchant.level(held, 'fortune') : 0;
+    if (fortune && (d.key.endsWith('_ore') || d.key.endsWith('_ore_lit') || id === B.LUMITE_CRYSTAL)) {
+      drops = drops.map(([did, n, dd]) => did === id || did === B.EMBER_ORE ? [did, n, dd] : [did, n * (Math.max(0, rng.nextInt(fortune + 2) - 1) + 1), dd]);
+    }
+    if (silk) {
+      for (const [did, n, dd] of drops) dropStack(game, x + 0.5, y + 0.5, z + 0.5, new ItemStack(did, n, dd));
+      return;
+    }
     for (const [did, n, dd] of drops) {
       if (n <= 0 || !itemExists(did)) continue;
       const s = new ItemStack(did, n, dd);

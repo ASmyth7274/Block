@@ -109,7 +109,7 @@ class Hud {
       this.lastHealth = p.health;
     }
   }
-  setItemName(stack) { if (stack) { this.itemName = stack.name; this.itemNameTimer = 50; this.itemNameColor = isRare(stack.id) ? '#55ffff' : '#ffffff'; } else this.itemNameTimer = 0; }
+  setItemName(stack) { if (stack) { this.itemName = stack.name; this.itemNameTimer = 50; this.itemNameColor = (isRare(stack.id) || Enchant.has(stack)) ? '#55ffff' : '#ffffff'; } else this.itemNameTimer = 0; }
 
   draw(gui, partial) {
     const g = this.game, p = g.player;

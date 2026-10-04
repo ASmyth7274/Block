@@ -34,6 +34,8 @@ class FishHook extends Entity {
     this.caught = null;
     this.caughtDelay = 0; this.catchableDelay = 0; this.catchable = 0; this.approach = 0;
     this.inWaterNow = false;
+    const rod = angler.inventory ? angler.inventory.held() : null;
+    this.luck = Enchant.level(rod, 'luck_of_the_sea'); this.lure = Enchant.level(rod, 'lure');
   }
   discard() {
     this.removed = true;
@@ -142,7 +144,7 @@ class FishHook extends Entity {
       }
       if (this.caughtDelay <= 0) { this.approach = R() * 360; this.catchableDelay = 20 + Math.floor(R() * 61); }
     } else {
-      this.caughtDelay = 100 + Math.floor(R() * 801);
+      this.caughtDelay = Math.max(1, 100 + Math.floor(R() * 801) - this.lure * 100);
     }
     if (this.catchable > 0) this.vy -= R() * R() * R() * 0.2;
   }
@@ -190,13 +192,14 @@ const Fishing = (() => {
     const sea = key === 'ocean' || key === 'deep_ocean';
     const S = (id, n, d) => () => new ItemStack(id, typeof n === 'function' ? n() : (n || 1), d || 0);
     const worn = (id) => () => { const s = new ItemStack(id, 1, 0); const m = maxDamageOf(id); if (m) s.dmg = Math.floor(m * (0.25 + R() * 0.65)); return s; };
+    const junkP = Math.max(0, 0.1 - (hook.luck || 0) * 0.025 - (hook.lure || 0) * 0.01), treasureP = Math.max(0, 0.05 + (hook.luck || 0) * 0.01 - (hook.lure || 0) * 0.01);
     let f = R();
-    if (f < 0.1) {
+    if (f < junkP) {
       return pick([[worn(I.leather_boots), 10], [S(I.leather), 10], [S(I.bone), 10], [S(I.string), 5], [S(I.stick), 5], [S(I.bowl), 10], [S(I.rotten_flesh), 10],
         [S(I.dye, 3, 15), 3], [S(B.LILY_PAD), 8], [S(I.cattail_fiber, () => 1 + Math.floor(R() * 3)), 5]]);
     }
-    f -= 0.1;
-    if (f < 0.05) {
+    f -= junkP;
+    if (f < treasureP) {
       return pick([[S(I.message_bottle), sea ? 40 : 25], [worn(I.bow), 8], [worn(I.fishing_rod), 8], [S(B.LILY_PAD), 5], [S(I.gold_nugget, () => 2 + Math.floor(R() * 5)), 10],
         [S(I.jade), 6], [S(I.golden_apple), 2], [S(I.diamond), 1], [S(I.wisp_essence), 4], [S(I.compass), 3]]);
     }

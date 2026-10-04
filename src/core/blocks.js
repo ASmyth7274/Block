@@ -625,6 +625,11 @@ defBlock(129, 'sticky_piston', { name: 'Sticky Piston', render: R.CIRCUIT, tex: 
 defBlock(130, 'piston_head', { name: 'Piston Head', render: R.CIRCUIT, tex: 'piston_side', opaque: false, opacity: 0, hardness: 0.5, sound: 'stone',
   collide: (m) => pistonHeadBoxes(m), select: (m) => pistonHeadBoxes(m)[0], drops: () => [] });
 defBlock(131, 'piston_moving', { name: 'Moving Block', render: R.NONE, tex: 'piston_side', opaque: false, solid: false, opacity: 0, hardness: -1, tileEntity: 'moving', select: () => null, drops: () => [] });
+defBlock(132, 'enchanting_table', {
+  name: 'Enchanting Table', render: R.MODEL, tex: { top: 'enchanting_top', side: 'enchanting_side', bottom: 'enchanting_bottom' }, opaque: false, opacity: 0,
+  hardness: 5, resistance: 2000, tool: 'pickaxe', needsTool: true, tileEntity: 'enchanting', light: 0,
+  model: () => [{ b: [0, 0, 0, 16, 12, 16] }], collide: () => [box16(0, 0, 0, 16, 12, 16)], select: () => box16(0, 0, 0, 16, 12, 16),
+});
 defBlock(127, 'note_block', { name: 'Note Block', tex: 'note_block', hardness: 0.8, tool: 'axe', sound: 'wood', flammable: 5, burnSpeed: 5, drops: () => [[B.NOTE_BLOCK, 1, 0]] });
 
 // -------------------------------------------------------------------------

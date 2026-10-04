@@ -305,6 +305,7 @@ class Living extends Entity {
       amount = amount * (25 - Math.min(20, armor)) / 25;
       if (this.damageArmor) this.damageArmor(amount);
     }
+    if (this.enchantReduction) amount *= 1 - this.enchantReduction(src);
     this.health = Math.max(0, this.health - amount);
   }
   knockback(dx, dz, strength) {

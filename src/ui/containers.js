@@ -58,7 +58,8 @@ class ContainerScreen extends Screen {
     } else if (this.hover && this.hover.stack) gui.tooltip(this.tooltipFor(this.hover.stack), mx, my);
   }
   tooltipFor(st) {
-    const lines = [(isRare(st.id) ? '§b' : '') + st.name];
+    const lines = [(Enchant.has(st) ? '§b' : isRare(st.id) ? '§b' : '') + st.name];
+    for (const [eid, lv] of Enchant.list(st)) lines.push('§7' + Enchant.name(eid, lv));
     const t = toolOf(st.id), a = armorOf(st.id), f = foodOf(st.id);
     if (t && t.kind !== 'shears') lines.push('§9+' + t.attack + ' Attack Damage');
     if (a) lines.push('§9+' + a.points + ' Armor');
@@ -480,7 +481,7 @@ const CREATIVE_TABS = (() => {
     blk(B.BASALT), blk(B.POLISHED_BASALT), blk(B.ASH), blk(B.PEAT), blk(B.SALT), blk(B.SCORCHED_STONE), blk(B.THATCH), blk(B.QUICKSAND), blk(B.HAY_BALE), blk(B.HUGE_MUSHROOM_BROWN), blk(B.HUGE_MUSHROOM_RED), blk(B.RUNESTONE)] });
   T.push({ name: 'Decoration', icon: [B.FLOWER, 0], list: [
     ...all(B.SAPLING), ...all(B.LEAVES), blk(B.COBWEB), ...all(B.TALL_GRASS), blk(B.DEAD_BUSH), ...all(B.FLOWER), blk(B.MUSHROOM_BROWN), blk(B.MUSHROOM_RED), blk(B.GLOWSHROOM), blk(B.LUMITE_CRYSTAL),
-    blk(B.TORCH), blk(B.CHEST), blk(B.CRAFTING_TABLE), blk(B.FURNACE), blk(B.LADDER), blk(B.ROPE), blk(B.SNOW_LAYER), blk(B.CACTUS), blk(B.PUMPKIN), blk(B.JACK_O_LANTERN), blk(B.MELON), blk(B.VINE),
+    blk(B.TORCH), blk(B.CHEST), blk(B.CRAFTING_TABLE), blk(B.FURNACE), blk(B.ENCHANTING_TABLE), blk(B.LADDER), blk(B.ROPE), blk(B.SNOW_LAYER), blk(B.CACTUS), blk(B.PUMPKIN), blk(B.JACK_O_LANTERN), blk(B.MELON), blk(B.VINE),
     blk(B.LILY_PAD), blk(B.CATTAIL), blk(B.BRAMBLE), blk(B.LEAF_LITTER), ...all(B.FENCE), blk(B.FENCE_GATE), blk(B.TRAPDOOR), blk(B.GLASS_PANE), ...all(B.CARPET), blk(B.LUMITE_LAMP), blk(B.MOB_SPAWNER),
     [I.door_wood, 0], [I.door_iron, 0], [I.bed, 0], ...WOOD.map((w, i) => [I.sign, i]), [I.painting, 0]] });
   T.push({ name: 'Tools', icon: [I.iron_axe, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ['shovel', 'pickaxe', 'axe', 'hoe'].map((k) => [I[m + '_' + k], 0])),

@@ -91,7 +91,10 @@ class PlayerInventory {
     if (!s) return;
     const md = maxDamageOf(s.id);
     if (md <= 0) return;
-    s.dmg += amount || 1;
+    let n = 0;
+    for (let i = 0; i < (amount || 1); i++) if (Enchant.wears(s)) n++;
+    if (!n) return;
+    s.dmg += n;
     if (s.dmg >= md) { this.main.items[this.selected] = null; if (player.onToolBreak) player.onToolBreak(s); }
     this.main.changed();
   }

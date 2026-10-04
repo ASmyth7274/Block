@@ -95,6 +95,14 @@ class Particles {
     for (let i = 0; i < n; i++) this.add({ x: x + (Math.random() - 0.5) * 0.8, y, z: z + (Math.random() - 0.5) * 0.8, vx: (Math.random() - 0.5) * 0.15, vy: 0.1 + Math.random() * 0.2, vz: (Math.random() - 0.5) * 0.15, size: 0.06, life: 10 + Math.floor(Math.random() * 10), gravity: 0.04, layer: L, r: 0.55, g: 0.65, b: 1, lit: true });
     this.bubble(x, y - 0.5, z, 6);
   }
+  // runes floating from a bookshelf into the enchanting table
+  glyph(sx, sy, sz, tx, ty, tz) {
+    const life = 30 + Math.floor(Math.random() * 15);
+    const p = this.add({ x: sx + (Math.random() - 0.5) * 0.6, y: sy + Math.random() * 0.5, z: sz + (Math.random() - 0.5) * 0.6, vx: 0, vy: 0, vz: 0, size: 0.06, life,
+      layer: this.layer('particle_glyph' + Math.floor(Math.random() * 8)), r: 0.95, g: 0.9, b: 1, collide: false, bright: true, drag: 1 });
+    p.seek = [tx, ty, tz, p.x, p.y, p.z];
+    return p;
+  }
   // flat white flecks drifting on the water surface (boat wakes, approaching fish)
   wake(x, y, z, vx, vz) {
     this.add({ x, y: y + 0.02, z, vx, vy: 0, vz, size: 0.05, life: 8 + Math.floor(Math.random() * 8), layer: this.layer('particle_drip'), r: 0.9, g: 0.95, b: 1, drag: 0.92, collide: false, lit: true, fade: true });
@@ -110,9 +118,10 @@ class Particles {
   drip(x, y, z, lava) {
     this.add({ x, y, z, vx: 0, vy: 0, vz: 0, size: 0.04, life: 60, gravity: 0.02, layer: this.layer('particle_drip'), r: lava ? 1 : 0.3, g: lava ? 0.4 : 0.45, b: lava ? 0.1 : 1, bright: lava, splashOnLand: true });
   }
-  crit(x, y, z, n) {
+  crit(x, y, z, n, magic) {
     const L = this.layer('particle_crit');
-    for (let i = 0; i < n; i++) this.add({ x: x + (Math.random() - 0.5) * 0.6, y: y + (Math.random() - 0.5) * 0.6, z: z + (Math.random() - 0.5) * 0.6, vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4 + 0.1, vz: (Math.random() - 0.5) * 0.4, size: 0.08, life: 10 + Math.floor(Math.random() * 6), gravity: 0.04, layer: L, r: 0.9, g: 0.85, b: 0.6, drag: 0.7, collide: false });
+    for (let i = 0; i < n; i++) this.add({ x: x + (Math.random() - 0.5) * 0.6, y: y + (Math.random() - 0.5) * 0.6, z: z + (Math.random() - 0.5) * 0.6, vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4 + 0.1, vz: (Math.random() - 0.5) * 0.4, size: 0.08, life: 10 + Math.floor(Math.random() * 6), gravity: 0.04, layer: L,
+      r: magic ? 0.55 : 0.9, g: magic ? 0.35 : 0.85, b: magic ? 1 : 0.6, drag: 0.7, collide: false, bright: !!magic });
   }
   happy(x, y, z) {
     const L = this.layer('particle_glint');
@@ -173,6 +182,14 @@ class Particles {
         }
       }
       if (p.water && w && w.getBlock(Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)) !== B.WATER) continue;
+      if (p.seek) {
+        // classic enchanting glyphs: start at the shelf, rise, then fall into the table
+        const k = p.age / p.life, s = p.seek, e = 1 - k;
+        p.x = s[0] + (s[3] - s[0]) * e; p.z = s[2] + (s[5] - s[2]) * e;
+        p.y = s[1] + (s[4] - s[1]) * e + (1 - e * e) * 0.6 * e * 4;
+        keep.push(p);
+        continue;
+      }
       p.x += p.vx; p.y += p.vy; p.z += p.vz;
       p.vx *= p.drag; p.vy *= p.drag; p.vz *= p.drag;
       if (p.onGround) { p.vx *= 0.7; p.vz *= 0.7; }

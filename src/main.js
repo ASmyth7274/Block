@@ -784,6 +784,7 @@ class Game {
       if (!c.tiles.size) continue;
       for (const te of c.tiles.values()) {
         if (te.type === 'furnace') this.tickFurnace(te, c);
+        else if (te.type === 'enchanting') this.tickEnchantTable(te);
         else if (te.type === 'spawner') { const dx = te.x + 0.5 - p.x, dy = te.y + 0.5 - p.y, dz = te.z + 0.5 - p.z; if (dx * dx + dy * dy + dz * dz < 256) this.tickSpawner(te); }
       }
     }
@@ -824,6 +825,27 @@ class Game {
       dirty = true;
     }
     if (dirty) c.modified = true;
+  }
+  // the floating book turns to face you and opens; glyphs drift in from bookshelves
+  tickEnchantTable(te) {
+    const p = this.player;
+    const dx = p.x - (te.x + 0.5), dy = p.y - (te.y + 0.5), dz = p.z - (te.z + 0.5), d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 > 1024) return;
+    te.pSpread = te.spread; te.pRot = te.rot;
+    if (d2 < 9 && !p.dead) {
+      te.tRot = Math.atan2(dz, dx);
+      te.spread += 0.1;
+      if (te.spread < 0.5 || Math.random() < 1 / 40) { const f1 = te.flipT; do { te.flipT += Math.floor(Math.random() * 4) - Math.floor(Math.random() * 4); } while (f1 === te.flipT); }
+    } else { te.tRot += 0.02; te.spread -= 0.1; }
+    te.rot += wrapRadians(te.tRot - te.rot) * 0.4;
+    te.spread = clamp(te.spread, 0, 1);
+    te.ticks++;
+    te.pFlip = te.flip;
+    const f = clamp((te.flipT - te.flip) * 0.4, -0.2, 0.2);
+    te.flipA += (f - te.flipA) * 0.9; te.flip += te.flipA;
+    if (d2 < 256 && this.settings.particles !== 'minimal' && te.ticks % 2 === 0) {
+      for (const s of Enchant.shelves(this.world, te.x, te.y, te.z)) if (Math.random() < 1 / 16) this.particles.glyph(s[0] + 0.5, s[1] + 1, s[2] + 0.5, te.x + 0.5, te.y + 1.25, te.z + 0.5);
+    }
   }
   tickSpawner(te) {
     const w = this.world;
@@ -1065,14 +1087,18 @@ class Game {
     f = (f * f + f * 2) / 3;
     if (f < 0.1) return;
     if (f > 1) f = 1;
-    const hasArrow = p.creative || p.inventory.main.count(ITEM_IDS.arrow) > 0;
+    const infinity = Enchant.level(held, 'infinity') > 0;
+    const hasArrow = p.creative || infinity || p.inventory.main.count(ITEM_IDS.arrow) > 0;
     if (!hasArrow) return;
     const a = new Arrow(this.world, p, f * 3, 1);
     if (f >= 1) a.crit = true;
-    a.pickup = !p.creative;
+    a.pickup = !p.creative && !infinity;
+    const pw = Enchant.level(held, 'power'); if (pw) a.damage += pw * 0.5 + 0.5;
+    a.punch = Enchant.level(held, 'punch');
+    if (Enchant.level(held, 'flame')) a.fire = 2000;
     this.spawnEntity(a);
     this.audio.play('bow', 1, 1 / (Math.random() * 0.4 + 1.2) + f * 0.5);
-    if (!p.creative) { p.inventory.main.removeItems(ITEM_IDS.arrow, undefined, 1); if (held) p.inventory.damageHeld(p, 1); }
+    if (!p.creative) { if (!infinity) p.inventory.main.removeItems(ITEM_IDS.arrow, undefined, 1); if (held) p.inventory.damageHeld(p, 1); }
   }
   tryUseBed(x, y, z, m) {
     const p = this.player, w = this.world;
@@ -1527,6 +1553,7 @@ class Game {
     gl.disable(gl.CULL_FACE);
     r.useEnt(proj, 1, 0.1, false); er.skinBatch.flush();
     r.useEnt(proj, 0, 0.1, false); r.batch.flush();
+    er.flushGlint(proj);
     gl.enable(gl.CULL_FACE);
     gl.disable(gl.SCISSOR_TEST);
     gl.viewport(0, 0, r.width, r.height);
