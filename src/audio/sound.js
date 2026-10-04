@@ -165,6 +165,25 @@ const SOUND_DEFS = (() => {
   S.boomcap_say = () => { const lp = new Biquad('lp', 600, 2); return render(0.4, (t) => lp.p(noise()) * env(t, 0.02, 0.1)); };
   S.wisp = () => render(1.2, (t) => { let s = 0; [2093, 2637, 3136].forEach((f, i) => { const st = i * 0.18; if (t > st) s += Math.sin(2 * Math.PI * f * (t - st)) * Math.exp(-(t - st) / 0.3); }); return s; });
   S.stranger = () => { const lp = new Biquad('lp', 300, 1); return render(3, (t) => (lp.p(noise()) * 0.6 + Math.sin(2 * Math.PI * 55 * t) * 0.3) * Math.sin(Math.PI * t / 3)); };
+  // ----- note block instruments (tuned to F#4 and played back faster or slower) -----
+  const pluck = (f0, dur, damp, lpf) => () => {
+    const n = Math.max(2, Math.round(DSP.SR / f0)), b = new Float32Array(n);
+    for (let i = 0; i < n; i++) b[i] = noise();
+    const lp = lpf ? new Biquad('lp', lpf, 0.7) : null;
+    let i = 0;
+    return render(dur, (t) => {
+      const v = b[i], nv = b[(i + 1) % n];
+      b[i] = (v + nv) * 0.5 * damp; i = (i + 1) % n;
+      return (lp ? lp.p(v) : v) * Math.min(1, t * 600);
+    });
+  };
+  S.nb_harp = pluck(370, 1.6, 0.998);
+  S.nb_bass = pluck(92.5, 1.3, 0.997, 700);
+  S.nb_drum = () => render(0.35, (t) => Math.sin(2 * Math.PI * (55 + 150 * Math.exp(-t * 28)) * t) * Math.exp(-t / 0.1) + noise() * 0.12 * Math.exp(-t / 0.008));
+  S.nb_snare = () => { const bp = new Biquad('bp', 1900, 0.8); return render(0.25, (t) => (bp.p(noise()) * 0.8 + Math.sin(2 * Math.PI * 185 * t) * 0.35) * Math.exp(-t / 0.05)); };
+  S.nb_hat = () => { const hp = new Biquad('hp', 6500, 0.7); return render(0.09, (t) => hp.p(noise()) * Math.exp(-t / 0.016)); };
+  S.piston_out = () => { const lp = new Biquad('lp', 900, 1.2); return render(0.35, (t) => lp.p(noise()) * env(t, 0.004, 0.05) * 0.9 + Math.sin(2 * Math.PI * (140 - t * 200) * t) * env(t, 0.002, 0.06)); };
+  S.piston_in = () => { const lp = new Biquad('lp', 700, 1.2); return render(0.35, (t) => lp.p(noise()) * env(t, 0.006, 0.06) * 0.8 + Math.sin(2 * Math.PI * (110 - t * 120) * t) * env(t, 0.002, 0.08)); };
   // ----- ambience -----
   S.cave = () => {
     const kind = Math.floor(rnd() * 3);
@@ -249,6 +268,8 @@ class AudioEngine {
     node.connect(this.sfx);
     src.start();
   }
+  // note blocks: midi 54..78 (F#3..F#5), played by pitching the F#4 sample like the classic game
+  playNote(inst, midi, x, y, z) { this.play('nb_' + inst, 2, Math.pow(2, (midi - 66) / 12), x, y, z); }
   playBlock(material, kind, x, y, z) {
     const m = material || 'stone';
     const vol = { break: 1, hit: 0.25, step: 0.15, place: 1 }[kind] || 1;

@@ -592,6 +592,7 @@ class Game {
     this.renderer.atlas.tickAnimations();
     DynamicItems.update(this);
     this.tickWaterways();
+    Circuits.tickPlates(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
     const h = p.inventory.held();

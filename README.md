@@ -100,6 +100,11 @@ splash text and a slowly turning live panorama.
   after dark — and messages in bottles that put an X on your map where
   treasure is buried.
 - Signs you can write on and 24 original paintings to hang on your walls.
+- Ember circuits, the classic wiring set in ember: wire with power levels,
+  levers, buttons, pressure plates, inverting ember torches (which burn out if
+  they flicker too fast), relays with four delays, lamps, note blocks with
+  five instruments, and pistons and sticky pistons that drive doors, TNT and
+  hidden machines.
 - Generative music: calm piano pieces composed on the fly, different by day,
   by night and underground.
 

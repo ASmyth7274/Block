@@ -48,8 +48,16 @@ class SignTE extends TileEntity {
   load(d) { if (Array.isArray(d.lines)) for (let i = 0; i < 4; i++) this.lines[i] = String(d.lines[i] || '').slice(0, 15); }
 }
 
+// a block in transit, pushed or pulled by a piston
+class MovingTE extends TileEntity {
+  constructor(x, y, z) { super('moving', x, y, z); this.id = 0; this.meta = 0; }
+  save() { return Object.assign(super.save(), { id: this.id, meta: this.meta }); }
+  load(d) { this.id = d.id | 0; this.meta = d.meta | 0; }
+}
+
 function makeTileEntity(type, x, y, z) {
   switch (type) {
+    case 'moving': return new MovingTE(x, y, z);
     case 'sign': return new SignTE(x, y, z);
     case 'chest': return new ChestTE(x, y, z);
     case 'furnace': return new FurnaceTE(x, y, z);

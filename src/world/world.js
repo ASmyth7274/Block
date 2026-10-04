@@ -242,6 +242,7 @@ class World {
         const nd = BLOCKS[id]; if (nd && nd.onPlaced) nd.onPlaced(this, x, y, z, meta, old);
       }
       if (flags & 1) this.notifyNeighbors(x, y, z, id);
+      if (!this.menu && typeof Circuits !== 'undefined') Circuits.blockChanged(this, x, y, z, old, id);
     }
     return true;
   }

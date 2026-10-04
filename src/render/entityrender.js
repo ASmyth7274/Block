@@ -253,6 +253,7 @@ class EntityRenderer {
       case 'boat': return this.drawBoat(e, rx, ry, rz, partial);
       case 'fishhook': return this.drawHook(e, rx, ry, rz, partial);
       case 'painting': return this.drawPainting(e, rx, ry, rz);
+      case 'moving_block': return this.drawMovingBlock(e, rx, ry, rz);
       case 'wisp': {
         const t = e.age + partial, pulse = 1 + Math.sin(t * 0.25) * 0.12;
         this.glow(rx, ry + 0.2, rz, 0.55 * pulse, [110, 255, 230, 150]);
@@ -478,6 +479,23 @@ class EntityRenderer {
       if (i === 0) this.quadOut(sb, [P(al, up, -fd), P(al, up, fd), P(al, up + 1, fd), P(al, up + 1, -fd)], [[bu, bv], [bu + e1, bv], [bu + e1, bv + e2], [bu, bv + e2]], -1, ec, sky, blk);
       if (i === a.w - 1) this.quadOut(sb, [P(al + 1, up, fd), P(al + 1, up, -fd), P(al + 1, up + 1, -fd), P(al + 1, up + 1, fd)], [[bu, bv], [bu + e1, bv], [bu + e1, bv + e2], [bu, bv + e2]], -1, ec, sky, blk);
     }
+  }
+  drawMovingBlock(e, rx, ry, rz) {
+    const [sky, blk] = this.lightAt(e.x, e.y + 0.5, e.z);
+    if (e.block === B.PISTON_HEAD) {
+      const f = e.meta & 7, tf = PISTON_TF[f], L = (n) => this.r.atlas.layer(n), b = this.r.batch;
+      const base = M3.mul(M3.trans(rx - 0.5, ry, rz - 0.5), M3.scale(1 / 16, 1 / 16, 1 / 16));
+      // run the head's local frame through the same transform the mesher uses
+      const tm = (bx) => {
+        const a = tf([bx[0], bx[1], bx[2]]), c = tf([bx[3], bx[4], bx[5]]);
+        return [Math.min(a[0], c[0]), Math.min(a[1], c[1]), Math.min(a[2], c[2]), Math.max(a[0], c[0]), Math.max(a[1], c[1]), Math.max(a[2], c[2])];
+      };
+      this.texBox(b, base, tm([0, 12, 0, 16, 16, 16]), L((e.meta & 8) ? 'piston_top_sticky' : 'piston_top'), sky, blk);
+      this.texBox(b, base, tm([6, -4, 6, 10, 12, 10]), L('piston_side'), sky, blk);
+      return;
+    }
+    const m = M3.trans(rx, ry + 0.5, rz);
+    this.drawItem(new ItemStack(e.block, 1, blockItemDamage(e.block, e.meta)), m, sky, blk, 255);
   }
   drawSigns(cam) {
     const w = this.game.world, R = 64;

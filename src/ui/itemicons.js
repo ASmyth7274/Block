@@ -88,7 +88,7 @@ class ItemIcons {
       case B.TRAPDOOR: return [{ b: [0, 0, 0, 16, 3, 16] }];
       case B.BED: return [{ b: [0, 3, 0, 16, 9, 16] }];
     }
-    if (b.render === R.MODEL && b.model) { try { return b.model(meta); } catch (e) { return [{ b: [0, 0, 0, 16, 16, 16] }]; } }
+    if ((b.render === R.MODEL || b.render === R.CIRCUIT) && b.model) { try { return b.model(meta); } catch (e) { return [{ b: [0, 0, 0, 16, 16, 16] }]; } }
     return [{ b: [0, 0, 0, 16, 16, 16] }];
   }
   faceTexture(id, meta, f) {

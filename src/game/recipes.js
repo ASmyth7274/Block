@@ -27,7 +27,7 @@ const Recipes = (() => {
   shaped([B.CHEST, 1], ['###', '# #', '###'], { '#': B.PLANKS });
   shaped([B.FURNACE, 1], ['###', '# #', '###'], { '#': B.COBBLESTONE });
   shaped([B.TORCH, 4], ['X', '#'], { X: I.coal, '#': I.stick });
-  shaped([B.TORCH, 2], ['X', '#'], { X: I.ember_dust, '#': I.stick });
+  shaped([B.EMBER_TORCH, 1], ['X', '#'], { X: I.ember_dust, '#': I.stick });
   shaped([I.bowl, 4], ['# #', ' # '], { '#': B.PLANKS });
   shaped([B.LADDER, 3], ['# #', '###', '# #'], { '#': I.stick });
   for (let t = 0; t < 6; t++) {
@@ -70,6 +70,17 @@ const Recipes = (() => {
     shaped([I.sign, 3, t], ['PPP', 'PPP', ' # '], { P: [B.PLANKS, t], '#': I.stick });
   }
   shaped([I.painting], ['###', '#W#', '###'], { '#': I.stick, W: B.WOOL });
+  // ember circuits
+  shaped([B.LEVER, 1], ['#', 'C'], { '#': I.stick, C: B.COBBLESTONE });
+  shapeless([B.STONE_BUTTON, 1], [[B.STONE, 0]]);
+  shapeless([B.WOOD_BUTTON, 1], [B.PLANKS]);
+  shaped([B.STONE_PLATE, 1], ['SS'], { S: [B.STONE, 0] });
+  shaped([B.WOOD_PLATE, 1], ['PP'], { P: B.PLANKS });
+  shaped([B.EMBER_LAMP, 1], [' E ', 'EGE', ' E '], { E: I.ember_dust, G: B.GLASS });
+  shaped([I.relay, 1], ['TET', 'SSS'], { T: B.EMBER_TORCH, E: I.ember_dust, S: [B.STONE, 0] });
+  shaped([B.NOTE_BLOCK, 1], ['PPP', 'PEP', 'PPP'], { P: B.PLANKS, E: I.ember_dust });
+  shaped([B.PISTON, 1], ['PPP', 'CIC', 'CEC'], { P: B.PLANKS, C: B.COBBLESTONE, I: I.iron_ingot, E: I.ember_dust });
+  shapeless([B.STICKY_PISTON, 1], [I.slimeball, B.PISTON]);
   shaped([I.compass], [' I ', 'IEI', ' I '], { I: I.iron_ingot, E: I.ember_dust });
   shaped([I.clock], [' G ', 'GEG', ' G '], { G: I.gold_ingot, E: I.ember_dust });
 

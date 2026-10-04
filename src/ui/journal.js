@@ -32,6 +32,7 @@ const MILESTONES = [
   { id: 'fish', name: 'Gone Fishing', desc: 'Catch a fish', icon: () => [ITEM_IDS.fish, 0] },
   { id: 'sail', name: 'Set Sail', desc: 'Row a boat 500 blocks', icon: () => [ITEM_IDS.boat, 0] },
   { id: 'bottle', name: 'Message Received', desc: 'Read a message in a bottle', icon: () => [ITEM_IDS.message_bottle, 0] },
+  { id: 'lamp', name: 'Bright Idea', desc: 'Light an ember lamp with a circuit', icon: () => [B.EMBER_LAMP_ON, 0] },
 ];
 const BIOME_DESCRIPTIONS = {
   ocean: 'Endless water. Sunken ruins rest on the sea floor.', deep_ocean: 'The water grows dark and cold.', plains: 'Rolling grass, wildflowers and the occasional lonely oak.',

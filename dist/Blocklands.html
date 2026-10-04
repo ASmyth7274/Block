@@ -413,7 +413,7 @@ const HFACE_DIR = [[0, -1], [0, 1], [-1, 0], [1, 0]];
 const HFACE_OPP = [1, 0, 3, 2];
 
 // Render types
-const R = { NONE: 0, CUBE: 1, CROSS: 2, LIQUID: 3, TORCH: 4, MODEL: 5, CROP: 6, LADDER: 7, FIRE: 8, LILY: 9, VINE: 10 };
+const R = { NONE: 0, CUBE: 1, CROSS: 2, LIQUID: 3, TORCH: 4, MODEL: 5, CROP: 6, LADDER: 7, FIRE: 8, LILY: 9, VINE: 10, CIRCUIT: 11 };
 
 const WOOD = ['oak', 'spruce', 'birch', 'jungle', 'maple', 'redwood'];
 const WOOD_NAMES = ['Oak', 'Spruce', 'Birch', 'Jungle', 'Maple', 'Redwood'];
@@ -929,6 +929,103 @@ defBlock(114, 'wall_sign', {
   tileEntity: 'sign', select: (m) => wallSignBox(m), drops: (m) => [[ITEM_IDS.sign, 1, (m >> 2) & 7]], itemSprite: 'sign_oak',
 });
 
+// ---- ember circuits (the classic redstone set) ----
+// attachment codes for levers & buttons: 0 floor, 1-4 walls (same as torches), 5 ceiling
+const CIRCUIT_ATT = [[0, -1, 0], [-1, 0, 0], [1, 0, 0], [0, 0, -1], [0, 0, 1], [0, 1, 0]];
+function attachedBox(m, w, h, d) {
+  // a w x d footprint, h tall, centred on the face it is attached to (pixels)
+  const a = m & 7, x0 = 8 - w / 2, x1 = 8 + w / 2, z0 = 8 - d / 2, z1 = 8 + d / 2;
+  switch (a) {
+    case 1: return box16(0, 8 - d / 2, x0, h, 8 + d / 2, x1);
+    case 2: return box16(16 - h, 8 - d / 2, x0, 16, 8 + d / 2, x1);
+    case 3: return box16(x0, 8 - d / 2, 0, x1, 8 + d / 2, h);
+    case 4: return box16(x0, 8 - d / 2, 16 - h, x1, 8 + d / 2, 16);
+    case 5: return box16(x0, 16 - h, z0, x1, 16, z1);
+    default: return box16(x0, 0, z0, x1, h, z1);
+  }
+}
+// pistons: facing is a face index (0 down, 1 up, 2 N, 3 S, 4 W, 5 E), bit 8 = extended (base) / sticky (head)
+function pistonBaseBox(m) {
+  if (!(m & 8)) return FULL;
+  const t = 4 / 16;
+  switch (m & 7) {
+    case 0: return [0, t, 0, 1, 1, 1]; case 1: return [0, 0, 0, 1, 1 - t, 1];
+    case 2: return [0, 0, t, 1, 1, 1]; case 3: return [0, 0, 0, 1, 1, 1 - t];
+    case 4: return [t, 0, 0, 1, 1, 1]; default: return [0, 0, 0, 1 - t, 1, 1];
+  }
+}
+function pistonHeadBoxes(m) {
+  const t = 4 / 16, a = 6 / 16, b = 10 / 16;
+  switch (m & 7) {
+    case 0: return [[0, 0, 0, 1, t, 1], [a, t, a, b, 1, b]];
+    case 1: return [[0, 1 - t, 0, 1, 1, 1], [a, 0, a, b, 1 - t, b]];
+    case 2: return [[0, 0, 0, 1, 1, t], [a, a, t, b, b, 1]];
+    case 3: return [[0, 0, 1 - t, 1, 1, 1], [a, a, 0, b, b, 1 - t]];
+    case 4: return [[0, 0, 0, t, 1, 1], [t, a, a, 1, b, b]];
+    default: return [[1 - t, 0, 0, 1, 1, 1], [0, a, a, 1 - t, b, b]];
+  }
+}
+const circuitBase = { opaque: false, solid: false, opacity: 0, hardness: 0, cutout: true };
+defBlock(115, 'ember_wire', Object.assign({}, circuitBase, {
+  name: 'Ember Wire', render: R.CIRCUIT, tex: 'ember_wire_cross', sound: 'stone', itemSprite: 'ember_dust',
+  select: () => box16(0, 0, 0, 16, 1, 16), drops: () => [[ITEM_IDS.ember_dust, 1, 0]],
+}));
+const torchSelect = (m) => {
+  switch (m) {
+    case 1: return box16(0, 3, 5.5, 5, 13, 10.5);
+    case 2: return box16(11, 3, 5.5, 16, 13, 10.5);
+    case 3: return box16(5.5, 3, 0, 10.5, 13, 5);
+    case 4: return box16(5.5, 3, 11, 10.5, 13, 16);
+  }
+  return box16(6, 0, 6, 10, 10, 10);
+};
+defBlock(116, 'ember_torch', Object.assign({}, circuitBase, {
+  name: 'Ember Torch', render: R.TORCH, tex: 'ember_torch_on', light: 7, sound: 'wood', itemSprite: 'ember_torch_on', itemMetaMask: 0, select: torchSelect,
+  drops: () => [[B.EMBER_TORCH, 1, 0]],
+}));
+defBlock(117, 'ember_torch_off', Object.assign({}, circuitBase, {
+  name: 'Ember Torch', render: R.TORCH, tex: 'ember_torch_off', sound: 'wood', itemSprite: 'ember_torch_off', itemMetaMask: 0, select: torchSelect,
+  drops: () => [[B.EMBER_TORCH, 1, 0]],
+}));
+defBlock(118, 'lever', Object.assign({}, circuitBase, {
+  name: 'Lever', render: R.CIRCUIT, tex: 'cobblestone', hardness: 0.5, sound: 'wood', itemSprite: 'item_lever', itemMetaMask: 0,
+  select: (m) => attachedBox(m, 8, 10, 8),
+}));
+defBlock(119, 'stone_button', Object.assign({}, circuitBase, {
+  name: 'Stone Button', render: R.CIRCUIT, tex: 'stone', hardness: 0.5, sound: 'stone', itemMetaMask: 0,
+  select: (m) => attachedBox(m, 6, (m & 8) ? 1 : 2, 4), model: () => [{ b: [5, 6, 6, 11, 10, 10] }],
+}));
+defBlock(120, 'wood_button', Object.assign({}, circuitBase, {
+  name: 'Wooden Button', render: R.CIRCUIT, tex: 'planks_oak', hardness: 0.5, sound: 'wood', itemMetaMask: 0,
+  select: (m) => attachedBox(m, 6, (m & 8) ? 1 : 2, 4), model: () => [{ b: [5, 6, 6, 11, 10, 10] }],
+}));
+defBlock(121, 'stone_plate', Object.assign({}, circuitBase, {
+  name: 'Stone Pressure Plate', render: R.MODEL, tex: 'stone', cutout: false, hardness: 0.5, sound: 'stone', tool: 'pickaxe', itemMetaMask: 0,
+  model: (m) => [{ b: [1, 0, 1, 15, 1, 15], inset: 0 }], select: () => box16(1, 0, 1, 15, 1, 15),
+}));
+defBlock(122, 'wood_plate', Object.assign({}, circuitBase, {
+  name: 'Wooden Pressure Plate', render: R.MODEL, tex: 'planks_oak', cutout: false, hardness: 0.5, sound: 'wood', tool: 'axe', itemMetaMask: 0,
+  model: (m) => [{ b: [1, 0, 1, 15, 1, 15] }], select: () => box16(1, 0, 1, 15, 1, 15),
+}));
+defBlock(123, 'ember_lamp', { name: 'Ember Lamp', tex: 'ember_lamp_off', hardness: 0.3, sound: 'glass', drops: () => [[B.EMBER_LAMP, 1, 0]] });
+defBlock(124, 'ember_lamp_on', { name: 'Ember Lamp', tex: 'ember_lamp_on', light: 15, hardness: 0.3, sound: 'glass', drops: () => [[B.EMBER_LAMP, 1, 0]] });
+defBlock(125, 'relay', Object.assign({}, circuitBase, {
+  name: 'Ember Relay', render: R.CIRCUIT, tex: 'relay_top', sound: 'wood', itemSprite: 'item_relay', select: () => box16(0, 0, 0, 16, 2, 16),
+  collide: () => [box16(0, 0, 0, 16, 2, 16)], solid: true, drops: () => [[ITEM_IDS.relay, 1, 0]],
+}));
+defBlock(126, 'relay_on', Object.assign({}, circuitBase, {
+  name: 'Ember Relay', render: R.CIRCUIT, tex: 'relay_top_on', light: 0, sound: 'wood', itemSprite: 'item_relay', select: () => box16(0, 0, 0, 16, 2, 16),
+  collide: () => [box16(0, 0, 0, 16, 2, 16)], solid: true, drops: () => [[ITEM_IDS.relay, 1, 0]],
+}));
+defBlock(128, 'piston', { name: 'Piston', render: R.CIRCUIT, tex: (m, f) => f === 1 ? 'piston_top' : f === 0 ? 'piston_bottom' : 'piston_side', opaque: false, opacity: 15, hardness: 0.5, sound: 'stone', itemMetaMask: 0,
+  collide: (m) => [pistonBaseBox(m)], select: (m) => pistonBaseBox(m), drops: () => [[B.PISTON, 1, 0]] });
+defBlock(129, 'sticky_piston', { name: 'Sticky Piston', render: R.CIRCUIT, tex: (m, f) => f === 1 ? 'piston_top_sticky' : f === 0 ? 'piston_bottom' : 'piston_side', opaque: false, opacity: 15, hardness: 0.5, sound: 'stone', itemMetaMask: 0,
+  collide: (m) => [pistonBaseBox(m)], select: (m) => pistonBaseBox(m), drops: () => [[B.STICKY_PISTON, 1, 0]] });
+defBlock(130, 'piston_head', { name: 'Piston Head', render: R.CIRCUIT, tex: 'piston_side', opaque: false, opacity: 0, hardness: 0.5, sound: 'stone',
+  collide: (m) => pistonHeadBoxes(m), select: (m) => pistonHeadBoxes(m)[0], drops: () => [] });
+defBlock(131, 'piston_moving', { name: 'Moving Block', render: R.NONE, tex: 'piston_side', opaque: false, solid: false, opacity: 0, hardness: -1, tileEntity: 'moving', select: () => null, drops: () => [] });
+defBlock(127, 'note_block', { name: 'Note Block', tex: 'note_block', hardness: 0.8, tool: 'axe', sound: 'wood', flammable: 5, burnSpeed: 5, drops: () => [[B.NOTE_BLOCK, 1, 0]] });
+
 // -------------------------------------------------------------------------
 // Derived lookup tables for fast access in hot loops
 // -------------------------------------------------------------------------
@@ -1103,7 +1200,7 @@ defItem('door_wood', { name: 'Wooden Door', tex: 'item_door_wood', places: 'door
 defItem('door_iron', { name: 'Iron Door', tex: 'item_door_iron', places: 'door', block: 51 });
 defItem('bed', { name: 'Bed', tex: 'item_bed', maxStack: 1, places: 'bed', block: 22 });
 // ---- Blocklands originals ----
-defItem('ember_dust', { name: 'Ember Dust', fuel: 800 });
+defItem('ember_dust', { name: 'Ember Dust', fuel: 800, places: 'wire' });
 defItem('jade', { name: 'Jade' });
 defItem('cobalt_ingot', { name: 'Cobalt Ingot' });
 defItem('sulfur', { name: 'Sulfur' });
@@ -1155,6 +1252,7 @@ defItem('message_bottle', { name: 'Message in a Bottle', maxStack: 1, rare: true
 defItem('boat', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Boat', tex: (d) => 'boat_' + (WOOD[d] || 'oak'), maxStack: 1, variants: [0, 1, 2, 3, 4, 5] });
 defItem('sign', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Sign', tex: (d) => 'sign_' + (WOOD[d] || 'oak'), maxStack: 16, variants: [0, 1, 2, 3, 4, 5], fuel: 200, places: 'sign' });
 defItem('painting', { name: 'Painting' });
+defItem('relay', { name: 'Ember Relay', tex: 'item_relay', places: 'relay' });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1228,6 +1326,10 @@ function pickBlockItem(id, meta) {
     case B.WATER: return [ITEM_IDS.water_bucket, 0];
     case B.LAVA: return [ITEM_IDS.lava_bucket, 0];
     case B.FIRE: return null;
+    case B.EMBER_WIRE: return [ITEM_IDS.ember_dust, 0];
+    case B.EMBER_TORCH_OFF: return [B.EMBER_TORCH, 0];
+    case B.EMBER_LAMP_ON: return [B.EMBER_LAMP, 0];
+    case B.RELAY: case B.RELAY_ON: return [ITEM_IDS.relay, 0];
     case B.SIGN: return [ITEM_IDS.sign, (meta >> 4) & 7];
     case B.WALL_SIGN: return [ITEM_IDS.sign, (meta >> 2) & 7];
   }
@@ -3185,6 +3287,131 @@ const TexGen = (function () {
   })();
 })();
 
+// ---- src/render/circuitart.js
+// ---------------------------------------------------------------------------
+// Textures for ember circuits: wire, ember torches, lever, lamp, relay and
+// the note block.
+// ---------------------------------------------------------------------------
+(function () {
+  const { Img, reg, pal, rngFor, sprite, C } = TexGen;
+  // wire: grey dust (tinted by power when drawn), a cross and a straight line
+  const dust = (name, fn) => {
+    const img = new Img(), rng = rngFor(name);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const v = fn(x, y);
+      if (v <= 0) continue;
+      if (rng.nextFloat() > v) continue;
+      const g = 170 + rng.nextInt(86);
+      img.set(x, y, [g, g, g]);
+    }
+    return reg(name, img);
+  };
+  dust('ember_wire_cross', (x, y) => {
+    const cx = Math.abs(x - 7.5), cy = Math.abs(y - 7.5);
+    if (cx < 3.2 && cy < 3.2) return 0.97;
+    if ((cx < 2) || (cy < 2)) return cx < 1.1 || cy < 1.1 ? 0.97 : 0.75;
+    return 0;
+  });
+  dust('ember_wire_line', (x, y) => { const d = Math.abs(x - 7.5); return d < 1.1 ? 0.97 : d < 2 ? 0.75 : 0; });
+  // ember torches: a dark stick with a glowing (or dead) ember on top
+  const etorch = (name, on) => {
+    const img = new Img();
+    const S = pal(['#4f3a22', '#6b5232', '#8a6b3e']);
+    for (let y = 8; y < 16; y++) { img.set(7, y, S[1]); img.set(8, y, y % 3 === 0 ? S[2] : S[0]); }
+    if (on) {
+      img.set(7, 6, C('#ffd0a0')); img.set(8, 6, C('#ff7a30'));
+      img.set(7, 7, C('#ff5a1a')); img.set(8, 7, C('#c8280c'));
+      img.set(7, 5, C('#ffb080'), 150); img.set(8, 5, C('#ff7040'), 110);
+      img.set(6, 6, C('#ff5020'), 90); img.set(9, 7, C('#ff5020'), 90);
+    } else {
+      img.set(7, 6, C('#6a2a1a')); img.set(8, 6, C('#4a1a10'));
+      img.set(7, 7, C('#5a2014')); img.set(8, 7, C('#3a120a'));
+    }
+    return reg(name, img);
+  };
+  etorch('ember_torch_on', true);
+  etorch('ember_torch_off', false);
+  // lever handle (plain wood) and the inventory sprite
+  reg('lever_stick', TexGen.noiseImg('lever_stick', ['#5e4320', '#6b5232', '#7a5e38', '#896c3d'], { scales: [4, 1], weights: [0.4, 0.6] }));
+  sprite('item_lever', [
+    '................', '................', '..........oo....', '.........ojo....', '........ojo.....', '.......ojo......',
+    '......ojo.......', '.....oHo........', '....oHo.........', '...cccccccc.....', '..cdcccdcccc....', '..cccdccccdc....',
+    '..cddccdcccd....', '..cccccccccc....', '................', '................'], { o: '#2e2010', j: '#896c3d', H: '#5e4320', c: '#7a7a7a', d: '#5a5a5a' });
+  // ember lamp: a copper frame around dark glass that blazes when powered
+  const lamp = (name, on) => {
+    const img = new Img(), rng = rngFor(name);
+    const F = pal(['#4a2a14', '#6e3e1c', '#9a5a2a']);
+    const G = on ? pal(['#ff8a3a', '#ffb060', '#ffd890', '#fff0c8']) : pal(['#3a1a10', '#4e2414', '#5e2e1a', '#6e3a22']);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const frame = x < 2 || y < 2 || x > 13 || y > 13;
+      const bar = x === 7 || x === 8 || y === 7 || y === 8;
+      if (frame) img.set(x, y, F[(x === 0 || y === 0) ? 2 : (x === 15 || y === 15) ? 0 : 1]);
+      else if (bar) img.set(x, y, on ? C('#c86a2a') : F[0]);
+      else {
+        const d = Math.min(Math.abs(x - 4), Math.abs(x - 11)) + Math.min(Math.abs(y - 4), Math.abs(y - 11));
+        img.set(x, y, G[Math.max(0, Math.min(3, 3 - Math.floor(d / 1.5) + (rng.nextInt(3) === 0 ? -1 : 0)))]);
+      }
+    }
+    return reg(name, img);
+  };
+  lamp('ember_lamp_off', false);
+  lamp('ember_lamp_on', true);
+  // relay top: smooth stone slab with an arrow of ember dust
+  const relayTop = (name, on) => {
+    const img = TexGen.T.stone_slab_top ? TexGen.T.stone_slab_top.copy() : new Img().fill([160, 160, 160]);
+    const D = on ? C('#ff7a30') : C('#7a2a14');
+    for (let y = 2; y < 15; y++) img.set(7, y, D), img.set(8, y, D);
+    for (const [x, y] of [[6, 3], [9, 3], [5, 4], [10, 4]]) img.set(x, y, D);
+    for (let x = 4; x < 12; x++) img.set(x, 15, C('#6a6a6a'));
+    return reg(name, img);
+  };
+  relayTop('relay_top', false);
+  relayTop('relay_top_on', true);
+  sprite('item_relay', [
+    '................', '................', '................', '................', '.....r....r.....', '....rRr..rRr....',
+    '.....s....s.....', '.....s....s.....', '..oooooooooooo..', '..ogggdddggggo..', '..ogggggggggdo..', '..oaaaaaaaaaao..',
+    '..oooooooooooo..', '................', '................', '................'], { o: '#3a3a3a', g: '#a8a8a8', d: '#c83a1a', a: '#7a7a7a', r: '#ff5a1a', R: '#ffd0a0', s: '#6b5232' });
+  // pistons: a wooden face on a cobblestone body
+  const cob = () => (TexGen.T.cobblestone ? TexGen.T.cobblestone.copy() : new Img().fill([110, 110, 110]));
+  reg('piston_top', (() => {
+    const img = TexGen.T.planks_oak.copy();
+    for (let i = 0; i < 16; i++) { img.set(i, 0, C('#4f3a22')); img.set(0, i, C('#4f3a22')); img.set(i, 15, C('#3a2a16')); img.set(15, i, C('#3a2a16')); }
+    return img;
+  })());
+  reg('piston_top_sticky', (() => {
+    const img = TexGen.T.piston_top.copy(), rng = rngFor('sticky');
+    const G = pal(['#4a9a3a', '#5fbf4a', '#7ad45a', '#a8e88a']);
+    for (let y = 2; y < 14; y++) for (let x = 2; x < 14; x++) { const d = Math.hypot(x - 7.5, y - 7.5); if (d < 5.5 + rng.nextFloat()) img.set(x, y, G[Math.min(3, Math.floor((6 - d) / 2 + rng.nextFloat()))]); }
+    return img;
+  })());
+  reg('piston_side', (() => {
+    const img = cob(), P = TexGen.T.planks_oak;
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 16; x++) img.set(x, y, P.get(x, y + 4));
+    for (let x = 0; x < 16; x++) img.set(x, 4, C('#3a2a16'));
+    for (let y = 5; y < 16; y++) { img.shade(6, y, 0.7); img.shade(9, y, 0.7); }
+    return img;
+  })());
+  reg('piston_bottom', (() => {
+    const img = cob();
+    for (let y = 5; y < 11; y++) for (let x = 5; x < 11; x++) img.shade(x, y, (x === 5 || y === 5 || x === 10 || y === 10) ? 0.6 : 0.4);
+    return img;
+  })());
+  reg('piston_inner', (() => {
+    const img = cob();
+    for (let y = 6; y < 10; y++) for (let x = 6; x < 10; x++) img.set(x, y, C('#1a1a1a'));
+    for (let i = 5; i < 11; i++) { img.shade(i, 5, 0.6); img.shade(5, i, 0.6); }
+    return img;
+  })());
+  // note block: dark wood with a sound hole
+  reg('note_block', (() => {
+    const img = TexGen.T.planks_jungle ? TexGen.T.planks_jungle.copy() : new Img().fill([120, 80, 50]);
+    img.mapColors((r, g, b, a) => [r * 0.75, g * 0.7, b * 0.7, a]);
+    for (let i = 0; i < 16; i++) { img.set(i, 0, C('#2a1810')); img.set(0, i, C('#2a1810')); img.set(i, 15, C('#2a1810')); img.set(15, i, C('#2a1810')); }
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const d = Math.hypot(x - 7.5, y - 7.5); if (d < 3.6) img.set(x, y, d < 2.4 ? C('#120a06') : C('#3a2414')); }
+    return img;
+  })());
+})();
+
 // ---- src/world/worldgen.js
 // ---------------------------------------------------------------------------
 // World generation. Self-contained factory (no outer references) so it can be
@@ -4858,8 +5085,16 @@ class SignTE extends TileEntity {
   load(d) { if (Array.isArray(d.lines)) for (let i = 0; i < 4; i++) this.lines[i] = String(d.lines[i] || '').slice(0, 15); }
 }
 
+// a block in transit, pushed or pulled by a piston
+class MovingTE extends TileEntity {
+  constructor(x, y, z) { super('moving', x, y, z); this.id = 0; this.meta = 0; }
+  save() { return Object.assign(super.save(), { id: this.id, meta: this.meta }); }
+  load(d) { this.id = d.id | 0; this.meta = d.meta | 0; }
+}
+
 function makeTileEntity(type, x, y, z) {
   switch (type) {
+    case 'moving': return new MovingTE(x, y, z);
     case 'sign': return new SignTE(x, y, z);
     case 'chest': return new ChestTE(x, y, z);
     case 'furnace': return new FurnaceTE(x, y, z);
@@ -5117,6 +5352,7 @@ class World {
         const nd = BLOCKS[id]; if (nd && nd.onPlaced) nd.onPlaced(this, x, y, z, meta, old);
       }
       if (flags & 1) this.notifyNeighbors(x, y, z, id);
+      if (!this.menu && typeof Circuits !== 'undefined') Circuits.blockChanged(this, x, y, z, old, id);
     }
     return true;
   }
@@ -5539,10 +5775,14 @@ uniform vec3 uOrigin;
 out vec3 vUV; out vec4 vCol; out vec2 vLight; out float vDist;
 void main() {
   vec3 p = (vec3(float(a.x & 511u), float((a.x >> 18) & 4095u), float((a.x >> 9) & 511u)) - 32.0) * 0.0625 + uOrigin;
+  // shade codes 252-254 mark decals (wire on the ground): nudged toward the camera so they never z-fight
+  uint shb = (a.z >> 24) & 255u;
+  float sh = float(shb) / 255.0;
+  if (shb >= 252u) { p *= 0.9985; sh = shb == 254u ? 1.0 : (shb == 253u ? 0.8 : 0.6); }
   gl_Position = uVP * vec4(p, 1.0);
   vUV = vec3(float(a.y & 31u) * 0.0625, float((a.y >> 5) & 31u) * 0.0625, float((a.y >> 10) & 1023u));
   vLight = vec2(float((a.y >> 20) & 63u), float((a.y >> 26) & 63u)) / 60.0;
-  vCol = vec4(float(a.z & 255u), float((a.z >> 8) & 255u), float((a.z >> 16) & 255u), float((a.z >> 24) & 255u)) / 255.0;
+  vCol = vec4(vec3(float(a.z & 255u), float((a.z >> 8) & 255u), float((a.z >> 16) & 255u)) / 255.0, sh);
   vDist = length(p.xz);
 }`,
   chunkFS: `#version 300 es
@@ -5788,6 +6028,15 @@ class MeshBuf {
   result() { return this.n ? this.a.slice(0, this.n) : null; }
 }
 
+// local frames for pistons (local +y is the pushing face)
+const PISTON_TF = [
+  (v) => [v[0], 16 - v[1], 16 - v[2]], (v) => v,
+  (v) => [v[0], v[2], 16 - v[1]], (v) => [v[0], 16 - v[2], v[1]],
+  (v) => [16 - v[1], v[2], 16 - v[0]], (v) => [v[1], v[2], v[0]],
+];
+// what ember wire visibly links up with
+const WIRE_LINK = new Uint8Array(256);
+for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK]) WIRE_LINK[id] = 1;
 const FIXED_TINT = {
   spruce: [97, 153, 97], birch: [128, 167, 85], redwood: [86, 128, 70], lily: [32, 128, 48], white: [255, 255, 255],
 };
@@ -5843,6 +6092,7 @@ class Mesher {
             case 8: this.fire(pi, id, meta, x, y, z); break;
             case 9: this.lily(pi, id, meta, x, y, z); break;
             case 10: this.vine(pi, id, meta, x, y, z); break;
+            case 11: this.circuit(pi, id, meta, x, y, z); break;
           }
         }
       }
@@ -6183,6 +6433,126 @@ class Mesher {
       const uv = [[0, 16], [16, 16], [16, 16 - Math.min(16, hb)], [0, 16 - Math.min(16, ha)]];
       this.quad(buf, p, uv, flow, light, tint, SHADE[f]);
       if (isWater) this.quad(buf, [p[3], p[2], p[1], p[0]], [uv[3], uv[2], uv[1], uv[0]], flow, light, tint, SHADE[f]);
+    }
+  }
+
+  // ------------------------------------------------------------ ember circuits
+  // a box given in a local frame; tf maps local pixel coords to block-relative pixels
+  lbox(xb, yb, zb, tf, b, layers, light, tint, uvs) {
+    const buf = this.out[1];
+    const [x0, y0, z0, x1, y1, z1] = b;
+    const F = [
+      [[x0, y0, z1], [x0, y0, z0], [x1, y0, z0], [x1, y0, z1]], [[x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]],
+      [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]],
+      [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]],
+    ];
+    const N = [[0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0]];
+    const UV = [(v) => [v[0], v[2]], (v) => [v[0], v[2]], (v) => [16 - v[0], 16 - v[1]], (v) => [v[0], 16 - v[1]], (v) => [v[2], 16 - v[1]], (v) => [16 - v[2], 16 - v[1]]];
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, cz = (z0 + z1) / 2, c0 = tf([cx, cy, cz]);
+    for (let f = 0; f < 6; f++) {
+      const layer = Array.isArray(layers) ? layers[f] : layers;
+      if (layer < 0) continue;
+      const c1 = tf([cx + N[f][0], cy + N[f][1], cz + N[f][2]]);
+      const nx = c1[0] - c0[0], ny = c1[1] - c0[1], nz = c1[2] - c0[2];
+      const shade = Math.abs(ny) > 0.7 ? (ny > 0 ? 1 : 0.5) : (Math.abs(nz) >= Math.abs(nx) ? 0.8 : 0.6);
+      const pts = F[f].map((v) => { const q = tf(v); return [xb + Math.round(q[0]), yb + Math.round(q[1]), zb + Math.round(q[2])]; });
+      const uv = (uvs && uvs[f]) ? uvs[f] : F[f].map((v) => UV[f](v).map((t) => clamp(Math.round(t), 0, 31)));
+      this.quad2(buf, pts, uv, layer, light, tint, shade);
+    }
+  }
+  // local frame of something attached to a face: y points away from the face
+  attachFrame(a, axisX) {
+    switch (a) {
+      case 1: return (v) => [v[1], v[2], v[0]];
+      case 2: return (v) => [16 - v[1], v[2], 16 - v[0]];
+      case 3: return (v) => [16 - v[0], v[2], v[1]];
+      case 4: return (v) => [v[0], v[2], 16 - v[1]];
+      case 5: return axisX ? (v) => [v[2], 16 - v[1], v[0]] : (v) => [v[0], 16 - v[1], v[2]];
+      default: return axisX ? (v) => [v[2], v[1], v[0]] : (v) => v;
+    }
+  }
+  circuit(pi, id, meta, x, y, z) {
+    const xb = x * 16, zb = z * 16, yb = (this.sy * 16 + y) * 16;
+    const light = this.flatLight(pi, -1), atlas = this.atlas, W = FIXED_TINT.white;
+    if (id === B.EMBER_WIRE) { this.wire(pi, meta, xb, yb, zb, light); return; }
+    if (id === B.LEVER) {
+      const tf = this.attachFrame(meta & 7, (meta & 16) !== 0);
+      this.lbox(xb, yb, zb, tf, [5, 0, 4, 11, 3, 12], atlas.layer('cobblestone'), light, W);
+      // the handle leans one way when off and the other when on
+      const ang = (meta & 8) ? 0.7 : -0.7, ca = Math.cos(ang), sa = Math.sin(ang);
+      const rt = (v) => { const yy = v[1], zz = v[2] - 8; return tf([v[0], 2 + yy * ca - zz * sa, 8 + yy * sa + zz * ca]); };
+      const st = atlas.layer('lever_stick');
+      const side = [[7, 16], [9, 16], [9, 6], [7, 6]];
+      this.lbox(xb, yb, zb, rt, [7, 0, 7, 9, 10, 9], st, light, W, [[[7, 7], [9, 7], [9, 9], [7, 9]], [[7, 7], [9, 7], [9, 9], [7, 9]], side, side, side, side]);
+      return;
+    }
+    if (id === B.STONE_BUTTON || id === B.WOOD_BUTTON) {
+      const tf = this.attachFrame(meta & 7, false);
+      this.lbox(xb, yb, zb, tf, [5, 0, 6, 11, (meta & 8) ? 1 : 2, 10], atlas.face(id, meta, 1), light, W);
+      return;
+    }
+    if (id === B.PISTON || id === B.STICKY_PISTON || id === B.PISTON_HEAD) {
+      const f = meta & 7, tf = PISTON_TF[f], L = (n) => atlas.layer(n), side = L('piston_side');
+      if (id === B.PISTON_HEAD) {
+        const face = L((meta & 8) ? 'piston_top_sticky' : 'piston_top');
+        this.lbox(xb, yb, zb, tf, [0, 12, 0, 16, 16, 16], [L('piston_top'), face, side, side, side, side], light, W);
+        const rod = [[6, 4], [10, 4], [10, 16], [6, 16]];
+        this.lbox(xb, yb, zb, tf, [6, -4, 6, 10, 12, 10], [-1, -1, side, side, side, side], light, W, [null, null, rod, rod, rod, rod]);
+        return;
+      }
+      const ext = (meta & 8) !== 0;
+      const front = ext ? 'piston_inner' : (id === B.STICKY_PISTON ? 'piston_top_sticky' : 'piston_top');
+      const sv = ext ? [[0, 4], [16, 4], [16, 16], [0, 16]] : null;
+      this.lbox(xb, yb, zb, tf, [0, 0, 0, 16, ext ? 12 : 16, 16], [L('piston_bottom'), L(front), side, side, side, side], light, W, sv ? [null, null, sv, sv, sv, sv] : null);
+      return;
+    }
+    if (id === B.RELAY || id === B.RELAY_ON) {
+      const f = meta & 3, on = id === B.RELAY_ON;
+      const tf = [(v) => v, (v) => [16 - v[0], v[1], 16 - v[2]], (v) => [v[2], v[1], 16 - v[0]], (v) => [16 - v[2], v[1], v[0]]][f];
+      const top = atlas.layer(on ? 'relay_top_on' : 'relay_top'), sideL = atlas.layer('stone_slab_side'), bot = atlas.layer('stone_slab_top');
+      this.lbox(xb, yb, zb, tf, [0, 0, 0, 16, 2, 16], [bot, top, sideL, sideL, sideL, sideL], light, W);
+      const tl = atlas.layer(on ? 'ember_torch_on' : 'ember_torch_off');
+      const post = [[7, 13], [9, 13], [9, 8], [7, 8]], cap = [[7, 6], [9, 6], [9, 8], [7, 8]];
+      const delay = (meta >> 2) & 3;
+      for (const pz of [2, 6 + delay * 2]) this.lbox(xb, yb, zb, tf, [7, 2, pz, 9, 7, pz + 2], tl, light, W, [post, cap, post, post, post, post]);
+    }
+  }
+  wire(pi, meta, xb, yb, zb, light) {
+    const ids = this.ids, metas = this.metas, OPQ = BT.opaque, Wr = B.EMBER_WIRE;
+    const offs = [-PD, PD, -1, 1];
+    const upOpen = !OPQ[ids[pi + PD2]];
+    let c = 0, up = 0;
+    for (let k = 0; k < 4; k++) {
+      const q = pi + offs[k], n = ids[q];
+      if (WIRE_LINK[n]) c |= 1 << k;
+      else if (n === B.RELAY || n === B.RELAY_ON) { if ((metas[q] & 3) >> 1 === k >> 1) c |= 1 << k; }
+      else if (!OPQ[n] && ids[q - PD2] === Wr) c |= 1 << k;
+      else if (upOpen && OPQ[n] && ids[q + PD2] === Wr) { c |= 1 << k; up |= 1 << k; }
+    }
+    const f = (meta & 15) / 15;
+    const tint = [Math.round(255 * (0.33 + 0.67 * f)), Math.round(255 * (0.07 + 0.43 * f * f)), Math.round(255 * (0.02 + 0.13 * f * f * f))];
+    const buf = this.out[1], atlas = this.atlas;
+    const s4 = (light >> 4) * 4, b4 = (light & 15) * 4;
+    const V = (px, py, pz, u, v, layer, sh) => this.vert(buf, xb + px, yb + py, zb + pz, u, v, layer, s4, b4, tint, sh);
+    const quad = (pts, uvs, layer, sh) => { for (let k = 0; k < 4; k++) V(pts[k][0], pts[k][1], pts[k][2], uvs[k][0], uvs[k][1], layer, sh); for (let k = 3; k >= 0; k--) V(pts[k][0], pts[k][1], pts[k][2], uvs[k][0], uvs[k][1], layer, sh); };
+    const ns = c && !(c & 0b1100), ew = c && !(c & 0b0011);
+    if (ns || ew) {
+      // the line texture runs along v: along z for north-south wire, along x for east-west
+      const L = atlas.layer('ember_wire_line');
+      quad([[0, 0, 0], [0, 0, 16], [16, 0, 16], [16, 0, 0]], ns ? [[0, 0], [0, 16], [16, 16], [16, 0]] : [[0, 0], [16, 0], [16, 16], [0, 16]], L, 254);
+    } else {
+      const L = atlas.layer('ember_wire_cross');
+      const x0 = (c === 0 || c & 4) ? 0 : 5, x1 = (c === 0 || c & 8) ? 16 : 11, z0 = (c === 0 || c & 1) ? 0 : 5, z1 = (c === 0 || c & 2) ? 16 : 11;
+      quad([[x0, 0, z0], [x0, 0, z1], [x1, 0, z1], [x1, 0, z0]], [[x0, z0], [x0, z1], [x1, z1], [x1, z0]], L, 254);
+    }
+    // dust running up the side of a block to the wire above
+    if (up) {
+      const L = atlas.layer('ember_wire_line');
+      const uv = [[0, 16], [16, 16], [16, 0], [0, 0]];
+      if (up & 1) quad([[16, 0, 0], [0, 0, 0], [0, 16, 0], [16, 16, 0]], uv, L, 253);
+      if (up & 2) quad([[0, 0, 16], [16, 0, 16], [16, 16, 16], [0, 16, 16]], uv, L, 253);
+      if (up & 4) quad([[0, 0, 0], [0, 0, 16], [0, 16, 16], [0, 16, 0]], uv, L, 252);
+      if (up & 8) quad([[16, 0, 16], [16, 0, 0], [16, 16, 0], [16, 16, 16]], uv, L, 252);
     }
   }
 
@@ -7198,7 +7568,7 @@ class ItemIcons {
       case B.TRAPDOOR: return [{ b: [0, 0, 0, 16, 3, 16] }];
       case B.BED: return [{ b: [0, 3, 0, 16, 9, 16] }];
     }
-    if (b.render === R.MODEL && b.model) { try { return b.model(meta); } catch (e) { return [{ b: [0, 0, 0, 16, 16, 16] }]; } }
+    if ((b.render === R.MODEL || b.render === R.CIRCUIT) && b.model) { try { return b.model(meta); } catch (e) { return [{ b: [0, 0, 0, 16, 16, 16] }]; } }
     return [{ b: [0, 0, 0, 16, 16, 16] }];
   }
   faceTexture(id, meta, f) {
@@ -9239,7 +9609,7 @@ const Recipes = (() => {
   shaped([B.CHEST, 1], ['###', '# #', '###'], { '#': B.PLANKS });
   shaped([B.FURNACE, 1], ['###', '# #', '###'], { '#': B.COBBLESTONE });
   shaped([B.TORCH, 4], ['X', '#'], { X: I.coal, '#': I.stick });
-  shaped([B.TORCH, 2], ['X', '#'], { X: I.ember_dust, '#': I.stick });
+  shaped([B.EMBER_TORCH, 1], ['X', '#'], { X: I.ember_dust, '#': I.stick });
   shaped([I.bowl, 4], ['# #', ' # '], { '#': B.PLANKS });
   shaped([B.LADDER, 3], ['# #', '###', '# #'], { '#': I.stick });
   for (let t = 0; t < 6; t++) {
@@ -9282,6 +9652,17 @@ const Recipes = (() => {
     shaped([I.sign, 3, t], ['PPP', 'PPP', ' # '], { P: [B.PLANKS, t], '#': I.stick });
   }
   shaped([I.painting], ['###', '#W#', '###'], { '#': I.stick, W: B.WOOL });
+  // ember circuits
+  shaped([B.LEVER, 1], ['#', 'C'], { '#': I.stick, C: B.COBBLESTONE });
+  shapeless([B.STONE_BUTTON, 1], [[B.STONE, 0]]);
+  shapeless([B.WOOD_BUTTON, 1], [B.PLANKS]);
+  shaped([B.STONE_PLATE, 1], ['SS'], { S: [B.STONE, 0] });
+  shaped([B.WOOD_PLATE, 1], ['PP'], { P: B.PLANKS });
+  shaped([B.EMBER_LAMP, 1], [' E ', 'EGE', ' E '], { E: I.ember_dust, G: B.GLASS });
+  shaped([I.relay, 1], ['TET', 'SSS'], { T: B.EMBER_TORCH, E: I.ember_dust, S: [B.STONE, 0] });
+  shaped([B.NOTE_BLOCK, 1], ['PPP', 'PEP', 'PPP'], { P: B.PLANKS, E: I.ember_dust });
+  shaped([B.PISTON, 1], ['PPP', 'CIC', 'CEC'], { P: B.PLANKS, C: B.COBBLESTONE, I: I.iron_ingot, E: I.ember_dust });
+  shapeless([B.STICKY_PISTON, 1], [I.slimeball, B.PISTON]);
   shaped([I.compass], [' I ', 'IEI', ' I '], { I: I.iron_ingot, E: I.ember_dust });
   shaped([I.clock], [' G ', 'GEG', ' G '], { G: I.gold_ingot, E: I.ember_dust });
 
@@ -9646,6 +10027,14 @@ const Behaviors = (() => {
         return isSolidTop(w, x, y - 1, z) && w.getBlock(x, y + 1, z) === id;
       case B.ROPE: { const a = w.getBlock(x, y + 1, z); return a === B.ROPE || BT.solid[a]; }
       case B.SIGN: return BT.solid[below];
+      case B.EMBER_TORCH: case B.EMBER_TORCH_OFF: return canStay(w, x, y, z, B.TORCH, meta);
+      case B.EMBER_WIRE: case B.RELAY: case B.RELAY_ON: return isSolidTop(w, x, y - 1, z);
+      case B.STONE_PLATE: case B.WOOD_PLATE: return isSolidTop(w, x, y - 1, z) || below === B.FENCE;
+      case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: {
+        const a = CIRCUIT_ATT[meta & 7] || CIRCUIT_ATT[0];
+        const n = w.getBlock(x + a[0], y + a[1], z + a[2]);
+        return (meta & 7) === 0 ? isSolidTop(w, x, y - 1, z) : BT.opaque[n];
+      }
       case B.WALL_SIGN: { const d = HFACE_DIR[meta & 3]; return BT.solid[w.getBlock(x - d[0], y, z - d[1])]; }
       case B.FIRE: return BT.solid[below] || neighbourFlammable(w, x, y, z);
       case B.VINE: return true;
@@ -9669,7 +10058,14 @@ const Behaviors = (() => {
         return pf | (up ? 4 : 0) | ((dmg & 31) << 3);
       }
       case B.SLAB: { const top = f === 0 || (f >= 2 && ctx.hitY > 0.5); return (dmg & 31) | (top ? 32 : 0); }
-      case B.TORCH: {
+      case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: {
+        const want = [5, 0, 4, 3, 2, 1][f];
+        const axis = (id === B.LEVER && (want === 0 || want === 5) && pf >= 2) ? 16 : 0;
+        if (canStay(w, x, y, z, id, want)) return want | axis;
+        for (const mm of [0, 1, 2, 3, 4, 5]) if (canStay(w, x, y, z, id, mm)) return mm;
+        return -1;
+      }
+      case B.TORCH: case B.EMBER_TORCH: {
         const m = [-1, 0, 4, 3, 2, 1][f];
         if (m < 0) return -1;
         if (!canStay(w, x, y, z, id, m)) {
@@ -9685,6 +10081,11 @@ const Behaviors = (() => {
         return m;
       }
       case B.FURNACE: case B.CHEST: case B.PUMPKIN: case B.JACK_O_LANTERN: return HFACE_OPP[pf];
+      case B.PISTON: case B.STICKY_PISTON: {
+        if (p.pitch < -0.85) return 1;
+        if (p.pitch > 0.85) return 0;
+        return HFACE[HFACE_OPP[pf]];
+      }
       case B.FENCE_GATE: return pf;
       case B.TRAPDOOR: {
         if (f >= 2) return [0, 0, 0, 1, 2, 3][f] | (ctx.hitY > 0.5 ? 8 : 0);
@@ -9807,6 +10208,18 @@ const Behaviors = (() => {
       if (!isSolidTop(w, x, y - 1, z) || !isSolidTop(w, hx, y - 1, hz)) return false;
       w.setBlock(x, y, z, B.BED, f, 4); w.setBlock(hx, y, hz, B.BED, f | 4, 4);
       game.audio.playBlock('wood', 'place', x + 0.5, y + 0.5, z + 0.5);
+      if (!player.creative) player.inventory.decrementHeld(1);
+      return true;
+    }
+    if (def.places === 'wire' || def.places === 'relay') {
+      let x = tx, y = ty, z = tz;
+      if (BT.replaceable[target] && !BT.fluid[target]) { x = hit.x; y = hit.y; z = hit.z; }
+      const cur = w.getBlock(x, y, z);
+      if (!BT.replaceable[cur] || BT.fluid[cur] || cur === B.EMBER_WIRE) return false;
+      const bid = def.places === 'wire' ? B.EMBER_WIRE : B.RELAY;
+      if (!canStay(w, x, y, z, bid, 0)) return false;
+      w.setBlock(x, y, z, bid, bid === B.RELAY ? playerFacing(player) : 0);
+      game.audio.playBlock(bid === B.RELAY ? 'wood' : 'stone', 'place', x + 0.5, y + 0.5, z + 0.5);
       if (!player.creative) player.inventory.decrementHeld(1);
       return true;
     }
@@ -9947,6 +10360,8 @@ const Behaviors = (() => {
         return false;
       }
       case B.RUNESTONE: game.useRunestone(x, y, z); return true;
+      case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: case B.RELAY: case B.RELAY_ON: case B.NOTE_BLOCK:
+        return Circuits.use(game, x, y, z, id);
       case B.BRAMBLE: {
         if (m >= 3) { w.setMeta(x, y, z, 0); dropStack(game, x + 0.5, y + 0.5, z + 0.5, new ItemStack(I.berries, 2 + Math.floor(Math.random() * 2), 0)); game.audio.playBlock('grass', 'break', x + 0.5, y + 0.5, z + 0.5); return true; }
         return false;
@@ -10001,6 +10416,17 @@ const Behaviors = (() => {
       if (BT.solid[w.getBlock(x, y - 1, z)] || BT.fluid[w.getBlock(x, y - 1, z)]) { w.setBlock(x, y, z, B.WATER, 0); w.scheduleTick(x, y, z, 5); }
     }
     if (id === B.LOG || id === B.LEAVES) markLeavesForDecay(w, x, y, z, id === B.LOG ? 4 : 1);
+    if ((id === B.PISTON || id === B.STICKY_PISTON) && (meta & 8)) {
+      const d = FACE_DIR[meta & 7];
+      if (w.getBlock(x + d[0], y + d[1], z + d[2]) === B.PISTON_HEAD) w.setBlock(x + d[0], y + d[1], z + d[2], 0, 0);
+    }
+    if (id === B.PISTON_HEAD) {
+      const d = FACE_DIR[meta & 7], bx = x - d[0], by = y - d[1], bz = z - d[2], b = w.getBlock(bx, by, bz);
+      if (b === B.PISTON || b === B.STICKY_PISTON) {
+        w.setBlock(bx, by, bz, 0, 0);
+        if (!game.player.creative) dropBlock(game, bx, by, bz, b, 0, null);
+      }
+    }
     if (id === B.EMBER_ORE_LIT || id === B.EMBER_ORE) { /* nothing */ }
   }
   function markLeavesForDecay(w, x, y, z, r) {
@@ -10023,6 +10449,7 @@ const Behaviors = (() => {
     }
     if (BLOCKS[id].gravity) w.scheduleTick(x, y, z, 2);
     if (id === B.WATER || id === B.LAVA) { if (!mixLiquids(w, x, y, z, id, meta)) w.scheduleTick(x, y, z, tickRate(id)); }
+    if (typeof Circuits !== 'undefined' && Circuits.IS[id] && !w.menu) Circuits.changed(w, x, y, z);
     if (id === B.FARMLAND && BT.solid[w.getBlock(x, y + 1, z)] && BT.opaque[w.getBlock(x, y + 1, z)]) w.setBlock(x, y, z, B.DIRT, 0);
   }
 
@@ -10035,6 +10462,7 @@ const Behaviors = (() => {
     if (BLOCKS[id].gravity) { fallCheck(w, x, y, z, id, m); return; }
     if (id === B.WATER || id === B.LAVA) { flow(w, x, y, z, id, m); return; }
     if (id === B.FIRE) { fireTick(w, x, y, z, m); return; }
+    if (BLOCKS[id].circuitTick) BLOCKS[id].circuitTick(w, x, y, z, m);
   }
   function fallCheck(w, x, y, z, id, m) {
     const below = w.getBlock(x, y - 1, z);
@@ -10472,6 +10900,515 @@ function rayBox(ox, oy, oz, dx, dy, dz, b) {
   if (tmin < 0) { tmin = 0; }
   return { t: tmin, face };
 }
+
+// ---- src/world/circuits.js
+// ---------------------------------------------------------------------------
+// Ember circuits: the classic redstone rules with an ember twist.
+//  - Ember wire (ember dust on the ground) carries power 15..0, losing one
+//    level per block; it climbs and descends single steps.
+//  - Sources: levers, buttons, pressure plates, ember torches (inverters,
+//    which burn out if they flicker too fast), blocks of ember and relays.
+//  - A source attached to an opaque block "strongly" powers it: the block
+//    then feeds wire and machines next to it. Wire running into a block (or
+//    lying on it) powers machines next to that block, but not other wire.
+//  - Machines: ember lamps, doors, trapdoors, fence gates, TNT, note blocks.
+// One redstone tick is two game ticks, as in the classic game.
+// ---------------------------------------------------------------------------
+// a block (or piston head) sliding between two cells: purely visual, the
+// world holds a moving-block placeholder until it arrives. It shoves
+// creatures out of the way as it goes.
+class MovingBlock extends Entity {
+  constructor(world, id, meta, fx, fy, fz, tx, ty, tz, noShove) {
+    super(world);
+    this.type = 'moving_block';
+    this.noShove = !!noShove;
+    this.block = id; this.meta = meta;
+    this.from = [fx, fy, fz]; this.to = [tx, ty, tz];
+    this.w = 1; this.h = 1; this.noGravity = true;
+    this.setPos(fx + 0.5, fy, fz + 0.5);
+    this.t = 0;
+  }
+  tick(game) {
+    this.px = this.x; this.py = this.y; this.pz = this.z;
+    this.t++;
+    const k = Math.min(1, this.t / 2), f = this.from, to = this.to;
+    this.x = f[0] + (to[0] - f[0]) * k + 0.5; this.y = f[1] + (to[1] - f[1]) * k; this.z = f[2] + (to[2] - f[2]) * k + 0.5;
+    this.updateBox();
+    if (this.t <= 2 && !this.noShove) {
+      const dx = (to[0] - f[0]) * 0.5, dy = (to[1] - f[1]) * 0.5, dz = (to[2] - f[2]) * 0.5;
+      const b = this.box;
+      const shove = (e) => { e.updateBox(); if (e.box.intersects(b)) { e.move(dx, dy > 0 ? dy + 0.01 : dy, dz); if (dy > 0) { e.vy = Math.max(e.vy, 0); e.fallDistance = 0; } } };
+      for (const e of this.world.entities) if (!e.removed && e !== this && e.type !== 'moving_block' && e.type !== 'painting' && e.type !== 'fishhook') shove(e);
+      if (game.player && !game.player.dead && !game.player.riding) shove(game.player);
+    }
+    if (this.t >= 4) this.removed = true;
+  }
+  save() { return null; }
+}
+
+const Circuits = (() => {
+  const H = [[0, -1], [0, 1], [-1, 0], [1, 0]];          // N S W E
+  const TORCH_ATT = [[0, -1, 0], [-1, 0, 0], [1, 0, 0], [0, 0, -1], [0, 0, 1]];
+  const ATT = CIRCUIT_ATT;
+  const IS = new Uint8Array(256), SOURCE = new Uint8Array(256), MACHINE = new Uint8Array(256), CONNECT = new Uint8Array(256);
+  for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE,
+    B.EMBER_LAMP, B.EMBER_LAMP_ON, B.RELAY, B.RELAY_ON, B.NOTE_BLOCK, B.EMBER_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT]) IS[id] = 1;
+  for (const id of [B.EMBER_TORCH, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.RELAY_ON, B.EMBER_BLOCK]) SOURCE[id] = 1;
+  for (const id of [B.EMBER_LAMP, B.EMBER_LAMP_ON, B.NOTE_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.RELAY, B.RELAY_ON]) MACHINE[id] = 1;
+  for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK]) CONNECT[id] = 1;
+  for (const id of [B.PISTON, B.STICKY_PISTON, B.PISTON_HEAD]) { IS[id] = 1; MACHINE[id] = 1; }
+  // blocks a piston crushes (dropping them) rather than pushes
+  const BREAKS = new Uint8Array(256);
+  for (const id of [B.DOOR_WOOD, B.DOOR_IRON, B.BED, B.CACTUS, B.RELAY, B.RELAY_ON, B.LADDER, B.TRAPDOOR, B.LILY_PAD, B.COBWEB, B.PUMPKIN, B.JACK_O_LANTERN, B.MELON]) BREAKS[id] = 1;
+
+  // ------------------------------------------------------------ power queries
+  // power the source at s gives to the neighbour in direction (dx,dy,dz)
+  function sourcePower(id, meta, dx, dy, dz) {
+    switch (id) {
+      case B.EMBER_BLOCK: return 15;
+      case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: return (meta & 8) ? 15 : 0;
+      case B.STONE_PLATE: case B.WOOD_PLATE: return (meta & 1) ? 15 : 0;
+      case B.EMBER_TORCH: { const a = TORCH_ATT[meta] || TORCH_ATT[0]; return (dx === a[0] && dy === a[1] && dz === a[2]) ? 0 : 15; }
+      case B.RELAY_ON: { const f = HFACE_DIR[meta & 3]; return (dy === 0 && dx === f[0] && dz === f[1]) ? 15 : 0; }
+    }
+    return 0;
+  }
+  // power given to an opaque block by sources attached to it
+  function strongPower(w, x, y, z) {
+    for (let f = 0; f < 6; f++) {
+      const d = FACE_DIR[f], sx = x + d[0], sy = y + d[1], sz = z + d[2];
+      const id = w.getBlock(sx, sy, sz);
+      if (!SOURCE[id]) continue;
+      const m = w.getMeta(sx, sy, sz);
+      switch (id) {
+        case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: { const a = ATT[m & 7] || ATT[0]; if ((m & 8) && a[0] === -d[0] && a[1] === -d[1] && a[2] === -d[2]) return 15; break; }
+        case B.STONE_PLATE: case B.WOOD_PLATE: if ((m & 1) && d[1] === 1) return 15; break;
+        case B.EMBER_TORCH: if (d[1] === -1) return 15; break;
+        case B.RELAY_ON: { const fd = HFACE_DIR[m & 3]; if (d[1] === 0 && fd[0] === -d[0] && fd[1] === -d[2]) return 15; break; }
+      }
+    }
+    return 0;
+  }
+  // which horizontal sides wire at (x,y,z) connects to: bit k for H[k]
+  function wireConns(w, x, y, z) {
+    let c = 0;
+    const upOpen = !BT.opaque[w.getBlock(x, y + 1, z)];
+    for (let k = 0; k < 4; k++) {
+      const nx = x + H[k][0], nz = z + H[k][1];
+      const n = w.getBlock(nx, y, nz);
+      if (CONNECT[n]) c |= 1 << k;
+      else if (n === B.RELAY || n === B.RELAY_ON) { if ((w.getMeta(nx, y, nz) & 3) >> 1 === k >> 1) c |= 1 << k; }
+      else if (!BT.opaque[n] && w.getBlock(nx, y - 1, nz) === B.EMBER_WIRE) c |= 1 << k;
+      else if (upOpen && BT.opaque[n] && w.getBlock(nx, y + 1, nz) === B.EMBER_WIRE) c |= 1 << k;
+    }
+    return c;
+  }
+  // does wire at (x,y,z) send power sideways into direction index k?
+  function wirePoints(w, x, y, z, k) {
+    const c = wireConns(w, x, y, z);
+    if (c === 0) return true;
+    const perp = k < 2 ? 0b1100 : 0b0011;
+    return !!(c & (1 << (k ^ 1))) && !(c & perp);
+  }
+  // weak power an opaque block receives from wire pointing into it or lying on it
+  function wireInto(w, x, y, z) {
+    let p = 0;
+    if (w.getBlock(x, y + 1, z) === B.EMBER_WIRE) p = w.getMeta(x, y + 1, z);
+    for (let k = 0; k < 4; k++) {
+      const sx = x + H[k][0], sz = z + H[k][1];
+      if (w.getBlock(sx, y, sz) !== B.EMBER_WIRE) continue;
+      const m = w.getMeta(sx, y, sz);
+      if (m > p && wirePoints(w, sx, y, sz, k ^ 1)) p = m;
+    }
+    return p;
+  }
+  // power reaching a machine / torch input at (x,y,z) from neighbour direction f
+  function powerFrom(w, x, y, z, f) {
+    const d = FACE_DIR[f], nx = x + d[0], ny = y + d[1], nz = z + d[2];
+    const id = w.getBlock(nx, ny, nz);
+    if (SOURCE[id]) return sourcePower(id, w.getMeta(nx, ny, nz), -d[0], -d[1], -d[2]);
+    if (id === B.EMBER_WIRE) {
+      if (d[1] === 1) return 0;                      // wire doesn't power the block above it
+      if (d[1] === -1) return 0;
+      const k = [-1, -1, 0, 1, 2, 3][f];
+      return wirePoints(w, nx, ny, nz, k ^ 1) ? w.getMeta(nx, ny, nz) : 0;
+    }
+    if (BT.opaque[id]) return Math.max(strongPower(w, nx, ny, nz), wireInto(w, nx, ny, nz));
+    return 0;
+  }
+  function machinePower(w, x, y, z) {
+    let p = 0;
+    for (let f = 0; f < 6; f++) { const v = powerFrom(w, x, y, z, f); if (v > p) { p = v; if (p >= 15) break; } }
+    // wire lying on top of a machine powers it too
+    if (w.getBlock(x, y + 1, z) === B.EMBER_WIRE) p = Math.max(p, w.getMeta(x, y + 1, z));
+    return p;
+  }
+  // power entering a wire from things other than wire
+  function wireSource(w, x, y, z) {
+    let p = 0;
+    for (let f = 0; f < 6; f++) {
+      const d = FACE_DIR[f], nx = x + d[0], ny = y + d[1], nz = z + d[2];
+      const id = w.getBlock(nx, ny, nz);
+      let v = 0;
+      if (SOURCE[id]) v = sourcePower(id, w.getMeta(nx, ny, nz), -d[0], -d[1], -d[2]);
+      else if (BT.opaque[id]) v = strongPower(w, nx, ny, nz);
+      if (v > p) { p = v; if (p >= 15) return 15; }
+    }
+    return p;
+  }
+  function wireNeighbours(w, x, y, z, out) {
+    out.length = 0;
+    const upOpen = !BT.opaque[w.getBlock(x, y + 1, z)];
+    for (const [dx, dz] of H) {
+      const nx = x + dx, nz = z + dz, n = w.getBlock(nx, y, nz);
+      if (n === B.EMBER_WIRE) out.push(nx, y, nz);
+      else {
+        if (!BT.opaque[n] && w.getBlock(nx, y - 1, nz) === B.EMBER_WIRE) out.push(nx, y - 1, nz);
+        if (upOpen && BT.opaque[n] && w.getBlock(nx, y + 1, nz) === B.EMBER_WIRE) out.push(nx, y + 1, nz);
+      }
+    }
+    return out;
+  }
+
+  // ------------------------------------------------------------ wire networks
+  const nbBuf = [];
+  function solveWires(w, starts, changedOut) {
+    const seen = new Map();
+    const stack = starts.slice();
+    while (stack.length && seen.size < 4096) {
+      const z = stack.pop(), y = stack.pop(), x = stack.pop();
+      const k = x + ',' + y + ',' + z;
+      if (seen.has(k) || w.getBlock(x, y, z) !== B.EMBER_WIRE) continue;
+      seen.set(k, [x, y, z, 0]);
+      const nb = wireNeighbours(w, x, y, z, nbBuf);
+      for (let i = 0; i < nb.length; i += 3) stack.push(nb[i], nb[i + 1], nb[i + 2]);
+    }
+    const buckets = []; for (let i = 0; i < 16; i++) buckets.push([]);
+    for (const [k, v] of seen) { v[3] = wireSource(w, v[0], v[1], v[2]); if (v[3] > 0) buckets[v[3]].push(k); }
+    for (let lv = 15; lv > 1; lv--) {
+      for (const k of buckets[lv]) {
+        const v = seen.get(k);
+        if (v[3] !== lv) continue;
+        const nb = wireNeighbours(w, v[0], v[1], v[2], []);
+        for (let i = 0; i < nb.length; i += 3) {
+          const nk = nb[i] + ',' + nb[i + 1] + ',' + nb[i + 2], n = seen.get(nk);
+          if (n && n[3] < lv - 1) { n[3] = lv - 1; buckets[lv - 1].push(nk); }
+        }
+      }
+    }
+    for (const v of seen.values()) {
+      if (w.getMeta(v[0], v[1], v[2]) !== v[3]) { w.setBlock(v[0], v[1], v[2], B.EMBER_WIRE, v[3], 2 | 4); changedOut.push(v[0], v[1], v[2]); }
+    }
+  }
+
+  // ------------------------------------------------------------ updates
+  const queue = [];
+  let busy = false;
+  function changed(w, x, y, z) {
+    queue.push(x, y, z);
+    if (busy) return;
+    busy = true;
+    let guard = 0;
+    try {
+      while (queue.length && guard++ < 512) {
+        const z0 = queue.pop(), y0 = queue.pop(), x0 = queue.pop();
+        const wires = [], machines = [];
+        for (let dy = -2; dy <= 2; dy++) for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+          if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) > 3) continue;
+          const bx = x0 + dx, by = y0 + dy, bz = z0 + dz;
+          if (by < 0 || by >= CH_H) continue;
+          const id = w.getBlock(bx, by, bz);
+          if (id === B.EMBER_WIRE) wires.push(bx, by, bz);
+          else if (MACHINE[id]) machines.push(bx, by, bz, id);
+        }
+        if (wires.length) {
+          const ch = [];
+          solveWires(w, wires, ch);
+          for (let i = 0; i < ch.length; i += 3) queue.push(ch[i], ch[i + 1], ch[i + 2]);
+        }
+        for (let i = 0; i < machines.length; i += 4) {
+          if (w.getBlock(machines[i], machines[i + 1], machines[i + 2]) === machines[i + 3]) evaluate(w, machines[i], machines[i + 1], machines[i + 2], machines[i + 3]);
+        }
+      }
+    } finally { busy = false; queue.length = 0; }
+  }
+  // a machine looks at its inputs
+  function evaluate(w, x, y, z, id) {
+    const m = w.getMeta(x, y, z);
+    const g = w.game;
+    switch (id) {
+      case B.EMBER_LAMP:
+        if (machinePower(w, x, y, z) > 0) {
+          w.setBlock(x, y, z, B.EMBER_LAMP_ON, 0);
+          if (g && g.player && g.player.distanceSq(x + 0.5, y + 0.5, z + 0.5) < 400) g.achieve('lamp');
+        }
+        break;
+      case B.EMBER_LAMP_ON: if (machinePower(w, x, y, z) === 0) w.scheduleTick(x, y, z, 4); break;
+      case B.EMBER_TORCH: case B.EMBER_TORCH_OFF: {
+        const a = TORCH_ATT[m] || TORCH_ATT[0];
+        const ax = x + a[0], ay = y + a[1], az = z + a[2];
+        const att = w.getBlock(ax, ay, az);
+        const powered = BT.opaque[att] ? Math.max(strongPower(w, ax, ay, az), wireInto(w, ax, ay, az)) > 0 : false;
+        if (powered === (id === B.EMBER_TORCH)) w.scheduleTick(x, y, z, 2);
+        break;
+      }
+      case B.RELAY: case B.RELAY_ON: {
+        const on = relayInput(w, x, y, z, m) > 0;
+        if (on !== (id === B.RELAY_ON)) w.scheduleTick(x, y, z, (((m >> 2) & 3) + 1) * 2);
+        break;
+      }
+      case B.NOTE_BLOCK: {
+        const p = machinePower(w, x, y, z) > 0, was = (m & 32) !== 0;
+        if (p !== was) { w.setBlock(x, y, z, id, (m & 31) | (p ? 32 : 0), 4); if (p && g) playNote(g, x, y, z, m & 31); }
+        break;
+      }
+      case B.TNT: if (machinePower(w, x, y, z) > 0 && g) { w.setBlock(x, y, z, 0, 0); g.spawnEntity(new TNTEntity(w, x + 0.5, y, z + 0.5, 80)); } break;
+      case B.DOOR_WOOD: case B.DOOR_IRON: {
+        const lower = (m & 8) ? y - 1 : y;
+        if (w.getBlock(x, lower, z) !== id || w.getBlock(x, lower + 1, z) !== id) break;
+        const lm = w.getMeta(x, lower, z);
+        const p = machinePower(w, x, lower, z) > 0 || machinePower(w, x, lower + 1, z) > 0, was = (lm & 32) !== 0;
+        if (p === was) break;
+        const nm = (lm & ~(32 | 4)) | (p ? 32 | 4 : 0);
+        w.setBlock(x, lower, z, id, nm, 4); w.setBlock(x, lower + 1, z, id, (nm & ~32) | 8, 4);
+        if (g && ((lm & 4) !== 0) !== p) g.audio.play(p ? 'door_open' : 'door_close', 0.9, 0.9 + Math.random() * 0.1, x + 0.5, lower + 1, z + 0.5);
+        break;
+      }
+      case B.PISTON: case B.STICKY_PISTON: {
+        let p = false;
+        for (let f = 0; f < 6 && !p; f++) if (f !== (m & 7) && powerFrom(w, x, y, z, f) > 0) p = true;
+        if (p && !(m & 8)) { if (g) extend(g, w, x, y, z, id, m); }
+        else if (!p && (m & 8)) { if (g) retract(g, w, x, y, z, id, m); }
+        else if ((m & 8)) {
+          // lost its head (an explosion?): fall back to the retracted state
+          const d = FACE_DIR[m & 7], h = w.getBlock(x + d[0], y + d[1], z + d[2]);
+          if (h !== B.PISTON_HEAD && h !== B.PISTON_MOVING) w.setBlock(x, y, z, id, m & ~8);
+        }
+        break;
+      }
+      case B.PISTON_HEAD: {
+        const d = FACE_DIR[m & 7], bx = x - d[0], by = y - d[1], bz = z - d[2];
+        const b = w.getBlock(bx, by, bz), bm = w.getMeta(bx, by, bz);
+        if ((b !== B.PISTON && b !== B.STICKY_PISTON) || !(bm & 8) || (bm & 7) !== (m & 7)) w.setBlock(x, y, z, 0, 0);
+        break;
+      }
+      case B.TRAPDOOR: case B.FENCE_GATE: {
+        const bit = id === B.TRAPDOOR ? 16 : 8;
+        const p = machinePower(w, x, y, z) > 0, was = (m & bit) !== 0;
+        if (p === was) break;
+        const nm = (m & ~(bit | 4)) | (p ? bit | 4 : 0);
+        w.setBlock(x, y, z, id, nm, 4);
+        if (g && ((m & 4) !== 0) !== p) g.audio.play(p ? 'door_open' : 'door_close', 0.9, id === B.TRAPDOOR ? 1.1 : 1.05, x + 0.5, y + 0.5, z + 0.5);
+        break;
+      }
+    }
+  }
+  // ------------------------------------------------------------ pistons
+  function moveType(w, x, y, z) {
+    if (y < 0 || y >= CH_H) return 'block';
+    const id = w.getBlock(x, y, z);
+    if (id === 0) return 'air';
+    if (BT.fluid[id] || id === B.FIRE) return 'break';
+    const d = BLOCKS[id];
+    if (!d || d.hardness < 0 || d.tileEntity || id === B.OBSIDIAN || id === B.RUNESTONE || id === B.PISTON_HEAD) return 'block';
+    if ((id === B.PISTON || id === B.STICKY_PISTON) && (w.getMeta(x, y, z) & 8)) return 'block';
+    if (!BT.solid[id] || BT.replaceable[id] || BREAKS[id]) return 'break';
+    return 'push';
+  }
+  function placeMoving(game, w, x, y, z, id, meta, fx, fy, fz, noShove) {
+    w.setBlock(x, y, z, B.PISTON_MOVING, 0);
+    const te = w.getTile(x, y, z);
+    if (te) { te.id = id; te.meta = meta; }
+    w.scheduleTick(x, y, z, 2, B.PISTON_MOVING);
+    game.spawnEntity(new MovingBlock(w, id, meta, fx, fy, fz, x, y, z, noShove));
+  }
+  function extend(game, w, x, y, z, id, m) {
+    const f = m & 7, d = FACE_DIR[f];
+    const line = [];
+    let cx = x + d[0], cy = y + d[1], cz = z + d[2];
+    for (let i = 0; ; i++) {
+      const t = moveType(w, cx, cy, cz);
+      if (t === 'air' || t === 'break') break;
+      if (t === 'block' || i >= 12) return false;
+      line.push([cx, cy, cz, w.getBlock(cx, cy, cz), w.getMeta(cx, cy, cz)]);
+      cx += d[0]; cy += d[1]; cz += d[2];
+    }
+    const endId = w.getBlock(cx, cy, cz);
+    if (endId !== 0 && !BT.fluid[endId]) Behaviors.dropBlock(game, cx, cy, cz, endId, w.getMeta(cx, cy, cz), null);
+    w.setBlock(x, y, z, id, m | 8);
+    for (let i = line.length - 1; i >= 0; i--) {
+      const [sx, sy, sz, bid, bm] = line[i];
+      placeMoving(game, w, sx + d[0], sy + d[1], sz + d[2], bid, bm, sx, sy, sz);
+    }
+    placeMoving(game, w, x + d[0], y + d[1], z + d[2], B.PISTON_HEAD, f | (id === B.STICKY_PISTON ? 8 : 0), x, y, z);
+    game.audio.play('piston_out', 0.5, 0.75 + Math.random() * 0.25, x + 0.5, y + 0.5, z + 0.5);
+    return true;
+  }
+  function retract(game, w, x, y, z, id, m) {
+    const f = m & 7, d = FACE_DIR[f];
+    const hx = x + d[0], hy = y + d[1], hz = z + d[2];
+    w.setBlock(x, y, z, id, m & ~8);
+    const h = w.getBlock(hx, hy, hz);
+    if (h === B.PISTON_HEAD || h === B.PISTON_MOVING) w.setBlock(hx, hy, hz, 0, 0);
+    game.spawnEntity(new MovingBlock(w, B.PISTON_HEAD, f | (id === B.STICKY_PISTON ? 8 : 0), hx, hy, hz, x, y, z, true));
+    if (id === B.STICKY_PISTON) {
+      const px = hx + d[0], py = hy + d[1], pz = hz + d[2];
+      if (moveType(w, px, py, pz) === 'push') {
+        const bid = w.getBlock(px, py, pz), bm = w.getMeta(px, py, pz);
+        w.setBlock(px, py, pz, 0, 0);
+        placeMoving(game, w, hx, hy, hz, bid, bm, px, py, pz, true);
+      }
+    }
+    game.audio.play('piston_in', 0.5, 0.65 + Math.random() * 0.25, x + 0.5, y + 0.5, z + 0.5);
+  }
+  function relayInput(w, x, y, z, m) {
+    const f = HFACE_DIR[m & 3];
+    const bx = x - f[0], bz = z - f[1];
+    const id = w.getBlock(bx, y, bz);
+    if (id === B.EMBER_WIRE) return w.getMeta(bx, y, bz);
+    if (SOURCE[id]) return sourcePower(id, w.getMeta(bx, y, bz), f[0], 0, f[1]);
+    if (BT.opaque[id]) return Math.max(strongPower(w, bx, y, bz), wireInto(w, bx, y, bz));
+    return 0;
+  }
+
+  // ------------------------------------------------------------ delayed updates
+  const burnout = new Map();
+  function circuitTick(w, x, y, z, id) {
+    const m = w.getMeta(x, y, z);
+    const g = w.game;
+    switch (id) {
+      case B.EMBER_LAMP_ON: if (machinePower(w, x, y, z) === 0) w.setBlock(x, y, z, B.EMBER_LAMP, 0); break;
+      case B.EMBER_TORCH: case B.EMBER_TORCH_OFF: {
+        const a = TORCH_ATT[m] || TORCH_ATT[0];
+        const ax = x + a[0], ay = y + a[1], az = z + a[2];
+        const powered = BT.opaque[w.getBlock(ax, ay, az)] ? Math.max(strongPower(w, ax, ay, az), wireInto(w, ax, ay, az)) > 0 : false;
+        const key = x + ',' + y + ',' + z;
+        if (id === B.EMBER_TORCH && powered) {
+          // flickering too fast burns the torch out for a while
+          const list = (burnout.get(key) || []).filter((t) => w.time - t < 60);
+          list.push(w.time); burnout.set(key, list);
+          w.setBlock(x, y, z, B.EMBER_TORCH_OFF, m);
+          if (list.length >= 8 && g) {
+            g.audio.play('fizz', 0.5, 2.6 + Math.random() * 0.8, x + 0.5, y + 0.5, z + 0.5);
+            for (let i = 0; i < 5; i++) g.particles.smoke(x + 0.3 + Math.random() * 0.4, y + 0.6, z + 0.3 + Math.random() * 0.4, 1);
+            w.scheduleTick(x, y, z, 160, B.EMBER_TORCH_OFF);
+          }
+        } else if (id === B.EMBER_TORCH_OFF && !powered) {
+          const list = (burnout.get(key) || []).filter((t) => w.time - t < 60);
+          if (list.length >= 8) { burnout.set(key, list); w.scheduleTick(x, y, z, 20, B.EMBER_TORCH_OFF); break; }
+          w.setBlock(x, y, z, B.EMBER_TORCH, m);
+        }
+        break;
+      }
+      case B.RELAY: case B.RELAY_ON: {
+        const on = relayInput(w, x, y, z, m) > 0;
+        if (on && id === B.RELAY) w.setBlock(x, y, z, B.RELAY_ON, m);
+        else if (!on && id === B.RELAY_ON) w.setBlock(x, y, z, B.RELAY, m);
+        break;
+      }
+      case B.STONE_BUTTON: case B.WOOD_BUTTON:
+        if (m & 8) { w.setBlock(x, y, z, id, m & ~8); if (g) g.audio.play('click', 0.3, 0.5, x + 0.5, y + 0.5, z + 0.5); }
+        break;
+      case B.PISTON_MOVING: {
+        const te = w.getTile(x, y, z);
+        const nid = te ? te.id : 0, nm = te ? te.meta : 0;
+        w.setBlock(x, y, z, nid, nm);
+        // a sticky head pulling back left nothing behind; heads re-check their piston
+        break;
+      }
+      case B.STONE_PLATE: case B.WOOD_PLATE:
+        if (m & 1) {
+          if (plateOccupied(w, x, y, z, id)) w.scheduleTick(x, y, z, 20, id);
+          else { w.setBlock(x, y, z, id, 0); if (g) g.audio.play('click', 0.3, 0.5, x + 0.5, y + 0.1, z + 0.5); }
+        }
+        break;
+    }
+  }
+
+  // ------------------------------------------------------------ interaction
+  function use(game, x, y, z, id) {
+    const w = game.world, m = w.getMeta(x, y, z);
+    switch (id) {
+      case B.LEVER:
+        w.setBlock(x, y, z, id, m ^ 8);
+        game.audio.play('click', 0.3, (m & 8) ? 0.5 : 0.6, x + 0.5, y + 0.5, z + 0.5);
+        return true;
+      case B.STONE_BUTTON: case B.WOOD_BUTTON:
+        if (m & 8) return true;
+        w.setBlock(x, y, z, id, m | 8);
+        w.scheduleTick(x, y, z, id === B.STONE_BUTTON ? 20 : 30, id);
+        game.audio.play('click', 0.3, 0.6, x + 0.5, y + 0.5, z + 0.5);
+        return true;
+      case B.RELAY: case B.RELAY_ON:
+        w.setBlock(x, y, z, id, (m & 3) | ((((m >> 2) & 3) + 1) & 3) << 2);
+        game.audio.play('click', 0.2, 0.9, x + 0.5, y + 0.2, z + 0.5);
+        return true;
+      case B.NOTE_BLOCK: {
+        const pitch = ((m & 31) + 1) % 25;
+        w.setBlock(x, y, z, id, pitch | (m & 32), 4);
+        playNote(game, x, y, z, pitch);
+        return true;
+      }
+    }
+    return false;
+  }
+  // note blocks: two octaves from F#, the instrument depends on what's underneath
+  function playNote(game, x, y, z, pitch) {
+    const w = game.world;
+    if (w.getBlock(x, y + 1, z) !== 0) return;
+    const below = BLOCKS[w.getBlock(x, y - 1, z)];
+    const snd = below ? below.sound : 'stone';
+    const midi = 54 + pitch;
+    let inst = 'harp';
+    if (snd === 'wood') inst = 'bass';
+    else if (snd === 'sand' || snd === 'gravel') inst = 'snare';
+    else if (snd === 'glass') inst = 'hat';
+    else if (snd === 'stone' && below && below.id !== B.DIRT) inst = 'drum';
+    game.audio.playNote(inst, midi, x + 0.5, y + 0.5, z + 0.5);
+    const c = pitch / 24;
+    game.particles.add({ x: x + 0.5, y: y + 1.2, z: z + 0.5, vx: 0, vy: 0.02, vz: 0, size: 0.12, life: 14, layer: game.particles.layer('particle_note'),
+      r: Math.max(0, Math.sin((c + 0) * TAU) * 0.65 + 0.35), g: Math.max(0, Math.sin((c + 1 / 3) * TAU) * 0.65 + 0.35), b: Math.max(0, Math.sin((c + 2 / 3) * TAU) * 0.65 + 0.35), collide: false, drag: 0.66, bright: true });
+  }
+  // pressure plates notice creatures (stone) or anything at all (wood)
+  function plateOccupied(w, x, y, z, id) {
+    const g = w.game;
+    const test = (e) => !e.removed && !e.dead && (id === B.WOOD_PLATE || e.category || e.type === 'player') && e.type !== 'wisp' && e.type !== 'fishhook' && e.type !== 'painting';
+    const box = [x + 0.0625, y, z + 0.0625, x + 0.9375, y + 0.25, z + 0.9375];
+    const hit = (e) => { e.updateBox(); const b = e.box; return b.x1 > box[0] && b.x0 < box[3] && b.z1 > box[2] && b.z0 < box[5] && b.y0 < box[4] && b.y1 > box[1]; };
+    if (g && g.player && test(g.player) && hit(g.player)) return true;
+    for (const e of w.entitiesInBox(x - 1, y - 1, z - 1, x + 2, y + 2, z + 2)) if (test(e) && hit(e)) return true;
+    return false;
+  }
+  function tickPlates(game) {
+    const w = game.world;
+    const check = (e) => {
+      const bx = Math.floor(e.x), by = Math.floor(e.y + 0.05), bz = Math.floor(e.z);
+      const id = w.getBlock(bx, by, bz);
+      if (id !== B.STONE_PLATE && id !== B.WOOD_PLATE) return;
+      if (w.getMeta(bx, by, bz) & 1) return;
+      if (!plateOccupied(w, bx, by, bz, id)) return;
+      w.setBlock(bx, by, bz, id, 1);
+      w.scheduleTick(bx, by, bz, 20, id);
+      game.audio.play('click', 0.3, 0.6, bx + 0.5, by + 0.1, bz + 0.5);
+    };
+    if (game.player && !game.player.dead) check(game.player);
+    for (const e of w.entities) if (!e.removed && (e.category || e.type === 'item' || e.type === 'arrow' || e.type === 'boat')) check(e);
+  }
+
+  // ------------------------------------------------------------ hooks
+  for (const id of [B.EMBER_LAMP_ON, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.RELAY, B.RELAY_ON, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.PISTON_MOVING]) BLOCKS[id].circuitTick = (w, x, y, z) => circuitTick(w, x, y, z, id);
+  // meta-only changes (lever flips, wire levels) and neighbour edits nearby
+  function blockChanged(w, x, y, z, oldId, newId) {
+    if (w.menu) return;
+    if (IS[oldId] || IS[newId]) { changed(w, x, y, z); return; }
+    // an ordinary block changed: does it touch anything electrical?
+    for (let dy = -2; dy <= 2; dy++) for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      if (IS[w.getBlock(x + dx, y + dy, z + dz)]) { changed(w, x, y, z); return; }
+    }
+  }
+  BLOCKS[B.NOTE_BLOCK].onPunch = (w, x, y, z) => { if (w.game) playNote(w.game, x, y, z, w.getMeta(x, y, z) & 31); };
+  return { changed, blockChanged, use, tickPlates, machinePower, wireConns, playNote, IS };
+})();
 
 // ---- src/game/interact.js
 // ---------------------------------------------------------------------------
@@ -12240,6 +13177,7 @@ class EntityRenderer {
       case 'boat': return this.drawBoat(e, rx, ry, rz, partial);
       case 'fishhook': return this.drawHook(e, rx, ry, rz, partial);
       case 'painting': return this.drawPainting(e, rx, ry, rz);
+      case 'moving_block': return this.drawMovingBlock(e, rx, ry, rz);
       case 'wisp': {
         const t = e.age + partial, pulse = 1 + Math.sin(t * 0.25) * 0.12;
         this.glow(rx, ry + 0.2, rz, 0.55 * pulse, [110, 255, 230, 150]);
@@ -12465,6 +13403,23 @@ class EntityRenderer {
       if (i === 0) this.quadOut(sb, [P(al, up, -fd), P(al, up, fd), P(al, up + 1, fd), P(al, up + 1, -fd)], [[bu, bv], [bu + e1, bv], [bu + e1, bv + e2], [bu, bv + e2]], -1, ec, sky, blk);
       if (i === a.w - 1) this.quadOut(sb, [P(al + 1, up, fd), P(al + 1, up, -fd), P(al + 1, up + 1, -fd), P(al + 1, up + 1, fd)], [[bu, bv], [bu + e1, bv], [bu + e1, bv + e2], [bu, bv + e2]], -1, ec, sky, blk);
     }
+  }
+  drawMovingBlock(e, rx, ry, rz) {
+    const [sky, blk] = this.lightAt(e.x, e.y + 0.5, e.z);
+    if (e.block === B.PISTON_HEAD) {
+      const f = e.meta & 7, tf = PISTON_TF[f], L = (n) => this.r.atlas.layer(n), b = this.r.batch;
+      const base = M3.mul(M3.trans(rx - 0.5, ry, rz - 0.5), M3.scale(1 / 16, 1 / 16, 1 / 16));
+      // run the head's local frame through the same transform the mesher uses
+      const tm = (bx) => {
+        const a = tf([bx[0], bx[1], bx[2]]), c = tf([bx[3], bx[4], bx[5]]);
+        return [Math.min(a[0], c[0]), Math.min(a[1], c[1]), Math.min(a[2], c[2]), Math.max(a[0], c[0]), Math.max(a[1], c[1]), Math.max(a[2], c[2])];
+      };
+      this.texBox(b, base, tm([0, 12, 0, 16, 16, 16]), L((e.meta & 8) ? 'piston_top_sticky' : 'piston_top'), sky, blk);
+      this.texBox(b, base, tm([6, -4, 6, 10, 12, 10]), L('piston_side'), sky, blk);
+      return;
+    }
+    const m = M3.trans(rx, ry + 0.5, rz);
+    this.drawItem(new ItemStack(e.block, 1, blockItemDamage(e.block, e.meta)), m, sky, blk, 255);
   }
   drawSigns(cam) {
     const w = this.game.world, R = 64;
@@ -13097,6 +14052,25 @@ const SOUND_DEFS = (() => {
   S.boomcap_say = () => { const lp = new Biquad('lp', 600, 2); return render(0.4, (t) => lp.p(noise()) * env(t, 0.02, 0.1)); };
   S.wisp = () => render(1.2, (t) => { let s = 0; [2093, 2637, 3136].forEach((f, i) => { const st = i * 0.18; if (t > st) s += Math.sin(2 * Math.PI * f * (t - st)) * Math.exp(-(t - st) / 0.3); }); return s; });
   S.stranger = () => { const lp = new Biquad('lp', 300, 1); return render(3, (t) => (lp.p(noise()) * 0.6 + Math.sin(2 * Math.PI * 55 * t) * 0.3) * Math.sin(Math.PI * t / 3)); };
+  // ----- note block instruments (tuned to F#4 and played back faster or slower) -----
+  const pluck = (f0, dur, damp, lpf) => () => {
+    const n = Math.max(2, Math.round(DSP.SR / f0)), b = new Float32Array(n);
+    for (let i = 0; i < n; i++) b[i] = noise();
+    const lp = lpf ? new Biquad('lp', lpf, 0.7) : null;
+    let i = 0;
+    return render(dur, (t) => {
+      const v = b[i], nv = b[(i + 1) % n];
+      b[i] = (v + nv) * 0.5 * damp; i = (i + 1) % n;
+      return (lp ? lp.p(v) : v) * Math.min(1, t * 600);
+    });
+  };
+  S.nb_harp = pluck(370, 1.6, 0.998);
+  S.nb_bass = pluck(92.5, 1.3, 0.997, 700);
+  S.nb_drum = () => render(0.35, (t) => Math.sin(2 * Math.PI * (55 + 150 * Math.exp(-t * 28)) * t) * Math.exp(-t / 0.1) + noise() * 0.12 * Math.exp(-t / 0.008));
+  S.nb_snare = () => { const bp = new Biquad('bp', 1900, 0.8); return render(0.25, (t) => (bp.p(noise()) * 0.8 + Math.sin(2 * Math.PI * 185 * t) * 0.35) * Math.exp(-t / 0.05)); };
+  S.nb_hat = () => { const hp = new Biquad('hp', 6500, 0.7); return render(0.09, (t) => hp.p(noise()) * Math.exp(-t / 0.016)); };
+  S.piston_out = () => { const lp = new Biquad('lp', 900, 1.2); return render(0.35, (t) => lp.p(noise()) * env(t, 0.004, 0.05) * 0.9 + Math.sin(2 * Math.PI * (140 - t * 200) * t) * env(t, 0.002, 0.06)); };
+  S.piston_in = () => { const lp = new Biquad('lp', 700, 1.2); return render(0.35, (t) => lp.p(noise()) * env(t, 0.006, 0.06) * 0.8 + Math.sin(2 * Math.PI * (110 - t * 120) * t) * env(t, 0.002, 0.08)); };
   // ----- ambience -----
   S.cave = () => {
     const kind = Math.floor(rnd() * 3);
@@ -13181,6 +14155,8 @@ class AudioEngine {
     node.connect(this.sfx);
     src.start();
   }
+  // note blocks: midi 54..78 (F#3..F#5), played by pitching the F#4 sample like the classic game
+  playNote(inst, midi, x, y, z) { this.play('nb_' + inst, 2, Math.pow(2, (midi - 66) / 12), x, y, z); }
   playBlock(material, kind, x, y, z) {
     const m = material || 'stone';
     const vol = { break: 1, hit: 0.25, step: 0.15, place: 1 }[kind] || 1;
@@ -14725,6 +15701,7 @@ const HOW_TO_PLAY = [
   ['Farming', 'Till grass or dirt with a hoe and plant seeds near water. Crops need light to grow. Bone meal speeds up growth.', 'Animals give food, leather and wool. Shear sheep for wool and use buckets to collect milk. Brambles in the forest give berries you can bake into pies.'],
   ['Exploration', 'The world is huge. Biomes have their own plants, creatures and treasures: look for camps, ruined towers, hermit huts, desert wells and sunken ruins.', 'Your Explorer\'s Map (M) fills in as you travel, and your Explorer\'s Journal (J) records every biome and creature you discover. Some secrets are rare - keep travelling!'],
   ['Waterways', 'Craft a boat from five planks to cross lakes and seas: right-click to climb in, steer with W and the mouse, and press Shift to hop out. Do not ram the shore at full speed!', 'Cast a fishing rod into water and wait for the float to dip, then reel in. Different waters hold different fish, and now and then a bottle washes up with a note about buried treasure.'],
+  ['Ember Circuits', 'Ember dust laid on the ground carries power from levers, buttons, pressure plates and ember torches, growing weaker with every block. Ember torches invert a signal, relays repeat and delay it.', 'Powered lamps light up, doors and trapdoors swing open, TNT ignites, note blocks sing and pistons push (sticky pistons pull too). Build gates, clocks and secret doors - just like the old days.'],
   ['Mysteries', 'On clear nights, watch the sky. Falling stars leave craters lined with starmetal - the strongest material of all, but you will need a diamond pickaxe.', 'Lights drift over swamps after dark. Some say they lead to buried treasure. On the moors, ancient runestones hum when touched with jade...'],
   ['Creative Mode', 'In Creative mode you can fly (double-tap Space), break blocks instantly and take any block from the creative inventory (E).', 'Worlds with cheats enabled accept commands: open chat with T and type /help.'],
   ['Saving & Sharing', 'Your worlds save automatically in your browser. Use Export on the world list (or in the pause menu) to download a .blocklands file.', 'Import it on any device - including your phone - to continue where you left off or share your world with friends.'],
@@ -15245,6 +16222,8 @@ const CREATIVE_TABS = (() => {
     ...WOOD.map((w, i) => [I.boat, i])] });
   T.push({ name: 'Combat', icon: [I.gold_sword, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].map((m) => [I[m + '_sword'], 0]), [I.bow, 0], [I.arrow, 0],
     ...['leather', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ARMOR_SLOTS.map((s) => [I[m + '_' + s], 0])), [I.snowball, 0], [I.egg, 0]] });
+  T.push({ name: 'Ember Circuits', icon: [I.ember_dust, 0], list: [[I.ember_dust, 0], blk(B.EMBER_TORCH), blk(B.LEVER), blk(B.STONE_BUTTON), blk(B.WOOD_BUTTON), blk(B.STONE_PLATE), blk(B.WOOD_PLATE),
+    [I.relay, 0], blk(B.PISTON), blk(B.STICKY_PISTON), blk(B.EMBER_LAMP), blk(B.NOTE_BLOCK), blk(B.EMBER_BLOCK), blk(B.TNT), [I.door_wood, 0], [I.door_iron, 0], blk(B.TRAPDOOR), blk(B.FENCE_GATE)] });
   T.push({ name: 'Foodstuffs', icon: [I.apple, 0], list: items(['apple', 'golden_apple', 'bread', 'porkchop', 'cooked_porkchop', 'beef', 'steak', 'chicken', 'cooked_chicken', 'mutton', 'cooked_mutton', 'venison', 'cooked_venison', 'jerky',
     'fish', 'cooked_fish', 'salmon', 'cooked_salmon', 'sunfish', 'pufferfish', 'glimmerfin', 'carrot', 'potato', 'baked_potato', 'poison_potato', 'cookie', 'melon_slice', 'mushroom_stew', 'glow_berries', 'pumpkin_pie', 'berry_pie', 'berries', 'rotten_flesh', 'spider_eye']) });
   T.push({ name: 'Materials', icon: [I.stick, 0], list: [...items(['coal']), [I.coal, 1], ...items(['diamond', 'iron_ingot', 'gold_ingot', 'gold_nugget', 'cobalt_ingot', 'starmetal_ingot', 'jade', 'ember_dust', 'sulfur', 'lumite_shard', 'salt',
@@ -15611,6 +16590,7 @@ const MILESTONES = [
   { id: 'fish', name: 'Gone Fishing', desc: 'Catch a fish', icon: () => [ITEM_IDS.fish, 0] },
   { id: 'sail', name: 'Set Sail', desc: 'Row a boat 500 blocks', icon: () => [ITEM_IDS.boat, 0] },
   { id: 'bottle', name: 'Message Received', desc: 'Read a message in a bottle', icon: () => [ITEM_IDS.message_bottle, 0] },
+  { id: 'lamp', name: 'Bright Idea', desc: 'Light an ember lamp with a circuit', icon: () => [B.EMBER_LAMP_ON, 0] },
 ];
 const BIOME_DESCRIPTIONS = {
   ocean: 'Endless water. Sunken ruins rest on the sea floor.', deep_ocean: 'The water grows dark and cold.', plains: 'Rolling grass, wildflowers and the occasional lonely oak.',
@@ -18385,6 +19365,7 @@ class Game {
     this.renderer.atlas.tickAnimations();
     DynamicItems.update(this);
     this.tickWaterways();
+    Circuits.tickPlates(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
     const h = p.inventory.held();

@@ -14,7 +14,7 @@ const HFACE_DIR = [[0, -1], [0, 1], [-1, 0], [1, 0]];
 const HFACE_OPP = [1, 0, 3, 2];
 
 // Render types
-const R = { NONE: 0, CUBE: 1, CROSS: 2, LIQUID: 3, TORCH: 4, MODEL: 5, CROP: 6, LADDER: 7, FIRE: 8, LILY: 9, VINE: 10 };
+const R = { NONE: 0, CUBE: 1, CROSS: 2, LIQUID: 3, TORCH: 4, MODEL: 5, CROP: 6, LADDER: 7, FIRE: 8, LILY: 9, VINE: 10, CIRCUIT: 11 };
 
 const WOOD = ['oak', 'spruce', 'birch', 'jungle', 'maple', 'redwood'];
 const WOOD_NAMES = ['Oak', 'Spruce', 'Birch', 'Jungle', 'Maple', 'Redwood'];
@@ -529,6 +529,103 @@ defBlock(114, 'wall_sign', {
   name: 'Sign', render: R.NONE, tex: (m) => 'planks_' + (WOOD[(m >> 2) & 7] || 'oak'), opaque: false, solid: false, opacity: 0, hardness: 1, tool: 'axe', sound: 'wood',
   tileEntity: 'sign', select: (m) => wallSignBox(m), drops: (m) => [[ITEM_IDS.sign, 1, (m >> 2) & 7]], itemSprite: 'sign_oak',
 });
+
+// ---- ember circuits (the classic redstone set) ----
+// attachment codes for levers & buttons: 0 floor, 1-4 walls (same as torches), 5 ceiling
+const CIRCUIT_ATT = [[0, -1, 0], [-1, 0, 0], [1, 0, 0], [0, 0, -1], [0, 0, 1], [0, 1, 0]];
+function attachedBox(m, w, h, d) {
+  // a w x d footprint, h tall, centred on the face it is attached to (pixels)
+  const a = m & 7, x0 = 8 - w / 2, x1 = 8 + w / 2, z0 = 8 - d / 2, z1 = 8 + d / 2;
+  switch (a) {
+    case 1: return box16(0, 8 - d / 2, x0, h, 8 + d / 2, x1);
+    case 2: return box16(16 - h, 8 - d / 2, x0, 16, 8 + d / 2, x1);
+    case 3: return box16(x0, 8 - d / 2, 0, x1, 8 + d / 2, h);
+    case 4: return box16(x0, 8 - d / 2, 16 - h, x1, 8 + d / 2, 16);
+    case 5: return box16(x0, 16 - h, z0, x1, 16, z1);
+    default: return box16(x0, 0, z0, x1, h, z1);
+  }
+}
+// pistons: facing is a face index (0 down, 1 up, 2 N, 3 S, 4 W, 5 E), bit 8 = extended (base) / sticky (head)
+function pistonBaseBox(m) {
+  if (!(m & 8)) return FULL;
+  const t = 4 / 16;
+  switch (m & 7) {
+    case 0: return [0, t, 0, 1, 1, 1]; case 1: return [0, 0, 0, 1, 1 - t, 1];
+    case 2: return [0, 0, t, 1, 1, 1]; case 3: return [0, 0, 0, 1, 1, 1 - t];
+    case 4: return [t, 0, 0, 1, 1, 1]; default: return [0, 0, 0, 1 - t, 1, 1];
+  }
+}
+function pistonHeadBoxes(m) {
+  const t = 4 / 16, a = 6 / 16, b = 10 / 16;
+  switch (m & 7) {
+    case 0: return [[0, 0, 0, 1, t, 1], [a, t, a, b, 1, b]];
+    case 1: return [[0, 1 - t, 0, 1, 1, 1], [a, 0, a, b, 1 - t, b]];
+    case 2: return [[0, 0, 0, 1, 1, t], [a, a, t, b, b, 1]];
+    case 3: return [[0, 0, 1 - t, 1, 1, 1], [a, a, 0, b, b, 1 - t]];
+    case 4: return [[0, 0, 0, t, 1, 1], [t, a, a, 1, b, b]];
+    default: return [[1 - t, 0, 0, 1, 1, 1], [0, a, a, 1 - t, b, b]];
+  }
+}
+const circuitBase = { opaque: false, solid: false, opacity: 0, hardness: 0, cutout: true };
+defBlock(115, 'ember_wire', Object.assign({}, circuitBase, {
+  name: 'Ember Wire', render: R.CIRCUIT, tex: 'ember_wire_cross', sound: 'stone', itemSprite: 'ember_dust',
+  select: () => box16(0, 0, 0, 16, 1, 16), drops: () => [[ITEM_IDS.ember_dust, 1, 0]],
+}));
+const torchSelect = (m) => {
+  switch (m) {
+    case 1: return box16(0, 3, 5.5, 5, 13, 10.5);
+    case 2: return box16(11, 3, 5.5, 16, 13, 10.5);
+    case 3: return box16(5.5, 3, 0, 10.5, 13, 5);
+    case 4: return box16(5.5, 3, 11, 10.5, 13, 16);
+  }
+  return box16(6, 0, 6, 10, 10, 10);
+};
+defBlock(116, 'ember_torch', Object.assign({}, circuitBase, {
+  name: 'Ember Torch', render: R.TORCH, tex: 'ember_torch_on', light: 7, sound: 'wood', itemSprite: 'ember_torch_on', itemMetaMask: 0, select: torchSelect,
+  drops: () => [[B.EMBER_TORCH, 1, 0]],
+}));
+defBlock(117, 'ember_torch_off', Object.assign({}, circuitBase, {
+  name: 'Ember Torch', render: R.TORCH, tex: 'ember_torch_off', sound: 'wood', itemSprite: 'ember_torch_off', itemMetaMask: 0, select: torchSelect,
+  drops: () => [[B.EMBER_TORCH, 1, 0]],
+}));
+defBlock(118, 'lever', Object.assign({}, circuitBase, {
+  name: 'Lever', render: R.CIRCUIT, tex: 'cobblestone', hardness: 0.5, sound: 'wood', itemSprite: 'item_lever', itemMetaMask: 0,
+  select: (m) => attachedBox(m, 8, 10, 8),
+}));
+defBlock(119, 'stone_button', Object.assign({}, circuitBase, {
+  name: 'Stone Button', render: R.CIRCUIT, tex: 'stone', hardness: 0.5, sound: 'stone', itemMetaMask: 0,
+  select: (m) => attachedBox(m, 6, (m & 8) ? 1 : 2, 4), model: () => [{ b: [5, 6, 6, 11, 10, 10] }],
+}));
+defBlock(120, 'wood_button', Object.assign({}, circuitBase, {
+  name: 'Wooden Button', render: R.CIRCUIT, tex: 'planks_oak', hardness: 0.5, sound: 'wood', itemMetaMask: 0,
+  select: (m) => attachedBox(m, 6, (m & 8) ? 1 : 2, 4), model: () => [{ b: [5, 6, 6, 11, 10, 10] }],
+}));
+defBlock(121, 'stone_plate', Object.assign({}, circuitBase, {
+  name: 'Stone Pressure Plate', render: R.MODEL, tex: 'stone', cutout: false, hardness: 0.5, sound: 'stone', tool: 'pickaxe', itemMetaMask: 0,
+  model: (m) => [{ b: [1, 0, 1, 15, 1, 15], inset: 0 }], select: () => box16(1, 0, 1, 15, 1, 15),
+}));
+defBlock(122, 'wood_plate', Object.assign({}, circuitBase, {
+  name: 'Wooden Pressure Plate', render: R.MODEL, tex: 'planks_oak', cutout: false, hardness: 0.5, sound: 'wood', tool: 'axe', itemMetaMask: 0,
+  model: (m) => [{ b: [1, 0, 1, 15, 1, 15] }], select: () => box16(1, 0, 1, 15, 1, 15),
+}));
+defBlock(123, 'ember_lamp', { name: 'Ember Lamp', tex: 'ember_lamp_off', hardness: 0.3, sound: 'glass', drops: () => [[B.EMBER_LAMP, 1, 0]] });
+defBlock(124, 'ember_lamp_on', { name: 'Ember Lamp', tex: 'ember_lamp_on', light: 15, hardness: 0.3, sound: 'glass', drops: () => [[B.EMBER_LAMP, 1, 0]] });
+defBlock(125, 'relay', Object.assign({}, circuitBase, {
+  name: 'Ember Relay', render: R.CIRCUIT, tex: 'relay_top', sound: 'wood', itemSprite: 'item_relay', select: () => box16(0, 0, 0, 16, 2, 16),
+  collide: () => [box16(0, 0, 0, 16, 2, 16)], solid: true, drops: () => [[ITEM_IDS.relay, 1, 0]],
+}));
+defBlock(126, 'relay_on', Object.assign({}, circuitBase, {
+  name: 'Ember Relay', render: R.CIRCUIT, tex: 'relay_top_on', light: 0, sound: 'wood', itemSprite: 'item_relay', select: () => box16(0, 0, 0, 16, 2, 16),
+  collide: () => [box16(0, 0, 0, 16, 2, 16)], solid: true, drops: () => [[ITEM_IDS.relay, 1, 0]],
+}));
+defBlock(128, 'piston', { name: 'Piston', render: R.CIRCUIT, tex: (m, f) => f === 1 ? 'piston_top' : f === 0 ? 'piston_bottom' : 'piston_side', opaque: false, opacity: 15, hardness: 0.5, sound: 'stone', itemMetaMask: 0,
+  collide: (m) => [pistonBaseBox(m)], select: (m) => pistonBaseBox(m), drops: () => [[B.PISTON, 1, 0]] });
+defBlock(129, 'sticky_piston', { name: 'Sticky Piston', render: R.CIRCUIT, tex: (m, f) => f === 1 ? 'piston_top_sticky' : f === 0 ? 'piston_bottom' : 'piston_side', opaque: false, opacity: 15, hardness: 0.5, sound: 'stone', itemMetaMask: 0,
+  collide: (m) => [pistonBaseBox(m)], select: (m) => pistonBaseBox(m), drops: () => [[B.STICKY_PISTON, 1, 0]] });
+defBlock(130, 'piston_head', { name: 'Piston Head', render: R.CIRCUIT, tex: 'piston_side', opaque: false, opacity: 0, hardness: 0.5, sound: 'stone',
+  collide: (m) => pistonHeadBoxes(m), select: (m) => pistonHeadBoxes(m)[0], drops: () => [] });
+defBlock(131, 'piston_moving', { name: 'Moving Block', render: R.NONE, tex: 'piston_side', opaque: false, solid: false, opacity: 0, hardness: -1, tileEntity: 'moving', select: () => null, drops: () => [] });
+defBlock(127, 'note_block', { name: 'Note Block', tex: 'note_block', hardness: 0.8, tool: 'axe', sound: 'wood', flammable: 5, burnSpeed: 5, drops: () => [[B.NOTE_BLOCK, 1, 0]] });
 
 // -------------------------------------------------------------------------
 // Derived lookup tables for fast access in hot loops

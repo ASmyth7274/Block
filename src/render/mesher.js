@@ -42,6 +42,15 @@ class MeshBuf {
   result() { return this.n ? this.a.slice(0, this.n) : null; }
 }
 
+// local frames for pistons (local +y is the pushing face)
+const PISTON_TF = [
+  (v) => [v[0], 16 - v[1], 16 - v[2]], (v) => v,
+  (v) => [v[0], v[2], 16 - v[1]], (v) => [v[0], 16 - v[2], v[1]],
+  (v) => [16 - v[1], v[2], 16 - v[0]], (v) => [v[1], v[2], v[0]],
+];
+// what ember wire visibly links up with
+const WIRE_LINK = new Uint8Array(256);
+for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK]) WIRE_LINK[id] = 1;
 const FIXED_TINT = {
   spruce: [97, 153, 97], birch: [128, 167, 85], redwood: [86, 128, 70], lily: [32, 128, 48], white: [255, 255, 255],
 };
@@ -97,6 +106,7 @@ class Mesher {
             case 8: this.fire(pi, id, meta, x, y, z); break;
             case 9: this.lily(pi, id, meta, x, y, z); break;
             case 10: this.vine(pi, id, meta, x, y, z); break;
+            case 11: this.circuit(pi, id, meta, x, y, z); break;
           }
         }
       }
@@ -437,6 +447,126 @@ class Mesher {
       const uv = [[0, 16], [16, 16], [16, 16 - Math.min(16, hb)], [0, 16 - Math.min(16, ha)]];
       this.quad(buf, p, uv, flow, light, tint, SHADE[f]);
       if (isWater) this.quad(buf, [p[3], p[2], p[1], p[0]], [uv[3], uv[2], uv[1], uv[0]], flow, light, tint, SHADE[f]);
+    }
+  }
+
+  // ------------------------------------------------------------ ember circuits
+  // a box given in a local frame; tf maps local pixel coords to block-relative pixels
+  lbox(xb, yb, zb, tf, b, layers, light, tint, uvs) {
+    const buf = this.out[1];
+    const [x0, y0, z0, x1, y1, z1] = b;
+    const F = [
+      [[x0, y0, z1], [x0, y0, z0], [x1, y0, z0], [x1, y0, z1]], [[x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]],
+      [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]],
+      [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]],
+    ];
+    const N = [[0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1], [-1, 0, 0], [1, 0, 0]];
+    const UV = [(v) => [v[0], v[2]], (v) => [v[0], v[2]], (v) => [16 - v[0], 16 - v[1]], (v) => [v[0], 16 - v[1]], (v) => [v[2], 16 - v[1]], (v) => [16 - v[2], 16 - v[1]]];
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, cz = (z0 + z1) / 2, c0 = tf([cx, cy, cz]);
+    for (let f = 0; f < 6; f++) {
+      const layer = Array.isArray(layers) ? layers[f] : layers;
+      if (layer < 0) continue;
+      const c1 = tf([cx + N[f][0], cy + N[f][1], cz + N[f][2]]);
+      const nx = c1[0] - c0[0], ny = c1[1] - c0[1], nz = c1[2] - c0[2];
+      const shade = Math.abs(ny) > 0.7 ? (ny > 0 ? 1 : 0.5) : (Math.abs(nz) >= Math.abs(nx) ? 0.8 : 0.6);
+      const pts = F[f].map((v) => { const q = tf(v); return [xb + Math.round(q[0]), yb + Math.round(q[1]), zb + Math.round(q[2])]; });
+      const uv = (uvs && uvs[f]) ? uvs[f] : F[f].map((v) => UV[f](v).map((t) => clamp(Math.round(t), 0, 31)));
+      this.quad2(buf, pts, uv, layer, light, tint, shade);
+    }
+  }
+  // local frame of something attached to a face: y points away from the face
+  attachFrame(a, axisX) {
+    switch (a) {
+      case 1: return (v) => [v[1], v[2], v[0]];
+      case 2: return (v) => [16 - v[1], v[2], 16 - v[0]];
+      case 3: return (v) => [16 - v[0], v[2], v[1]];
+      case 4: return (v) => [v[0], v[2], 16 - v[1]];
+      case 5: return axisX ? (v) => [v[2], 16 - v[1], v[0]] : (v) => [v[0], 16 - v[1], v[2]];
+      default: return axisX ? (v) => [v[2], v[1], v[0]] : (v) => v;
+    }
+  }
+  circuit(pi, id, meta, x, y, z) {
+    const xb = x * 16, zb = z * 16, yb = (this.sy * 16 + y) * 16;
+    const light = this.flatLight(pi, -1), atlas = this.atlas, W = FIXED_TINT.white;
+    if (id === B.EMBER_WIRE) { this.wire(pi, meta, xb, yb, zb, light); return; }
+    if (id === B.LEVER) {
+      const tf = this.attachFrame(meta & 7, (meta & 16) !== 0);
+      this.lbox(xb, yb, zb, tf, [5, 0, 4, 11, 3, 12], atlas.layer('cobblestone'), light, W);
+      // the handle leans one way when off and the other when on
+      const ang = (meta & 8) ? 0.7 : -0.7, ca = Math.cos(ang), sa = Math.sin(ang);
+      const rt = (v) => { const yy = v[1], zz = v[2] - 8; return tf([v[0], 2 + yy * ca - zz * sa, 8 + yy * sa + zz * ca]); };
+      const st = atlas.layer('lever_stick');
+      const side = [[7, 16], [9, 16], [9, 6], [7, 6]];
+      this.lbox(xb, yb, zb, rt, [7, 0, 7, 9, 10, 9], st, light, W, [[[7, 7], [9, 7], [9, 9], [7, 9]], [[7, 7], [9, 7], [9, 9], [7, 9]], side, side, side, side]);
+      return;
+    }
+    if (id === B.STONE_BUTTON || id === B.WOOD_BUTTON) {
+      const tf = this.attachFrame(meta & 7, false);
+      this.lbox(xb, yb, zb, tf, [5, 0, 6, 11, (meta & 8) ? 1 : 2, 10], atlas.face(id, meta, 1), light, W);
+      return;
+    }
+    if (id === B.PISTON || id === B.STICKY_PISTON || id === B.PISTON_HEAD) {
+      const f = meta & 7, tf = PISTON_TF[f], L = (n) => atlas.layer(n), side = L('piston_side');
+      if (id === B.PISTON_HEAD) {
+        const face = L((meta & 8) ? 'piston_top_sticky' : 'piston_top');
+        this.lbox(xb, yb, zb, tf, [0, 12, 0, 16, 16, 16], [L('piston_top'), face, side, side, side, side], light, W);
+        const rod = [[6, 4], [10, 4], [10, 16], [6, 16]];
+        this.lbox(xb, yb, zb, tf, [6, -4, 6, 10, 12, 10], [-1, -1, side, side, side, side], light, W, [null, null, rod, rod, rod, rod]);
+        return;
+      }
+      const ext = (meta & 8) !== 0;
+      const front = ext ? 'piston_inner' : (id === B.STICKY_PISTON ? 'piston_top_sticky' : 'piston_top');
+      const sv = ext ? [[0, 4], [16, 4], [16, 16], [0, 16]] : null;
+      this.lbox(xb, yb, zb, tf, [0, 0, 0, 16, ext ? 12 : 16, 16], [L('piston_bottom'), L(front), side, side, side, side], light, W, sv ? [null, null, sv, sv, sv, sv] : null);
+      return;
+    }
+    if (id === B.RELAY || id === B.RELAY_ON) {
+      const f = meta & 3, on = id === B.RELAY_ON;
+      const tf = [(v) => v, (v) => [16 - v[0], v[1], 16 - v[2]], (v) => [v[2], v[1], 16 - v[0]], (v) => [16 - v[2], v[1], v[0]]][f];
+      const top = atlas.layer(on ? 'relay_top_on' : 'relay_top'), sideL = atlas.layer('stone_slab_side'), bot = atlas.layer('stone_slab_top');
+      this.lbox(xb, yb, zb, tf, [0, 0, 0, 16, 2, 16], [bot, top, sideL, sideL, sideL, sideL], light, W);
+      const tl = atlas.layer(on ? 'ember_torch_on' : 'ember_torch_off');
+      const post = [[7, 13], [9, 13], [9, 8], [7, 8]], cap = [[7, 6], [9, 6], [9, 8], [7, 8]];
+      const delay = (meta >> 2) & 3;
+      for (const pz of [2, 6 + delay * 2]) this.lbox(xb, yb, zb, tf, [7, 2, pz, 9, 7, pz + 2], tl, light, W, [post, cap, post, post, post, post]);
+    }
+  }
+  wire(pi, meta, xb, yb, zb, light) {
+    const ids = this.ids, metas = this.metas, OPQ = BT.opaque, Wr = B.EMBER_WIRE;
+    const offs = [-PD, PD, -1, 1];
+    const upOpen = !OPQ[ids[pi + PD2]];
+    let c = 0, up = 0;
+    for (let k = 0; k < 4; k++) {
+      const q = pi + offs[k], n = ids[q];
+      if (WIRE_LINK[n]) c |= 1 << k;
+      else if (n === B.RELAY || n === B.RELAY_ON) { if ((metas[q] & 3) >> 1 === k >> 1) c |= 1 << k; }
+      else if (!OPQ[n] && ids[q - PD2] === Wr) c |= 1 << k;
+      else if (upOpen && OPQ[n] && ids[q + PD2] === Wr) { c |= 1 << k; up |= 1 << k; }
+    }
+    const f = (meta & 15) / 15;
+    const tint = [Math.round(255 * (0.33 + 0.67 * f)), Math.round(255 * (0.07 + 0.43 * f * f)), Math.round(255 * (0.02 + 0.13 * f * f * f))];
+    const buf = this.out[1], atlas = this.atlas;
+    const s4 = (light >> 4) * 4, b4 = (light & 15) * 4;
+    const V = (px, py, pz, u, v, layer, sh) => this.vert(buf, xb + px, yb + py, zb + pz, u, v, layer, s4, b4, tint, sh);
+    const quad = (pts, uvs, layer, sh) => { for (let k = 0; k < 4; k++) V(pts[k][0], pts[k][1], pts[k][2], uvs[k][0], uvs[k][1], layer, sh); for (let k = 3; k >= 0; k--) V(pts[k][0], pts[k][1], pts[k][2], uvs[k][0], uvs[k][1], layer, sh); };
+    const ns = c && !(c & 0b1100), ew = c && !(c & 0b0011);
+    if (ns || ew) {
+      // the line texture runs along v: along z for north-south wire, along x for east-west
+      const L = atlas.layer('ember_wire_line');
+      quad([[0, 0, 0], [0, 0, 16], [16, 0, 16], [16, 0, 0]], ns ? [[0, 0], [0, 16], [16, 16], [16, 0]] : [[0, 0], [16, 0], [16, 16], [0, 16]], L, 254);
+    } else {
+      const L = atlas.layer('ember_wire_cross');
+      const x0 = (c === 0 || c & 4) ? 0 : 5, x1 = (c === 0 || c & 8) ? 16 : 11, z0 = (c === 0 || c & 1) ? 0 : 5, z1 = (c === 0 || c & 2) ? 16 : 11;
+      quad([[x0, 0, z0], [x0, 0, z1], [x1, 0, z1], [x1, 0, z0]], [[x0, z0], [x0, z1], [x1, z1], [x1, z0]], L, 254);
+    }
+    // dust running up the side of a block to the wire above
+    if (up) {
+      const L = atlas.layer('ember_wire_line');
+      const uv = [[0, 16], [16, 16], [16, 0], [0, 0]];
+      if (up & 1) quad([[16, 0, 0], [0, 0, 0], [0, 16, 0], [16, 16, 0]], uv, L, 253);
+      if (up & 2) quad([[0, 0, 16], [16, 0, 16], [16, 16, 16], [0, 16, 16]], uv, L, 253);
+      if (up & 4) quad([[0, 0, 0], [0, 0, 16], [0, 16, 16], [0, 16, 0]], uv, L, 252);
+      if (up & 8) quad([[16, 0, 16], [16, 0, 0], [16, 16, 0], [16, 16, 16]], uv, L, 252);
     }
   }
 

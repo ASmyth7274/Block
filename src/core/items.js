@@ -130,7 +130,7 @@ defItem('door_wood', { name: 'Wooden Door', tex: 'item_door_wood', places: 'door
 defItem('door_iron', { name: 'Iron Door', tex: 'item_door_iron', places: 'door', block: 51 });
 defItem('bed', { name: 'Bed', tex: 'item_bed', maxStack: 1, places: 'bed', block: 22 });
 // ---- Blocklands originals ----
-defItem('ember_dust', { name: 'Ember Dust', fuel: 800 });
+defItem('ember_dust', { name: 'Ember Dust', fuel: 800, places: 'wire' });
 defItem('jade', { name: 'Jade' });
 defItem('cobalt_ingot', { name: 'Cobalt Ingot' });
 defItem('sulfur', { name: 'Sulfur' });
@@ -182,6 +182,7 @@ defItem('message_bottle', { name: 'Message in a Bottle', maxStack: 1, rare: true
 defItem('boat', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Boat', tex: (d) => 'boat_' + (WOOD[d] || 'oak'), maxStack: 1, variants: [0, 1, 2, 3, 4, 5] });
 defItem('sign', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Sign', tex: (d) => 'sign_' + (WOOD[d] || 'oak'), maxStack: 16, variants: [0, 1, 2, 3, 4, 5], fuel: 200, places: 'sign' });
 defItem('painting', { name: 'Painting' });
+defItem('relay', { name: 'Ember Relay', tex: 'item_relay', places: 'relay' });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -255,6 +256,10 @@ function pickBlockItem(id, meta) {
     case B.WATER: return [ITEM_IDS.water_bucket, 0];
     case B.LAVA: return [ITEM_IDS.lava_bucket, 0];
     case B.FIRE: return null;
+    case B.EMBER_WIRE: return [ITEM_IDS.ember_dust, 0];
+    case B.EMBER_TORCH_OFF: return [B.EMBER_TORCH, 0];
+    case B.EMBER_LAMP_ON: return [B.EMBER_LAMP, 0];
+    case B.RELAY: case B.RELAY_ON: return [ITEM_IDS.relay, 0];
     case B.SIGN: return [ITEM_IDS.sign, (meta >> 4) & 7];
     case B.WALL_SIGN: return [ITEM_IDS.sign, (meta >> 2) & 7];
   }

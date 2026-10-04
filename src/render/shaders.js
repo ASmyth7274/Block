@@ -11,10 +11,14 @@ uniform vec3 uOrigin;
 out vec3 vUV; out vec4 vCol; out vec2 vLight; out float vDist;
 void main() {
   vec3 p = (vec3(float(a.x & 511u), float((a.x >> 18) & 4095u), float((a.x >> 9) & 511u)) - 32.0) * 0.0625 + uOrigin;
+  // shade codes 252-254 mark decals (wire on the ground): nudged toward the camera so they never z-fight
+  uint shb = (a.z >> 24) & 255u;
+  float sh = float(shb) / 255.0;
+  if (shb >= 252u) { p *= 0.9985; sh = shb == 254u ? 1.0 : (shb == 253u ? 0.8 : 0.6); }
   gl_Position = uVP * vec4(p, 1.0);
   vUV = vec3(float(a.y & 31u) * 0.0625, float((a.y >> 5) & 31u) * 0.0625, float((a.y >> 10) & 1023u));
   vLight = vec2(float((a.y >> 20) & 63u), float((a.y >> 26) & 63u)) / 60.0;
-  vCol = vec4(float(a.z & 255u), float((a.z >> 8) & 255u), float((a.z >> 16) & 255u), float((a.z >> 24) & 255u)) / 255.0;
+  vCol = vec4(vec3(float(a.z & 255u), float((a.z >> 8) & 255u), float((a.z >> 16) & 255u)) / 255.0, sh);
   vDist = length(p.xz);
 }`,
   chunkFS: `#version 300 es

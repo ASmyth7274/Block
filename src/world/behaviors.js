@@ -62,6 +62,14 @@ const Behaviors = (() => {
         return isSolidTop(w, x, y - 1, z) && w.getBlock(x, y + 1, z) === id;
       case B.ROPE: { const a = w.getBlock(x, y + 1, z); return a === B.ROPE || BT.solid[a]; }
       case B.SIGN: return BT.solid[below];
+      case B.EMBER_TORCH: case B.EMBER_TORCH_OFF: return canStay(w, x, y, z, B.TORCH, meta);
+      case B.EMBER_WIRE: case B.RELAY: case B.RELAY_ON: return isSolidTop(w, x, y - 1, z);
+      case B.STONE_PLATE: case B.WOOD_PLATE: return isSolidTop(w, x, y - 1, z) || below === B.FENCE;
+      case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: {
+        const a = CIRCUIT_ATT[meta & 7] || CIRCUIT_ATT[0];
+        const n = w.getBlock(x + a[0], y + a[1], z + a[2]);
+        return (meta & 7) === 0 ? isSolidTop(w, x, y - 1, z) : BT.opaque[n];
+      }
       case B.WALL_SIGN: { const d = HFACE_DIR[meta & 3]; return BT.solid[w.getBlock(x - d[0], y, z - d[1])]; }
       case B.FIRE: return BT.solid[below] || neighbourFlammable(w, x, y, z);
       case B.VINE: return true;
@@ -85,7 +93,14 @@ const Behaviors = (() => {
         return pf | (up ? 4 : 0) | ((dmg & 31) << 3);
       }
       case B.SLAB: { const top = f === 0 || (f >= 2 && ctx.hitY > 0.5); return (dmg & 31) | (top ? 32 : 0); }
-      case B.TORCH: {
+      case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: {
+        const want = [5, 0, 4, 3, 2, 1][f];
+        const axis = (id === B.LEVER && (want === 0 || want === 5) && pf >= 2) ? 16 : 0;
+        if (canStay(w, x, y, z, id, want)) return want | axis;
+        for (const mm of [0, 1, 2, 3, 4, 5]) if (canStay(w, x, y, z, id, mm)) return mm;
+        return -1;
+      }
+      case B.TORCH: case B.EMBER_TORCH: {
         const m = [-1, 0, 4, 3, 2, 1][f];
         if (m < 0) return -1;
         if (!canStay(w, x, y, z, id, m)) {
@@ -101,6 +116,11 @@ const Behaviors = (() => {
         return m;
       }
       case B.FURNACE: case B.CHEST: case B.PUMPKIN: case B.JACK_O_LANTERN: return HFACE_OPP[pf];
+      case B.PISTON: case B.STICKY_PISTON: {
+        if (p.pitch < -0.85) return 1;
+        if (p.pitch > 0.85) return 0;
+        return HFACE[HFACE_OPP[pf]];
+      }
       case B.FENCE_GATE: return pf;
       case B.TRAPDOOR: {
         if (f >= 2) return [0, 0, 0, 1, 2, 3][f] | (ctx.hitY > 0.5 ? 8 : 0);
@@ -223,6 +243,18 @@ const Behaviors = (() => {
       if (!isSolidTop(w, x, y - 1, z) || !isSolidTop(w, hx, y - 1, hz)) return false;
       w.setBlock(x, y, z, B.BED, f, 4); w.setBlock(hx, y, hz, B.BED, f | 4, 4);
       game.audio.playBlock('wood', 'place', x + 0.5, y + 0.5, z + 0.5);
+      if (!player.creative) player.inventory.decrementHeld(1);
+      return true;
+    }
+    if (def.places === 'wire' || def.places === 'relay') {
+      let x = tx, y = ty, z = tz;
+      if (BT.replaceable[target] && !BT.fluid[target]) { x = hit.x; y = hit.y; z = hit.z; }
+      const cur = w.getBlock(x, y, z);
+      if (!BT.replaceable[cur] || BT.fluid[cur] || cur === B.EMBER_WIRE) return false;
+      const bid = def.places === 'wire' ? B.EMBER_WIRE : B.RELAY;
+      if (!canStay(w, x, y, z, bid, 0)) return false;
+      w.setBlock(x, y, z, bid, bid === B.RELAY ? playerFacing(player) : 0);
+      game.audio.playBlock(bid === B.RELAY ? 'wood' : 'stone', 'place', x + 0.5, y + 0.5, z + 0.5);
       if (!player.creative) player.inventory.decrementHeld(1);
       return true;
     }
@@ -363,6 +395,8 @@ const Behaviors = (() => {
         return false;
       }
       case B.RUNESTONE: game.useRunestone(x, y, z); return true;
+      case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: case B.RELAY: case B.RELAY_ON: case B.NOTE_BLOCK:
+        return Circuits.use(game, x, y, z, id);
       case B.BRAMBLE: {
         if (m >= 3) { w.setMeta(x, y, z, 0); dropStack(game, x + 0.5, y + 0.5, z + 0.5, new ItemStack(I.berries, 2 + Math.floor(Math.random() * 2), 0)); game.audio.playBlock('grass', 'break', x + 0.5, y + 0.5, z + 0.5); return true; }
         return false;
@@ -417,6 +451,17 @@ const Behaviors = (() => {
       if (BT.solid[w.getBlock(x, y - 1, z)] || BT.fluid[w.getBlock(x, y - 1, z)]) { w.setBlock(x, y, z, B.WATER, 0); w.scheduleTick(x, y, z, 5); }
     }
     if (id === B.LOG || id === B.LEAVES) markLeavesForDecay(w, x, y, z, id === B.LOG ? 4 : 1);
+    if ((id === B.PISTON || id === B.STICKY_PISTON) && (meta & 8)) {
+      const d = FACE_DIR[meta & 7];
+      if (w.getBlock(x + d[0], y + d[1], z + d[2]) === B.PISTON_HEAD) w.setBlock(x + d[0], y + d[1], z + d[2], 0, 0);
+    }
+    if (id === B.PISTON_HEAD) {
+      const d = FACE_DIR[meta & 7], bx = x - d[0], by = y - d[1], bz = z - d[2], b = w.getBlock(bx, by, bz);
+      if (b === B.PISTON || b === B.STICKY_PISTON) {
+        w.setBlock(bx, by, bz, 0, 0);
+        if (!game.player.creative) dropBlock(game, bx, by, bz, b, 0, null);
+      }
+    }
     if (id === B.EMBER_ORE_LIT || id === B.EMBER_ORE) { /* nothing */ }
   }
   function markLeavesForDecay(w, x, y, z, r) {
@@ -439,6 +484,7 @@ const Behaviors = (() => {
     }
     if (BLOCKS[id].gravity) w.scheduleTick(x, y, z, 2);
     if (id === B.WATER || id === B.LAVA) { if (!mixLiquids(w, x, y, z, id, meta)) w.scheduleTick(x, y, z, tickRate(id)); }
+    if (typeof Circuits !== 'undefined' && Circuits.IS[id] && !w.menu) Circuits.changed(w, x, y, z);
     if (id === B.FARMLAND && BT.solid[w.getBlock(x, y + 1, z)] && BT.opaque[w.getBlock(x, y + 1, z)]) w.setBlock(x, y, z, B.DIRT, 0);
   }
 
@@ -451,6 +497,7 @@ const Behaviors = (() => {
     if (BLOCKS[id].gravity) { fallCheck(w, x, y, z, id, m); return; }
     if (id === B.WATER || id === B.LAVA) { flow(w, x, y, z, id, m); return; }
     if (id === B.FIRE) { fireTick(w, x, y, z, m); return; }
+    if (BLOCKS[id].circuitTick) BLOCKS[id].circuitTick(w, x, y, z, m);
   }
   function fallCheck(w, x, y, z, id, m) {
     const below = w.getBlock(x, y - 1, z);
