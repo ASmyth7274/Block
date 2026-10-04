@@ -17,6 +17,7 @@ class Player extends Living {
     this.air = 300;
     this.xpLevel = 0; this.xp = 0; this.xpTotal = 0; this.score = 0;
     this.spawnPoint = null;
+    this.portalTime = 0; this.portalLock = false;
     this.distWalked = 0; this.pdistWalked = 0; this.bob = 0; this.pbob = 0; this.bobPitch = 0; this.pbobPitch = 0;
     this.stepDist = 0; this.nextStep = 1;
     this.sprintTap = 0; this.jumpTap = 0; this.prevForwardKey = false; this.prevJumpKey = false;
@@ -143,7 +144,7 @@ class Player extends Living {
       const a = this.world.getBlock(Math.floor(ax), by, Math.floor(az));
       const top = this.world.getBlock(Math.floor(ax), by + 1, Math.floor(az));
       const head = this.world.getBlock(Math.floor(this.x), by + 2, Math.floor(this.z));
-      if (BT.solid[a] && !BT.solid[top] && !BT.solid[head] && this.jumpTicks === 0 && a !== B.FENCE && a !== B.FENCE_GATE) {
+      if (BT.solid[a] && !BT.solid[top] && !BT.solid[head] && this.jumpTicks === 0 && a !== B.FENCE && a !== B.FENCE_GATE && a !== B.BRIMSTONE_FENCE) {
         const coll = []; blockCollisionBoxes(this.world, Math.floor(ax), by, Math.floor(az), a, this.world.getMeta(Math.floor(ax), by, Math.floor(az)), coll);
         const h = coll.reduce((m, b) => Math.max(m, b.y1), 0) - this.y;
         if (h > 0.6 && h <= 1.05) this.jumping = true;
@@ -324,7 +325,7 @@ class Player extends Living {
       exhaustion: this.exhaustion, air: this.air, xpLevel: this.xpLevel, xp: this.xp, xpTotal: this.xpTotal, score: this.score,
       gameMode: this.gameMode, flying: this.flying, inventory: this.inventory.toJSON(), spawnPoint: this.spawnPoint, fire: this.fire,
       fallDistance: this.fallDistance, stats: this.stats, discovered: this.discovered, achievements: this.achievements, effects: this.effects,
-      enchantSeed: this.enchantSeed,
+      enchantSeed: this.enchantSeed, dim: (this.world && this.world.dim) || 0,
     };
   }
   load(d) {

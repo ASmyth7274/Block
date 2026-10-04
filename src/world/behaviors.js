@@ -10,7 +10,7 @@ const Behaviors = (() => {
     if (BT.opaque[id]) return true;
     if (id === B.SLAB) return (w.getMeta(x, y, z) & 32) !== 0;
     if (id === B.STAIRS) return (w.getMeta(x, y, z) & 4) !== 0;
-    return id === B.FENCE || id === B.GLASS || id === B.STAINED_GLASS || id === B.FARMLAND || id === B.ICE || id === B.PACKED_ICE || id === B.LEAVES || id === B.GLASS_PANE || id === B.HAY_BALE;
+    return id === B.FENCE || id === B.BRIMSTONE_FENCE || id === B.GLASS || id === B.STAINED_GLASS || id === B.FARMLAND || id === B.ICE || id === B.PACKED_ICE || id === B.LEAVES || id === B.GLASS_PANE || id === B.HAY_BALE;
   };
   const playerFacing = (p) => {
     // horizontal facing index (0 N, 1 S, 2 W, 3 E) the player looks toward
@@ -46,6 +46,7 @@ const Behaviors = (() => {
         return false;
       }
       case B.WHEAT: case B.CARROTS: case B.POTATOES: return below === B.FARMLAND;
+      case B.BLOODCAP: return below === B.BONESAND;
       case B.LILY_PAD: return below === B.WATER || below === B.ICE;
       case B.TORCH: {
         if (meta === 0) return isSolidTop(w, x, y - 1, z);
@@ -65,7 +66,7 @@ const Behaviors = (() => {
       case B.EMBER_TORCH: case B.EMBER_TORCH_OFF: return canStay(w, x, y, z, B.TORCH, meta);
       case B.EMBER_WIRE: case B.RELAY: case B.RELAY_ON: return isSolidTop(w, x, y - 1, z);
       case B.RAIL: case B.BOOSTER_RAIL: case B.DETECTOR_RAIL: return Rails.canStay(w, x, y, z, id, meta);
-      case B.STONE_PLATE: case B.WOOD_PLATE: return isSolidTop(w, x, y - 1, z) || below === B.FENCE;
+      case B.STONE_PLATE: case B.WOOD_PLATE: return isSolidTop(w, x, y - 1, z) || below === B.FENCE || below === B.BRIMSTONE_FENCE;
       case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: {
         const a = CIRCUIT_ATT[meta & 7] || CIRCUIT_ATT[0];
         const n = w.getBlock(x + a[0], y + a[1], z + a[2]);
@@ -89,6 +90,8 @@ const Behaviors = (() => {
     const pf = playerFacing(p);
     switch (id) {
       case B.LOG: case B.HAY_BALE: { const axis = f <= 1 ? 0 : (f >= 4 ? 1 : 2); return (dmg & 7) | (axis << 3); }
+      case B.BONE_BLOCK: return (f <= 1 ? 0 : (f >= 4 ? 1 : 2)) << 2;
+      case B.QUARTZ_BLOCK: return (dmg & 3) === 2 ? 2 | ((f <= 1 ? 0 : (f >= 4 ? 1 : 2)) << 2) : (dmg & 3);
       case B.STAIRS: {
         const up = f === 0 || (f >= 2 && ctx.hitY > 0.5);
         return pf | (up ? 4 : 0) | ((dmg & 31) << 3);
@@ -191,7 +194,7 @@ const Behaviors = (() => {
   function finishPlace(game, player, stack, x, y, z, id, meta) {
     const w = game.world;
     w.setBlock(x, y, z, id, meta);
-    if (id === B.WATER || id === B.LAVA) w.scheduleTick(x, y, z, tickRate(id));
+    if (id === B.WATER || id === B.LAVA) w.scheduleTick(x, y, z, tickRate(id, w));
     if (Rails.isRail(id)) Rails.placed(w, x, y, z);
     const d = BLOCKS[id];
     game.audio.playBlock(d.sound, 'place', x + 0.5, y + 0.5, z + 0.5);
@@ -294,11 +297,29 @@ const Behaviors = (() => {
       const cur = w.getBlock(x, y, z);
       if (!BT.replaceable[cur] && cur !== B.WATER && cur !== B.LAVA) return false;
       const fid = stack.id === I.water_bucket ? B.WATER : B.LAVA;
+      if (fid === B.WATER && w.dim === 1) {
+        game.audio.play('fizz', 0.5, 2.6 + (Math.random() - Math.random()) * 0.8, x + 0.5, y + 0.5, z + 0.5);
+        for (let i = 0; i < 8; i++) game.particles.smoke(x + Math.random(), y + Math.random(), z + Math.random(), 1, true);
+        if (!player.creative) player.inventory.setHeld(new ItemStack(I.bucket, 1, 0));
+        return true;
+      }
       if (cur !== 0 && cur !== fid && !BT.fluid[cur]) dropBlock(game, x, y, z, cur, w.getMeta(x, y, z));
       w.setBlock(x, y, z, fid, 0);
-      w.scheduleTick(x, y, z, tickRate(fid));
+      w.scheduleTick(x, y, z, tickRate(fid, w));
       game.audio.play(fid === B.WATER ? 'bucket_empty' : 'bucket_empty_lava', 0.8);
       if (!player.creative) player.inventory.setHeld(new ItemStack(I.bucket, 1, 0));
+      return true;
+    }
+    if (stack.id === I.fire_charge) {
+      // a fire charge lights whatever it lands on, once
+      if (target === B.TNT) { w.setBlock(hit.x, hit.y, hit.z, 0); game.spawnEntity(new TNTEntity(w, hit.x + 0.5, hit.y, hit.z + 0.5, 80)); }
+      else {
+        if (w.getBlock(tx, ty, tz) !== 0) return false;
+        w.setBlock(tx, ty, tz, B.FIRE, 0);
+        if (!Portals.tryLight(w, tx, ty, tz)) w.scheduleTick(tx, ty, tz, 30 + Math.floor(Math.random() * 10));
+      }
+      game.audio.play('fire_charge', 0.8, 0.9 + Math.random() * 0.2);
+      if (!player.creative) player.inventory.decrementHeld(1);
       return true;
     }
     if (stack.id === I.flint_and_steel) {
@@ -306,7 +327,7 @@ const Behaviors = (() => {
       else {
         if (w.getBlock(tx, ty, tz) !== 0) return false;
         w.setBlock(tx, ty, tz, B.FIRE, 0);
-        w.scheduleTick(tx, ty, tz, 30 + Math.floor(Math.random() * 10));
+        if (!Portals.tryLight(w, tx, ty, tz)) w.scheduleTick(tx, ty, tz, 30 + Math.floor(Math.random() * 10));
       }
       game.audio.play('ignite', 0.8, 0.9 + Math.random() * 0.2);
       if (!player.creative) player.inventory.damageHeld(player, 1);
@@ -461,7 +482,7 @@ const Behaviors = (() => {
       if (w.getBlock(ox, y, oz) === B.BED) w.setBlock(ox, y, oz, 0, 0, 4);
     }
     // ice melts into water when broken above something
-    if (id === B.ICE && !game.player.creative) {
+    if (id === B.ICE && !game.player.creative && w.dim !== 1) {
       if (BT.solid[w.getBlock(x, y - 1, z)] || BT.fluid[w.getBlock(x, y - 1, z)]) { w.setBlock(x, y, z, B.WATER, 0); w.scheduleTick(x, y, z, 5); }
     }
     if (id === B.LOG || id === B.LEAVES) markLeavesForDecay(w, x, y, z, id === B.LOG ? 4 : 1);
@@ -490,6 +511,7 @@ const Behaviors = (() => {
   }
   function neighborChanged(w, x, y, z, id, meta) {
     const game = w.game;
+    if (id === B.PORTAL) { if (!Portals.intact(w, x, y, z, meta)) w.setBlock(x, y, z, 0); return; }
     if (!canStay(w, x, y, z, id, meta)) {
       if (id === B.FIRE) { w.setBlock(x, y, z, 0); return; }
       w.setBlock(x, y, z, 0);
@@ -497,14 +519,15 @@ const Behaviors = (() => {
       return;
     }
     if (BLOCKS[id].gravity) w.scheduleTick(x, y, z, 2);
-    if (id === B.WATER || id === B.LAVA) { if (!mixLiquids(w, x, y, z, id, meta)) w.scheduleTick(x, y, z, tickRate(id)); }
+    if (id === B.WATER || id === B.LAVA) { if (!mixLiquids(w, x, y, z, id, meta)) w.scheduleTick(x, y, z, tickRate(id, w)); }
     if (typeof Circuits !== 'undefined' && Circuits.IS[id] && !w.menu) Circuits.changed(w, x, y, z);
     if (id === B.RAIL && !w.menu) Rails.neighbourChanged(w, x, y, z, id);
     if (id === B.FARMLAND && BT.solid[w.getBlock(x, y + 1, z)] && BT.opaque[w.getBlock(x, y + 1, z)]) w.setBlock(x, y, z, B.DIRT, 0);
   }
 
   // ---------------------------------------------------------------- scheduled ticks
-  function tickRate(id) { return id === B.LAVA ? 30 : 5; }
+  // lava runs quicker (and further) in the heat of the Underworld
+  function tickRate(id, w) { return id === B.LAVA ? (w && w.dim === 1 ? 10 : 30) : 5; }
   function scheduledTick(w, x, y, z, id) {
     const cur = w.getBlock(x, y, z);
     if (cur !== id) return;
@@ -531,7 +554,7 @@ const Behaviors = (() => {
   }
   function blocksFlow(w, x, y, z) {
     const id = w.getBlock(x, y, z);
-    if (id === B.DOOR_WOOD || id === B.DOOR_IRON || id === B.LADDER || id === B.SUGAR_CANE) return true;
+    if (id === B.DOOR_WOOD || id === B.DOOR_IRON || id === B.LADDER || id === B.SUGAR_CANE || id === B.PORTAL) return true;
     if (id === 0) return false;
     if (BT.fluid[id]) return false;
     return BT.solid[id] || id === B.CACTUS;
@@ -557,7 +580,7 @@ const Behaviors = (() => {
     return false;
   }
   function flow(w, x, y, z, id, m) {
-    const decay = id === B.LAVA ? 2 : 1;
+    const decay = id === B.LAVA && w.dim !== 1 ? 2 : 1;
     let level = m;
     if (mixLiquids(w, x, y, z, id, m)) return;
     if (level > 0) {
@@ -577,12 +600,12 @@ const Behaviors = (() => {
         const below = w.getBlock(x, y - 1, z);
         if (BT.solid[below] || (below === id && w.getMeta(x, y - 1, z) === 0)) nl = 0;
       }
-      if (id === B.LAVA && level < 8 && nl < 8 && nl > level && w.rng.nextInt(4) !== 0) { nl = level; }
+      if (id === B.LAVA && w.dim !== 1 && level < 8 && nl < 8 && nl > level && w.rng.nextInt(4) !== 0) { nl = level; }
       if (nl !== level) {
         level = nl;
         if (nl < 0) { w.setBlock(x, y, z, 0, 0); return; }
         w.setBlock(x, y, z, id, nl);
-        w.scheduleTick(x, y, z, tickRate(id));
+        w.scheduleTick(x, y, z, tickRate(id, w));
       }
     }
     // flow down
@@ -592,7 +615,7 @@ const Behaviors = (() => {
       if (below === B.LAVA && id === B.WATER) { w.setBlock(x, y - 1, z, w.getMeta(x, y - 1, z) === 0 ? B.OBSIDIAN : B.COBBLESTONE, 0); return; }
       destroyForFluid(w, x, y - 1, z);
       w.setBlock(x, y - 1, z, id, level >= 8 ? level : level + 8);
-      w.scheduleTick(x, y - 1, z, tickRate(id));
+      w.scheduleTick(x, y - 1, z, tickRate(id, w));
     } else if (level >= 0 && (level === 0 || blocksFlow(w, x, y - 1, z) || (w.getBlock(x, y - 1, z) === id && w.getMeta(x, y - 1, z) === 0))) {
       let nl = level + decay;
       if (level >= 8) nl = 1;
@@ -613,7 +636,7 @@ const Behaviors = (() => {
     if (t === id) { if (w.getMeta(x, y, z) <= nl) return; }
     destroyForFluid(w, x, y, z);
     w.setBlock(x, y, z, id, nl);
-    w.scheduleTick(x, y, z, tickRate(id));
+    w.scheduleTick(x, y, z, tickRate(id, w));
   }
   function flowDirections(w, x, y, z, id) {
     const cost = [1000, 1000, 1000, 1000];
@@ -641,7 +664,7 @@ const Behaviors = (() => {
   function fireTick(w, x, y, z, m) {
     if (!w.gameRules.doFireTick) return;
     const below = w.getBlock(x, y - 1, z);
-    const eternal = below === B.ASH || below === B.SCORCHED_STONE || below === B.SULFUR_ORE;
+    const eternal = below === B.ASH || below === B.SCORCHED_STONE || below === B.SULFUR_ORE || below === B.BRIMSTONE;
     if (!canStay(w, x, y, z, B.FIRE, m)) { w.setBlock(x, y, z, 0); return; }
     if (!eternal && w.isRainingAt(x, y, z) && w.rng.nextFloat() < 0.4) { w.setBlock(x, y, z, 0); return; }
     if (m < 15) w.setMeta(x, y, z, Math.min(15, m + 1 + (w.rng.nextInt(3) === 0 ? 1 : 0)), 4);
@@ -697,6 +720,7 @@ const Behaviors = (() => {
         if (w.rng.nextInt(chance) === 0) w.setMeta(x, y, z, m + 1, 4);
         return;
       }
+      case B.BLOODCAP: if (m < 3 && w.rng.nextInt(10) === 0) w.setMeta(x, y, z, m + 1, 4); return;
       case B.FARMLAND: {
         let water = false;
         for (let dx = -4; dx <= 4 && !water; dx++) for (let dz = -4; dz <= 4 && !water; dz++) for (let dy = 0; dy <= 1; dy++) if (w.getBlock(x + dx, y + dy, z + dz) === B.WATER) { water = true; break; }
@@ -722,7 +746,7 @@ const Behaviors = (() => {
         } else w.setMeta(x, y, z, m & ~16, 4);
         return;
       }
-      case B.ICE: if (w.getBlockLight(x, y, z) > 11 - BT.opacity[id]) { w.setBlock(x, y, z, B.WATER, 0); w.scheduleTick(x, y, z, 5); } return;
+      case B.ICE: if (w.dim === 1) { w.setBlock(x, y, z, 0); return; } if (w.getBlockLight(x, y, z) > 11 - BT.opacity[id]) { w.setBlock(x, y, z, B.WATER, 0); w.scheduleTick(x, y, z, 5); } return;
       case B.SNOW_LAYER: if (w.getBlockLight(x, y, z) > 11) w.setBlock(x, y, z, 0); return;
       case B.EMBER_ORE_LIT: w.setBlock(x, y, z, B.EMBER_ORE, 0); return;
       case B.BRAMBLE: if (m < 3 && w.getLightLevel(x, y + 1, z) >= 9 && w.rng.nextInt(5) === 0) w.setMeta(x, y, z, m + 1, 4); return;
@@ -916,7 +940,7 @@ function raycastBlocks(world, ox, oy, oz, dx, dy, dz, maxDist, opts) {
             if (def.select && !sb) { /* not selectable (fire) */ }
             else {
               if (!sb && def.collide) { const cb = []; blockCollisionBoxes(world, x, y, z, id, meta, cb); if (cb.length) { let a = cb[0].copy(); for (const c of cb) { a.x0 = Math.min(a.x0, c.x0); a.y0 = Math.min(a.y0, c.y0); a.z0 = Math.min(a.z0, c.z0); a.x1 = Math.max(a.x1, c.x1); a.y1 = Math.min(Math.max(a.y1, c.y1), y + 1); a.z1 = Math.max(a.z1, c.z1); } boxes.push(a); } }
-              else if (!sb && (id === B.FENCE || id === B.GLASS_PANE)) { const cb = []; blockCollisionBoxes(world, x, y, z, id, meta, cb); for (const c of cb) { c.y1 = Math.min(c.y1, y + 1); boxes.push(c); } }
+              else if (!sb && (id === B.FENCE || id === B.BRIMSTONE_FENCE || id === B.GLASS_PANE)) { const cb = []; blockCollisionBoxes(world, x, y, z, id, meta, cb); for (const c of cb) { c.y1 = Math.min(c.y1, y + 1); boxes.push(c); } }
               else boxes.push(sb ? new AABB(x + sb[0], y + sb[1], z + sb[2], x + sb[3], y + sb[4], z + sb[5]) : new AABB(x, y, z, x + 1, y + 1, z + 1));
             }
           }

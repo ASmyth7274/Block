@@ -33,8 +33,9 @@ class AABB {
 function blockCollisionBoxes(world, x, y, z, id, meta, out) {
   const d = BLOCKS[id];
   if (!d || !d.solid) return;
-  if (id === B.FENCE) {
-    const conn = (nx, nz) => { const n = world.getBlock(nx, y, nz); return n === B.FENCE || n === B.FENCE_GATE || BT.opaque[n]; };
+  if (id === B.FENCE || id === B.BRIMSTONE_FENCE) {
+    const conn = id === B.FENCE ? (nx, nz) => { const n = world.getBlock(nx, y, nz); return n === B.FENCE || n === B.FENCE_GATE || BT.opaque[n]; }
+      : (nx, nz) => { const n = world.getBlock(nx, y, nz); return n === B.BRIMSTONE_FENCE || BT.opaque[n]; };
     let x0 = 0.375, x1 = 0.625, z0 = 0.375, z1 = 0.625;
     if (conn(x - 1, z)) x0 = 0; if (conn(x + 1, z)) x1 = 1; if (conn(x, z - 1)) z0 = 0; if (conn(x, z + 1)) z1 = 1;
     out.push(new AABB(x + x0, y, z + 0.375, x + x1, y + 1.5, z + 0.625));
@@ -96,7 +97,7 @@ class Entity {
     this.age = 0;
     this.removed = false;
     this.fire = 0;
-    this.inWeb = false; this.inQuicksand = false;
+    this.inWeb = false; this.inQuicksand = false; this.onBoneSand = false;
     this.persistent = false;
     this.box = new AABB(0, 0, 0, 0, 0, 0);
   }
@@ -142,6 +143,7 @@ class Entity {
     this.inLava = lava;
     this.inWeb = web;
     this.inQuicksand = quick;
+    this.onBoneSand = w.getBlock(Math.floor(this.x), Math.floor(this.y + 0.01), Math.floor(this.z)) === B.BONESAND;
     const ey = this.y + this.eye;
     const hid = w.getBlock(Math.floor(this.x), Math.floor(ey), Math.floor(this.z));
     if (hid === B.WATER) {
@@ -156,6 +158,7 @@ class Entity {
     if (this.noClip) { this.x += dx; this.y += dy; this.z += dz; this.updateBox(); return; }
     if (this.inWeb) { dx *= 0.25; dy *= 0.05; dz *= 0.25; this.vx = 0; this.vy = 0; this.vz = 0; }
     if (this.inQuicksand) { dx *= 0.35; dz *= 0.35; if (dy > 0) dy *= 0.3; else dy *= 0.12; this.vy = Math.min(this.vy, 0); this.fallDistance = 0; }
+    if (this.onBoneSand && this.onGround) { dx *= 0.4; dz *= 0.4; }
     const ox = dx, oy = dy, oz = dz;
     const w = this.world;
     this.updateBox();

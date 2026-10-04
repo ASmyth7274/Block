@@ -185,6 +185,16 @@ defItem('painting', { name: 'Painting' });
 defItem('relay', { name: 'Ember Relay', tex: 'item_relay', places: 'relay' });
 defItem('minecart', { name: 'Minecart', maxStack: 1 });
 defItem('chest_minecart', { name: 'Minecart with Chest', maxStack: 1 });
+// ---- the Underworld ----
+defItem('sunstone_dust', { name: 'Sunstone Dust' });
+defItem('smoky_quartz', { name: 'Smoky Quartz' });
+defItem('brimstone_brick', { name: 'Brimstone Brick' });
+defItem('wailer_tear', { name: 'Wailer Tear', rare: true });
+defItem('flare_rod', { name: 'Flare Rod', handheld: true, fuel: 2400 });
+defItem('flare_powder', { name: 'Flare Powder' });
+defItem('magma_cream', { name: 'Magma Cream' });
+defItem('bloodcap', { name: 'Bloodcap', tex: 'item_bloodcap', plant: { block: 144, on: [138] } });
+defItem('fire_charge', { name: 'Fire Charge' });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -245,6 +255,8 @@ function blockItemDamage(id, meta) {
 function pickBlockItem(id, meta) {
   switch (id) {
     case B.WHEAT: return [ITEM_IDS.seeds, 0];
+    case B.BLOODCAP: return [ITEM_IDS.bloodcap, 0];
+    case B.PORTAL: return null;
     case B.CARROTS: return [ITEM_IDS.carrot, 0];
     case B.POTATOES: return [ITEM_IDS.potato, 0];
     case B.SUGAR_CANE: return [ITEM_IDS.sugar_cane, 0];

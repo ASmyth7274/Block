@@ -49,6 +49,8 @@ const SLAB_MATS = [
   { key: 'basalt', name: 'Polished Basalt', tex: 'polished_basalt_side', top: 'polished_basalt_top', tool: 'pickaxe', hard: 2, sound: 'stone' },
   { key: 'mossy_cobblestone', name: 'Mossy Cobblestone', tex: 'mossy_cobblestone', tool: 'pickaxe', hard: 2, sound: 'stone' },
   { key: 'thatch', name: 'Thatch', tex: 'thatch', tool: 'hoe', hard: 0.5, sound: 'grass', flam: true },
+  { key: 'brimstone_brick', name: 'Brimstone Brick', tex: 'brimstone_bricks', tool: 'pickaxe', hard: 2, sound: 'stone' },
+  { key: 'smoky_quartz', name: 'Smoky Quartz', tex: 'quartz_side', top: 'quartz_top', tool: 'pickaxe', hard: 0.8, sound: 'stone' },
 ];
 
 // Block storage
@@ -637,6 +639,46 @@ defBlock(133, 'rail', Object.assign({}, railBase, { name: 'Rail', tex: (m) => (m
 defBlock(134, 'booster_rail', Object.assign({}, railBase, { name: 'Booster Rail', tex: (m) => (m & 8) ? 'booster_rail_on' : 'booster_rail', itemSprite: 'booster_rail', select: (m) => railSelect(m & 7), drops: () => [[B.BOOSTER_RAIL, 1, 0]] }));
 defBlock(135, 'detector_rail', Object.assign({}, railBase, { name: 'Detector Rail', tex: (m) => (m & 8) ? 'detector_rail_on' : 'detector_rail', itemSprite: 'detector_rail', select: (m) => railSelect(m & 7), drops: () => [[B.DETECTOR_RAIL, 1, 0]] }));
 defBlock(127, 'note_block', { name: 'Note Block', tex: 'note_block', hardness: 0.8, tool: 'axe', sound: 'wood', flammable: 5, burnSpeed: 5, drops: () => [[B.NOTE_BLOCK, 1, 0]] });
+
+// --- the Underworld ---------------------------------------------------------
+// portal sheet: meta 0 spans x (thin along z), 1 spans z (thin along x)
+function portalBox(m) { return (m & 1) ? [6, 0, 0, 10, 16, 16] : [0, 0, 6, 16, 16, 10]; }
+defBlock(136, 'portal', {
+  name: 'Underworld Portal', render: R.MODEL, tex: 'portal', opaque: false, solid: false, translucent: true, opacity: 0, light: 11,
+  hardness: -1, resistance: 0, sound: 'glass', itemMetaMask: 0, drops: () => [], select: () => null,
+  model: (m) => [{ b: portalBox(m) }],
+});
+defBlock(137, 'brimstone', { name: 'Brimstone', hardness: 0.4, resistance: 2, tool: 'pickaxe', needsTool: true });
+// sinks you in a little and drags at your feet
+defBlock(138, 'bonesand', { name: 'Bone Sand', hardness: 0.5, tool: 'shovel', sound: 'sand', collide: () => [box16(0, 0, 0, 16, 14, 16)] });
+defBlock(139, 'sunstone', { name: 'Sunstone', light: 15, hardness: 0.3, sound: 'glass', drops: (m, rng) => [[ITEM_IDS.sunstone_dust, 2 + rng.nextInt(3), 0]] });
+defBlock(140, 'quartz_ore', { name: 'Smoky Quartz Ore', hardness: 3, resistance: 15, tool: 'pickaxe', needsTool: true, drops: () => [[ITEM_IDS.smoky_quartz, 1, 0]], xp: [2, 5] });
+// 0 plain, 1 chiseled, 2 pillar (axis in bits 2-3, like logs)
+defBlock(141, 'quartz_block', {
+  name: (m) => ['Block of Smoky Quartz', 'Chiseled Smoky Quartz', 'Smoky Quartz Pillar', 'Block of Smoky Quartz'][m & 3],
+  tex: (m, f) => {
+    const k = m & 3;
+    if (k === 1) return f <= 1 ? 'quartz_chiseled_top' : 'quartz_chiseled';
+    if (k === 2) { const axis = (m >> 2) & 3; const end = axis === 0 ? f <= 1 : axis === 1 ? f >= 4 : (f === 2 || f === 3); return end ? 'quartz_pillar_top' : 'quartz_pillar'; }
+    return f <= 1 ? 'quartz_top' : 'quartz_side';
+  },
+  hardness: 0.8, tool: 'pickaxe', needsTool: true, variants: [0, 1, 2], itemMetaMask: 3,
+});
+defBlock(142, 'brimstone_bricks', { name: 'Brimstone Bricks', hardness: 2, resistance: 30, tool: 'pickaxe', needsTool: true });
+defBlock(143, 'brimstone_fence', {
+  name: 'Brimstone Brick Fence', tex: 'brimstone_bricks', render: R.MODEL, opaque: false, opacity: 0,
+  hardness: 2, resistance: 30, tool: 'pickaxe', needsTool: true, itemMetaMask: 0,
+});
+defBlock(144, 'bloodcap', Object.assign({}, plantBase, {
+  name: 'Bloodcap', render: R.CROP, tex: (m) => 'bloodcap_' + Math.min(3, m), itemSprite: 'item_bloodcap',
+  select: (m) => [0, 0, 0, 1, 0.25 + Math.min(3, m) * 0.125, 1],
+  drops: (m, rng) => m >= 3 ? [[ITEM_IDS.bloodcap, 2 + rng.nextInt(3), 0]] : [[ITEM_IDS.bloodcap, 1, 0]],
+}));
+defBlock(145, 'bone_block', {
+  name: 'Bone Block',
+  tex: (m, f) => { const axis = (m >> 2) & 3; const end = axis === 0 ? f <= 1 : axis === 1 ? f >= 4 : (f === 2 || f === 3); return end ? 'bone_block_top' : 'bone_block_side'; },
+  hardness: 2, tool: 'pickaxe', needsTool: true, itemMetaMask: 0,
+});
 
 // -------------------------------------------------------------------------
 // Derived lookup tables for fast access in hot loops

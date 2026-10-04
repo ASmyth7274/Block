@@ -120,6 +120,7 @@ class Hud {
     if (p.sleeping || g.sleepFade > 0) { ctx.fillStyle = 'rgba(16,16,32,' + clamp(g.sleepFade / 100, 0, 1) + ')'; ctx.fillRect(0, 0, W, H); }
     if (p.headInWater && g.settings.graphics === 'fancy') { ctx.fillStyle = 'rgba(20,40,120,0.12)'; ctx.fillRect(0, 0, W, H); }
     if (p.fire > 0 && !p.inLava && g.thirdPerson === 0) this.fireOverlay(gui);
+    if (g.portalFx > 0) this.portalOverlay(gui, g.portalFx);
     if (g.hideHud) return;
     const cx = Math.floor(W / 2);
     const hotY = H - 22 - (touch ? 0 : 0);
@@ -163,6 +164,17 @@ class Hud {
     const grd = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
     grd.addColorStop(0, 'rgba(0,0,0,0)'); grd.addColorStop(1, 'rgba(0,0,0,' + dark + ')');
     ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+  }
+  // the swirl of the portal fills your view as you cross over
+  portalOverlay(gui, t) {
+    const ctx = gui.ctx, img = TexGen.T.portal;
+    if (!img) return;
+    let a = t;
+    if (a < 1) { a *= a; a *= a; a = a * 0.8 + 0.2; }
+    ctx.globalAlpha = clamp(a, 0, 1);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img.toCanvas(1), 0, 0, gui.w, gui.h);
+    ctx.globalAlpha = 1;
   }
   fireOverlay(gui) {
     const ctx = gui.ctx, W = gui.w, H = gui.h;
@@ -325,7 +337,7 @@ class Hud {
       'Chunk: ' + (bx & 15) + ' ' + (by & 15) + ' ' + (bz & 15) + ' in ' + (bx >> 4) + ' ' + (by >> 4) + ' ' + (bz >> 4),
       'Facing: ' + facing + ' (' + wrapDegrees(-p.yaw * 180 / Math.PI + 180).toFixed(1) + ' / ' + (-p.pitch * 180 / Math.PI).toFixed(1) + ')',
       'Light: ' + Math.max(l >> 4, l & 15) + ' (' + (l >> 4) + ' sky, ' + (l & 15) + ' block)',
-      'Biome: ' + (b ? b.name : '?'),
+      'Biome: ' + (b ? b.name : '?') + (w.dim ? ' (Underworld)' : ''),
       'Day ' + Math.floor(w.dayTime / 24000) + ', time ' + (w.dayTime % 24000) + (w.raining ? (w.thundering ? ', thunder' : ', rain') : ''),
       'Seed: ' + w.seed,
     ];

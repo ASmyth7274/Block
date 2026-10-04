@@ -1835,6 +1835,252 @@ function WorldGenFactory(Noise, TAB) {
     }
   }
 
+  // ------------------------------------------------------------------ the Underworld
+  // A cavern world between a bedrock floor and roof: lava seas at y 31, brimstone
+  // cliffs and islands, sunstone hanging from the ceilings. Four regions:
+  // the Brimstone Depths, the Bone Shoals, the Cinder Hollows and the rare
+  // Glimmering Grottos.
+  const LAVA_SEA = 31;
+  const ubiome = (id, key, name, fog, o) => biome(id, key, name, Object.assign({
+    dim: 1, temp: 2.0, rain: 0, top: B.BRIMSTONE, filler: B.BRIMSTONE, under: B.BRIMSTONE, grass: '#9a5a3a', foliage: '#9a5a3a', water: '#ffffff',
+    tallGrass: 0, flowers: 0, cane: 0, pumpkins: false, animals: [], structures: [], fog,
+  }, o));
+  BI.U_DEPTHS = ubiome(40, 'brimstone_depths', 'Brimstone Depths', [0.2, 0.03, 0.03], { umobs: [['charred', 100], ['wailer', 30], ['magma_slime', 12]] });
+  BI.U_BONE = ubiome(41, 'bone_shoals', 'Bone Shoals', [0.24, 0.14, 0.07], { umobs: [['charred', 40], ['wailer', 45], ['skeleton', 30]] });
+  BI.U_CINDER = ubiome(42, 'cinder_hollows', 'Cinder Hollows', [0.15, 0.12, 0.15], { umobs: [['magma_slime', 60], ['charred', 25], ['wailer', 10]] });
+  BI.U_GROTTO = ubiome(43, 'glimmering_grotto', 'Glimmering Grotto', [0.26, 0.16, 0.04], { umobs: [['charred', 60], ['magma_slime', 20]] });
+
+  class UnderGenerator extends Generator {
+    constructor(seed, opts) {
+      super(seed, opts);
+      const r = new Random(seedHash(this.seed, 13, 666));
+      this.uA = new Octaves(r, 5); this.uB = new Octaves(r, 4); this.uShelf = new Octaves(r, 3);
+      this.uReg = new Octaves(r, 3); this.uReg2 = new Octaves(r, 3);
+      this.uPatch = new Octaves(r, 3); this.uPatch2 = new Octaves(r, 3);
+    }
+    villageAt() { return null; }
+    mineshaftAt() { return null; }
+    findSpawn() { return { x: 0, z: 0 }; }
+    tempAt() { return 2; }
+    biomeAt(x, z) {
+      const r1 = this.uReg.noise2(x / 260, z / 260), r2 = this.uReg2.noise2(x / 170 + 31.7, z / 170 - 12.3);
+      if (r1 > 0.27) return BI.U_BONE.id;
+      if (r1 < -0.27) return BI.U_CINDER.id;
+      if (r2 > 0.34) return BI.U_GROTTO.id;
+      return BI.U_DEPTHS.id;
+    }
+    // positive = rock
+    density(wx, y, wz) {
+      let d = this.uA.noise3(wx / 90, y / 52, wz / 90) * 2.4 + this.uB.noise3(wx / 26, y / 18, wz / 26) * 0.75;
+      d += Math.cos(y * Math.PI * 7 / 128) * 0.12 + this.uShelf.noise2(wx / 60, wz / 60) * 0.25;
+      if (y < 22) d += (22 - y) / 22 * 2.6;
+      if (y > 92) d += (y - 92) / 34 * 3.4;
+      return d + 0.02;
+    }
+    generate(cx, cz) {
+      const blocks = new Uint8Array(16 * 16 * H), meta = new Uint8Array(16 * 16 * H), biomes = new Uint8Array(256);
+      const out = { cx, cz, blocks, meta, biomes, entities: [], tiles: [], ticks: [] };
+      const x0 = cx * 16, z0 = cz * 16;
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) biomes[z * 16 + x] = this.biomeAt(x0 + x, z0 + z);
+      // density on a 4 x 8 x 4 lattice, interpolated
+      const dens = new Float32Array(5 * 17 * 5);
+      for (let gz = 0; gz < 5; gz++) for (let gx = 0; gx < 5; gx++) for (let gy = 0; gy < 17; gy++) dens[(gz * 5 + gx) * 17 + gy] = this.density(x0 + gx * 4, gy * 8, z0 + gz * 4);
+      for (let z = 0; z < 16; z++) {
+        const gz = z >> 2, tz = (z & 3) / 4;
+        for (let x = 0; x < 16; x++) {
+          const gx = x >> 2, tx = (x & 3) / 4;
+          const a = (gz * 5 + gx) * 17, b2 = (gz * 5 + gx + 1) * 17, c2 = ((gz + 1) * 5 + gx) * 17, d2 = ((gz + 1) * 5 + gx + 1) * 17;
+          for (let y = 0; y < H; y++) {
+            const gy = y >> 3, ty = (y & 7) / 8;
+            const v00 = dens[a + gy] + (dens[a + gy + 1] - dens[a + gy]) * ty;
+            const v10 = dens[b2 + gy] + (dens[b2 + gy + 1] - dens[b2 + gy]) * ty;
+            const v01 = dens[c2 + gy] + (dens[c2 + gy + 1] - dens[c2 + gy]) * ty;
+            const v11 = dens[d2 + gy] + (dens[d2 + gy + 1] - dens[d2 + gy]) * ty;
+            const v = (v00 + (v10 - v00) * tx) * (1 - tz) + (v01 + (v11 - v01) * tx) * tz;
+            blocks[IDX(x, y, z)] = v > 0 ? B.BRIMSTONE : (y <= LAVA_SEA ? B.LAVA : 0);
+          }
+        }
+      }
+      // bedrock floor and roof, ragged like the classics
+      const br = new Random(seedHash(this.seed, cx, cz, 0xBED));
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
+        blocks[IDX(x, 0, z)] = B.BEDROCK; blocks[IDX(x, H - 1, z)] = B.BEDROCK;
+        for (let k = 1; k < 5; k++) { if (br.nextInt(5) >= k) blocks[IDX(x, k, z)] = B.BEDROCK; if (br.nextInt(5) >= k) blocks[IDX(x, H - 1 - k, z)] = B.BEDROCK; }
+      }
+      this.uSurface(out);
+      this.uOres(out);
+      this.uFeatures(out);
+      return out;
+    }
+    // floors and ceilings take on their region's look
+    uSurface(out) {
+      const { blocks, meta, biomes } = out, x0 = out.cx * 16, z0 = out.cz * 16;
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
+        const b = biomes[z * 16 + x], wx = x0 + x, wz = z0 + z;
+        const p1 = this.uPatch.noise2(wx / 22, wz / 22), p2 = this.uPatch2.noise2(wx / 18 + 9.1, wz / 18 - 4.4);
+        for (let y = 5; y < H - 5; y++) {
+          const i = IDX(x, y, z);
+          if (blocks[i] !== B.BRIMSTONE || blocks[i + 256] !== 0) continue;
+          // a floor: air above rock
+          if (b === BI.U_BONE.id) {
+            const depth = 2 + (p1 > 0 ? 1 : 0);
+            for (let k = 0; k < depth && blocks[i - k * 256] === B.BRIMSTONE; k++) blocks[i - k * 256] = B.BONESAND;
+          } else if (b === BI.U_CINDER.id) {
+            blocks[i] = (p2 > 0.3) ? B.SCORCHED_STONE : B.ASH;
+            for (let k = 1; k < 3 && blocks[i - k * 256] === B.BRIMSTONE; k++) blocks[i - k * 256] = B.BASALT;
+          } else if (y >= LAVA_SEA && y <= LAVA_SEA + 2 && p2 > -0.1) {
+            blocks[i] = B.GRAVEL;        // dark beaches along the lava seas
+          } else if (p1 > 0.32) {
+            blocks[i] = B.BONESAND; if (blocks[i - 256] === B.BRIMSTONE) blocks[i - 256] = B.BONESAND;
+          } else if (p2 > 0.4 && y > LAVA_SEA + 2) {
+            blocks[i] = B.GRAVEL;
+          }
+          // ash and gravel need something under them
+          if ((blocks[i] === B.ASH || blocks[i] === B.GRAVEL) && blocks[i - 256] === 0) blocks[i] = B.BRIMSTONE;
+        }
+      }
+    }
+    uOres(out) {
+      const { blocks, meta, biomes } = out;
+      const rng = new Random(seedHash(this.seed, out.cx, out.cz, 0x0A12));
+      const brim = (id) => id === B.BRIMSTONE;
+      const grotto = biomes[136] === BI.U_GROTTO.id;
+      for (let i = 0, n = grotto ? 36 : 14; i < n; i++) this.vein(blocks, meta, rng, rng.nextInt(16), 10 + rng.nextInt(108), rng.nextInt(16), 13, B.QUARTZ_ORE, 0, brim);
+      // hidden pockets of lava sealed in the rock
+      for (let i = 0; i < 8; i++) {
+        const x = 1 + rng.nextInt(14), y = 8 + rng.nextInt(110), z = 1 + rng.nextInt(14), k = IDX(x, y, z);
+        if (blocks[k] !== B.BRIMSTONE) continue;
+        let sealed = true;
+        for (const o of [1, -1, 16, -16, 256, -256]) if (blocks[k + o] === 0) sealed = false;
+        if (sealed) blocks[k] = B.LAVA;
+      }
+    }
+    uFeatures(out) {
+      const { blocks, meta, biomes, cx, cz } = out, X0 = cx * 16, Z0 = cz * 16;
+      const rng = new Random(seedHash(this.seed, cx, cz, 0xF00D));
+      const reg = biomes[136];
+      const get = (x, y, z) => (x < 0 || x > 15 || z < 0 || z > 15 || y < 0 || y >= H) ? -1 : blocks[IDX(x, y, z)];
+      const set = (x, y, z, id, m) => { if (x < 0 || x > 15 || z < 0 || z > 15 || y < 1 || y >= H - 1) return; const i = IDX(x, y, z); blocks[i] = id; meta[i] = m || 0; };
+      const solid = (id) => id > 0 && SOLID[id] && id !== B.LAVA;
+      // ---- sunstone clusters hanging from the roof ----
+      const clusters = reg === BI.U_GROTTO.id ? 14 : reg === BI.U_DEPTHS.id ? 6 : 3;
+      for (let c = 0; c < clusters; c++) {
+        const sx = 3 + rng.nextInt(10), sz = 3 + rng.nextInt(10);
+        let sy = 40 + rng.nextInt(80);
+        while (sy < H - 6 && get(sx, sy, sz) !== 0) sy++;
+        while (sy < H - 6 && get(sx, sy + 1, sz) === 0) sy++;
+        if (!solid(get(sx, sy + 1, sz)) || get(sx, sy, sz) !== 0) continue;
+        set(sx, sy, sz, B.SUNSTONE);
+        for (let k = 0; k < 140; k++) {
+          const x = sx + rng.nextInt(7) - 3, y = sy - rng.nextInt(9), z = sz + rng.nextInt(7) - 3;
+          if (get(x, y, z) !== 0) continue;
+          let n = 0;
+          for (const [dx, dy, dz] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) if (get(x + dx, y + dy, z + dz) === B.SUNSTONE) n++;
+          if (n === 1) set(x, y, z, B.SUNSTONE);
+        }
+      }
+      // ---- lava falls spilling from the walls ----
+      for (let k = 0; k < 6; k++) {
+        const x = 1 + rng.nextInt(14), y = 36 + rng.nextInt(80), z = 1 + rng.nextInt(14);
+        if (get(x, y, z) !== B.BRIMSTONE || get(x, y + 1, z) !== B.BRIMSTONE || get(x, y - 1, z) !== B.BRIMSTONE) continue;
+        let air = 0, rock = 0;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = get(x + dx, y, z + dz); if (n === 0) air++; else if (solid(n)) rock++; }
+        if (air === 1 && rock === 3) { set(x, y, z, B.LAVA); out.ticks.push([X0 + x, y, Z0 + z]); }
+      }
+      // floor positions helper
+      const floorAt = (x, z, ylo, yhi) => {
+        for (let t = 0; t < 6; t++) {
+          const y = ylo + rng.nextInt(Math.max(1, yhi - ylo));
+          let yy = y;
+          while (yy > ylo && get(x, yy, z) === 0) yy--;
+          if (solid(get(x, yy, z)) && get(x, yy + 1, z) === 0 && get(x, yy + 2, z) === 0) return yy + 1;
+        }
+        return -1;
+      };
+      // ---- eternal fires and dark mushrooms ----
+      if (reg !== BI.U_GROTTO.id) for (let k = 0; k < (reg === BI.U_CINDER.id ? 8 : 4); k++) {
+        const x = rng.nextInt(16), z = rng.nextInt(16), y = floorAt(x, z, LAVA_SEA + 1, 120);
+        if (y < 0) continue;
+        const below = get(x, y - 1, z);
+        if (below === B.BRIMSTONE || below === B.ASH || below === B.SCORCHED_STONE) for (let j = 0; j < 4; j++) { const fx = x + rng.nextInt(3) - 1, fz = z + rng.nextInt(3) - 1; const fb = get(fx, y - 1, fz); if (get(fx, y, fz) === 0 && (fb === B.BRIMSTONE || fb === B.ASH || fb === B.SCORCHED_STONE)) set(fx, y, fz, B.FIRE); }
+      }
+      for (let k = 0; k < 2; k++) {
+        const x = rng.nextInt(16), z = rng.nextInt(16), y = floorAt(x, z, LAVA_SEA + 1, 120);
+        if (y > 0 && get(x, y - 1, z) !== B.BONESAND) set(x, y, z, rng.nextBool() ? B.MUSHROOM_BROWN : B.MUSHROOM_RED);
+      }
+      // ---- region features ----
+      if (reg === BI.U_BONE.id) {
+        // wild bloodcap in the bone sand
+        if (rng.nextInt(3) === 0) for (let k = 0; k < 6; k++) {
+          const x = rng.nextInt(16), z = rng.nextInt(16), y = floorAt(x, z, LAVA_SEA + 1, 110);
+          if (y > 0 && get(x, y - 1, z) === B.BONESAND) set(x, y, z, B.BLOODCAP, 2 + rng.nextInt(2));
+        }
+        // the ribs of something enormous
+        if (rng.nextInt(4) === 0) this.uRibcage(out, rng, get, set, floorAt);
+      } else if (reg === BI.U_CINDER.id) {
+        // basalt columns, floor to roof
+        for (let k = 0; k < 3; k++) {
+          const x = 2 + rng.nextInt(12), z = 2 + rng.nextInt(12), y = floorAt(x, z, LAVA_SEA + 1, 100);
+          if (y < 0) continue;
+          const w = rng.nextInt(3) === 0 ? 2 : 1;
+          let top = y; while (top < H - 6 && get(x, top, z) === 0) top++;
+          if (top - y > 40) continue;
+          for (let yy = y; yy < top; yy++) for (let dx = 0; dx < w; dx++) for (let dz = 0; dz < w; dz++) if (get(x + dx, yy, z + dz) === 0) set(x + dx, yy, z + dz, B.BASALT);
+        }
+        // smouldering vents: a ring of scorched stone round a lava eye
+        if (rng.nextInt(2) === 0) {
+          const x = 2 + rng.nextInt(12), z = 2 + rng.nextInt(12), y = floorAt(x, z, LAVA_SEA + 2, 100);
+          if (y > 0) {
+            for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (get(x + dx, y, z + dz) === 0) set(x + dx, y, z + dz, B.SCORCHED_STONE);
+            set(x, y - 1, z, B.LAVA); out.ticks.push([X0 + x, y - 1, Z0 + z]);
+          }
+        }
+      } else if (reg === BI.U_GROTTO.id) {
+        // smoky quartz spires rising from the floor and hanging from the roof
+        for (let k = 0; k < 5; k++) {
+          const x = 1 + rng.nextInt(14), z = 1 + rng.nextInt(14), y = floorAt(x, z, LAVA_SEA + 1, 110);
+          if (y < 0) continue;
+          const h = 2 + rng.nextInt(4);
+          for (let j = 0; j < h && get(x, y + j, z) === 0; j++) set(x, y + j, z, B.QUARTZ_BLOCK, 2);
+          if (get(x, y + h, z) === 0 && rng.nextBool()) set(x, y + h, z, B.SUNSTONE);
+        }
+        for (let k = 0; k < 4; k++) {
+          const x = 1 + rng.nextInt(14), z = 1 + rng.nextInt(14);
+          let y = 60 + rng.nextInt(60);
+          while (y < H - 6 && get(x, y, z) === 0) y++;
+          if (!solid(get(x, y, z))) continue;
+          for (let j = 1; j <= 1 + rng.nextInt(4) && get(x, y - j, z) === 0; j++) set(x, y - j, z, B.QUARTZ_BLOCK, 2);
+        }
+      }
+    }
+    // a giant rib cage: a spine with curved ribs arching down to the floor
+    uRibcage(out, rng, get, set, floorAt) {
+      const alongX = rng.nextBool(), len = 7 + rng.nextInt(4), half = 3;
+      const cx = 8, cz = 8;
+      const y = floorAt(cx, cz, LAVA_SEA + 2, 100);
+      if (y < 0) return;
+      const top = y + 6 + rng.nextInt(3);
+      const at = (u, v) => alongX ? [cx - (len >> 1) + u, cz + v] : [cx + v, cz - (len >> 1) + u];
+      const axisM = alongX ? 4 : 8;      // bone block axis along the spine
+      for (let u = 0; u < len; u++) { const [x, z] = at(u, 0); if (get(x, top, z) === 0) set(x, top, z, B.BONE_BLOCK, axisM); }
+      for (let u = 1; u < len - 1; u += 2) {
+        for (const side of [-1, 1]) {
+          // a rib: out from the spine, then curving down
+          const prof = [[1, 0], [2, -1], [3, -2], [3, -3], [3, -4], [3, -5], [2, -6], [2, -7]];
+          for (const [o, dy] of prof) {
+            const yy = top + dy;
+            if (yy < y) break;
+            const [x, z] = at(u, o * side);
+            if (get(x, yy, z) === 0) set(x, yy, z, B.BONE_BLOCK, dy === 0 ? (alongX ? 8 : 4) : 0);
+          }
+        }
+      }
+      // a fallen skull's worth of bone sand round the base
+      for (let k = 0; k < 10; k++) { const x = cx + rng.nextInt(9) - 4, z = cz + rng.nextInt(9) - 4; if (get(x, y - 1, z) === B.BRIMSTONE) set(x, y - 1, z, B.BONESAND); }
+    }
+  }
+  function makeGenerator(seed, opts) { return (opts && opts.dim === 1) ? new UnderGenerator(seed, opts) : new Generator(seed, opts); }
+
   // Writer that clips feature writes to one chunk.
   // mode: 0 = force, 1 = replace air/plants/leaves only (leaves), 2 = replace air & plants (boulders), 3 = log (replace air, leaves, plants)
   class Writer {
@@ -1855,5 +2101,5 @@ function WorldGenFactory(Noise, TAB) {
     setIf(x, y, z, id, m, ifId) { if (this.get(x, y, z) === ifId) this.set(x, y, z, id, m, 0); }
   }
 
-  return { BIOMES, BI, Generator, SEA, H };
+  return { BIOMES, BI, Generator, UnderGenerator, makeGenerator, SEA, H, LAVA_SEA };
 }

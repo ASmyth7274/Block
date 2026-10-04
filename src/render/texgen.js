@@ -1502,5 +1502,5 @@ const TexGen = (function () {
   ANIM.fire = new FireAnim();
   for (const k in ANIM) { const img = new Img(); ANIM[k].render(img); reg(k, img); }
 
-  return { T, ANIM, Img, sprite, reg, pal, rngFor, fnoise, vnoise, normalize, noiseImg, mul, mix, C };
+  return { T, ANIM, Img, sprite, reg, pal, rngFor, fnoise, vnoise, normalize, noiseImg, mul, mix, C, stone, ore, stoneBricks, pick };
 })();

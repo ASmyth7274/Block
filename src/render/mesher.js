@@ -642,8 +642,17 @@ class Mesher {
   boxesFor(pi, id, meta) {
     const ids = this.ids;
     switch (id) {
-      case B.FENCE: {
-        const conn = (n) => n === B.FENCE || n === B.FENCE_GATE || BT.opaque[n];
+      case B.PORTAL: {
+        // only the broad faces, plus any edge that doesn't run into more portal
+        const P = B.PORTAL, xs = !(meta & 1), faces = xs ? [2, 3] : [4, 5];
+        if (ids[pi - PD2] !== P) faces.push(0);
+        if (ids[pi + PD2] !== P) faces.push(1);
+        if (xs) { if (ids[pi - 1] !== P) faces.push(4); if (ids[pi + 1] !== P) faces.push(5); }
+        else { if (ids[pi - PD] !== P) faces.push(2); if (ids[pi + PD] !== P) faces.push(3); }
+        return [{ b: portalBox(meta), faces }];
+      }
+      case B.FENCE: case B.BRIMSTONE_FENCE: {
+        const conn = id === B.FENCE ? (n) => n === B.FENCE || n === B.FENCE_GATE || BT.opaque[n] : (n) => n === B.BRIMSTONE_FENCE || BT.opaque[n];
         const out = [{ b: [6, 0, 6, 10, 16, 10] }];
         if (conn(ids[pi - PD])) { out.push({ b: [7, 12, 0, 9, 15, 6] }, { b: [7, 6, 0, 9, 9, 6] }); }
         if (conn(ids[pi + PD])) { out.push({ b: [7, 12, 10, 9, 15, 16] }, { b: [7, 6, 10, 9, 9, 16] }); }

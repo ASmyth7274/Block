@@ -6,7 +6,7 @@
 // ---------------------------------------------------------------------------
 const DynamicItems = (() => {
   let compassBase = null, clockBase = null;
-  let angle = 0, delta = 0, lastC = null, lastK = null;
+  let angle = 0, delta = 0, lastC = null, lastK = null, clockSpin = 0;
   function bases() {
     if (compassBase) return;
     // compass: iron rim, pale face, small cardinal ticks
@@ -63,7 +63,8 @@ const DynamicItems = (() => {
     const sp = w.spawn || { x: 0, z: 0 };
     const dx = sp.x + 0.5 - p.x, dz = sp.z + 0.5 - p.z;
     const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
-    const target = (dx * dx + dz * dz < 0.5) ? angle + 0.3 : Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz);
+    // below, the needle wanders aimlessly
+    const target = w.dim ? angle + (Math.random() - 0.5) * 6 : (dx * dx + dz * dz < 0.5) ? angle + 0.3 : Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz);
     let d2 = wrapRadians(target - angle);
     d2 = clamp(d2, -1, 1);
     delta += d2 * 0.1; delta *= 0.8; angle = wrapRadians(angle + delta);
@@ -76,7 +77,8 @@ const DynamicItems = (() => {
       invalidate(game, ITEM_IDS.compass);
     }
     // clock: dial follows the sun
-    const kq = Math.round(w.celestialAngle(0) * 64) % 64;
+    if (w.dim) { clockSpin = (clockSpin + (Math.random() - 0.3) * 0.08 + 1) % 1; }
+    const kq = Math.round((w.dim ? clockSpin : w.celestialAngle(0)) * 64) % 64;
     if (kq !== lastK) {
       lastK = kq;
       const img = TexGen.T.clock;

@@ -129,6 +129,7 @@ const SOUND_DEFS = (() => {
   };
   S.fuse = () => { const hp = new Biquad('hp', 3500, 0.7); return render(1.4, (t) => hp.p(noise()) * (0.5 + 0.5 * Math.sin(t * 60)) * env(t, 0.05, 0.6)); };
   S.fizz = () => { const hp = new Biquad('hp', 2500, 0.7); return render(0.45, (t) => hp.p(noise()) * env(t, 0.01, 0.12)); };
+  S.fire_charge = () => { const lp = new Biquad('lp', 900, 0.8); return render(0.6, (t) => lp.p(noise()) * env(t, 0.01, 0.15) + Math.sin(2 * Math.PI * (90 - t * 60) * t) * env(t, 0.005, 0.12) * 0.6); };
   S.ignite = () => { const hp = new Biquad('hp', 4000, 0.7); return render(0.25, (t) => hp.p(noise()) * env(t, 0.002, 0.05) + Math.sin(2 * Math.PI * 3000 * t) * env(t, 0.001, 0.01) * 0.3); };
   S.thunder = () => {
     const lp = new Biquad('lp', 180, 0.7), lp2 = new Biquad('lp', 900, 0.7);
@@ -276,6 +277,73 @@ const SOUND_DEFS = (() => {
     });
   };
   S.rain = () => { const lp = new Biquad('lp', 2200, 0.7), hp = new Biquad('hp', 300, 0.7); return render(3, (t) => hp.p(lp.p(noise())) + (rnd() < 0.002 ? noise() * 2 : 0)); };
+  // ----- portals & the Underworld -----
+  // the portal's endless phasing whoomp
+  S.portal_hum = () => {
+    const bp = new Biquad('bp', 400, 4), bp2 = new Biquad('bp', 900, 6);
+    let ph = 0;
+    return render(2.6, (t) => {
+      const sw = Math.sin(t * Math.PI * 2 / 2.6);
+      bp.set(300 + sw * 180, 4); bp2.set(820 - sw * 300, 6);
+      ph += 2 * Math.PI * (62 + sw * 9 + Math.sin(t * 31) * 2) / DSP.SR;
+      return (bp.p(noise()) * 0.9 + bp2.p(noise()) * 0.5 + Math.sin(ph) * 0.45) * Math.sin(Math.PI * t / 2.6);
+    });
+  };
+  // stepping in: a swelling rush
+  S.portal_trigger = () => {
+    const bp = new Biquad('bp', 300, 3);
+    let ph = 0;
+    return render(3.2, (t) => {
+      const u = t / 3.2;
+      bp.set(220 + u * u * 2400, 3);
+      ph += 2 * Math.PI * (70 + u * 260) / DSP.SR;
+      return (bp.p(noise()) + Math.sin(ph) * 0.35 * u) * Math.min(1, u * 3) * (1 - Math.pow(u, 6));
+    });
+  };
+  // coming out the other side: a falling roar
+  S.portal_travel = () => {
+    const bp = new Biquad('bp', 2000, 2), lp = new Biquad('lp', 400, 0.8);
+    let ph = 0;
+    return render(3.5, (t) => {
+      const u = t / 3.5;
+      bp.set(2600 * (1 - u) + 150, 2);
+      ph += 2 * Math.PI * (300 - u * 240) / DSP.SR;
+      return (bp.p(noise()) * 0.9 + lp.p(noise()) * 0.6 + Math.sin(ph) * 0.3) * env(t, 0.05, 1.2);
+    });
+  };
+  // a frame catching light
+  S.portal_open = () => {
+    const bp = new Biquad('bp', 600, 2);
+    return render(2.2, (t) => {
+      let s = 0;
+      [196, 247, 294, 392].forEach((f, i) => { const st = i * 0.12; if (t > st) s += Math.sin(2 * Math.PI * f * (t - st) * (1 + 0.01 * Math.sin(t * 9))) * Math.exp(-(t - st) / 0.9) * 0.3; });
+      bp.set(500 + t * 900, 2);
+      return s + bp.p(noise()) * env(t, 0.2, 0.5) * 0.6;
+    });
+  };
+  // the Underworld's low, hot drone (looped)
+  S.under_drone = () => {
+    const lp = new Biquad('lp', 160, 0.9), bp = new Biquad('bp', 700, 6);
+    return render(6, (t) => {
+      const w = Math.sin(Math.PI * 2 * t / 6);
+      bp.set(600 + w * 200, 6);
+      return lp.p(noise()) * 1.6 + Math.sin(2 * Math.PI * 41 * t) * 0.25 + Math.sin(2 * Math.PI * 61.5 * t) * 0.12 * (0.6 + 0.4 * w) + bp.p(noise()) * 0.06;
+    });
+  };
+  // a far-off moan rolling through the caverns
+  S.under_moan = () => {
+    const f1 = new Biquad('bp', 500, 4), f2 = new Biquad('bp', 1100, 6), lp = new Biquad('lp', 1500, 0.8);
+    const dl = new Float32Array(Math.floor(DSP.SR * 0.31)); let di = 0, ph = 0;
+    const f0 = 120 + rnd() * 80, bend = rnd() < 0.5 ? -1 : 1;
+    return render(4.5, (t) => {
+      const u = t / 4.5;
+      ph += 2 * Math.PI * (f0 + bend * Math.sin(u * Math.PI) * 40 + Math.sin(t * 6) * 3) / DSP.SR;
+      const src = ((ph / (2 * Math.PI)) % 1) * 2 - 1;
+      let s = lp.p(f1.p(src) + f2.p(src) * 0.5) * Math.sin(Math.PI * Math.min(1, u * 1.6)) * (u < 0.62 ? 1 : 0);
+      const out = s + dl[di] * 0.55; dl[di] = out; di = (di + 1) % dl.length;
+      return out;
+    });
+  };
   S.wind = () => { const bp = new Biquad('bp', 400, 1); return render(4, (t) => { bp.set(300 + Math.sin(t * 0.8) * 200, 1.5); return bp.p(noise()) * Math.sin(Math.PI * t / 4); }); };
   return S;
 })();
@@ -307,7 +375,7 @@ class AudioEngine {
     const def = SOUND_DEFS[name];
     if (!def || !this.ctx) return null;
     variants = [];
-    const nv = (name === 'cave' || name === 'thunder' || name === 'explode') ? 3 : 2;
+    const nv = (name === 'cave' || name === 'thunder' || name === 'explode' || name === 'under_moan') ? 3 : 2;
     for (let v = 0; v < nv; v++) {
       DSP.setSeed(stringHash(name) + v * 7919);
       const data = def();

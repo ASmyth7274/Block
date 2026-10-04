@@ -74,7 +74,7 @@ const PathFinder = (() => {
     switch (id) {
       case B.WATER: return 2;
       case B.LAVA: case B.FIRE: case B.CACTUS: case B.COBWEB: case B.QUICKSAND: case B.BRAMBLE: return 3;
-      case B.FENCE: case B.FENCE_GATE: return 4;
+      case B.FENCE: case B.FENCE_GATE: case B.BRIMSTONE_FENCE: return 4;
       case B.DOOR_WOOD: return (throughDoors || (w.getMeta(x, y, z) & 4)) ? 0 : 1;
       case B.DOOR_IRON: return (w.getMeta(x, y, z) & 4) ? 0 : 1;
       case B.LADDER: case B.VINE: case B.ROPE: return 0;
@@ -1952,6 +1952,7 @@ class MobSpawner {
     if (!w.gameRules.doMobSpawning) return;
     const rd = Math.min(g.settings.renderDistance, 6);
     const area = (rd * 2 + 1) * (rd * 2 + 1);
+    if (w.dim) { if (this.tickUnder) this.tickUnder(rd, area); return; }
     const capMonster = Math.max(8, Math.round(48 * area / 169));
     if (w.difficulty > 0 && this.counts.monster < capMonster) {
       for (let i = 0; i < 2; i++) if (this.spawnMonsterPack(rd)) { this.counts.monster += 1; }

@@ -39,6 +39,12 @@ const MILESTONES = [
   { id: 'bottle', name: 'Message Received', desc: 'Read a message in a bottle', icon: () => [ITEM_IDS.message_bottle, 0] },
   { id: 'enchant', name: 'Enchanter', desc: 'Enchant an item at an enchanting table', icon: () => [B.ENCHANTING_TABLE, 0] },
   { id: 'lamp', name: 'Bright Idea', desc: 'Light an ember lamp with a circuit', icon: () => [B.EMBER_LAMP_ON, 0] },
+  { id: 'portal', name: 'Gateway', desc: 'Build and light an Underworld portal', icon: () => [B.OBSIDIAN, 0] },
+  { id: 'underworld', name: 'Hot Under the Collar', desc: 'Step into the Underworld', icon: () => [B.BRIMSTONE, 0] },
+  { id: 'fortress', name: 'Brimstone Bastion', desc: 'Find an Underworld fortress', icon: () => [B.BRIMSTONE_BRICKS, 0] },
+  { id: 'flare', name: 'Playing with Fire', desc: 'Collect a flare rod', icon: () => [ITEM_IDS.flare_rod, 0] },
+  { id: 'wailer', name: 'Hush Now', desc: 'Bring down a wailer', icon: () => [ITEM_IDS.wailer_tear, 0] },
+  { id: 'regions', name: 'Underworld Cartographer', desc: 'Discover every region of the Underworld', icon: () => [B.SUNSTONE, 0] },
 ];
 const BIOME_DESCRIPTIONS = {
   ocean: 'Endless water. Sunken ruins rest on the sea floor.', deep_ocean: 'The water grows dark and cold.', plains: 'Rolling grass, wildflowers and the occasional lonely oak.',
@@ -48,6 +54,8 @@ const BIOME_DESCRIPTIONS = {
   beach: 'Sand between land and sea.', river: 'Rivers wind toward the ocean.', autumn_forest: 'Red and gold maples, forever in autumn.', redwood_grove: 'Colossal red trunks that pierce the sky.',
   moors: 'Heather, peat and mist. Stone circles keep old secrets.', ashen_wastes: 'Ash and basalt around pools of lava. Sulfur glitters in the rock.',
   salt_flats: 'Blinding white salt crust. Stars fall here often.', meadow: 'Flowers in every colour.', canyon: 'Banded red cliffs rich in gold.', stone_shore: 'Bare stone where mountains meet the sea.',
+  brimstone_depths: 'Underworld. Lava seas beneath a roof of red rock, lit by sunstone.', bone_shoals: 'Underworld. Drifts of bone sand and the ribs of long-dead giants. Bloodcap grows wild.',
+  cinder_hollows: 'Underworld. Ash, basalt pillars and smouldering vents. Magma slimes bask here.', glimmering_grotto: 'Underworld. Smoky quartz spires and clusters of sunstone: a rare, bright refuge.',
 };
 class JournalScreen extends Screen {
   constructor(game, parent) { super(game); this.parent = parent; this.background = 'world'; this.tab = 0; this.page = 0; this.pauses = !!parent; }

@@ -76,7 +76,7 @@ class ItemIcons {
   blockBoxes(id, meta) {
     const b = BLOCKS[id];
     switch (id) {
-      case B.FENCE: return [{ b: [6, 0, 6, 10, 16, 10] }, { b: [0, 12, 7, 16, 15, 9] }, { b: [0, 6, 7, 16, 9, 9] }];
+      case B.FENCE: case B.BRIMSTONE_FENCE: return [{ b: [6, 0, 6, 10, 16, 10] }, { b: [0, 12, 7, 16, 15, 9] }, { b: [0, 6, 7, 16, 9, 9] }];
       case B.FENCE_GATE: return [{ b: [0, 5, 7, 2, 16, 9] }, { b: [14, 5, 7, 16, 16, 9] }, { b: [2, 6, 7, 14, 9, 9] }, { b: [2, 12, 7, 14, 15, 9] }, { b: [6, 9, 7, 10, 12, 9] }];
       case B.STAIRS: return stairBoxes(((meta & 31) << 3) | 3).map((bb) => ({ b: bb.map((v) => v * 16) }));
       case B.SLAB: return [{ b: [0, 0, 0, 16, 8, 16] }];

@@ -10,14 +10,14 @@ const MENU_SEEDS = [1337, 20111118, 404, 8675309, 31415, 777, 2468, 99, 12345, 4
 // blocks that receive random ticks
 const RANDOM_TICK = new Uint8Array(256);
 for (const id of [B.GRASS, B.MYCELIUM, B.SAPLING, B.WHEAT, B.CARROTS, B.POTATOES, B.FARMLAND, B.SUGAR_CANE, B.CACTUS, B.LEAVES, B.ICE, B.SNOW_LAYER,
-  B.EMBER_ORE_LIT, B.BRAMBLE, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.GLOWSHROOM, B.FIRE, B.WATER]) if (id !== undefined) RANDOM_TICK[id] = 1;
+  B.EMBER_ORE_LIT, B.BRAMBLE, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.GLOWSHROOM, B.FIRE, B.WATER, B.BLOODCAP]) if (id !== undefined) RANDOM_TICK[id] = 1;
 
 // ore values for the prospector's rod
 const PROSPECT = (() => {
   const m = new Map();
   const add = (id, v) => { if (id !== undefined) m.set(id, v); };
   add(B.COAL_ORE, 1); add(B.SULFUR_ORE, 2); add(B.IRON_ORE, 3); add(B.EMBER_ORE, 4); add(B.EMBER_ORE_LIT, 4); add(B.LAPIS_ORE, 5);
-  add(B.GOLD_ORE, 6); add(B.LUMITE_CRYSTAL, 6); add(B.JADE_ORE, 7); add(B.COBALT_ORE, 8); add(B.DIAMOND_ORE, 10); add(B.STARMETAL_ORE, 12);
+  add(B.GOLD_ORE, 6); add(B.LUMITE_CRYSTAL, 6); add(B.JADE_ORE, 7); add(B.QUARTZ_ORE, 3); add(B.COBALT_ORE, 8); add(B.DIAMOND_ORE, 10); add(B.STARMETAL_ORE, 12);
   return m;
 })();
 
@@ -56,6 +56,7 @@ class Game {
     this.camera = { x: 0, y: 80, z: 0, yaw: 0, pitch: 0, fov: 70, roll: 0, bobPitch: 0, bobX: 0, bobY: 0 };
     this.world = null; this.player = null; this.screen = null;
     this.ticks = 0; this.tickAcc = 0; this.lastFrame = performance.now();
+    this.portalFx = 0; this.homeOnSave = false;
     this.thirdPerson = 0; this.hideHud = false; this.showDebug = false;
     this.cursorStack = null; this.chatHistory = [];
     this.sleepFade = 0; this.deathMessage = ''; this.saveStatus = '';
@@ -203,6 +204,7 @@ class Game {
     this.loading = null;
     this.sleepFade = 0;
     this.maps = null;
+    this.homeOnSave = false;
   }
   createWorld(opts) {
     const info = Object.assign({
@@ -211,8 +213,8 @@ class Game {
     info.folder = info.name.replace(/[^\w\- ]+/g, '_');
     this.storage.putWorld(info).then(() => this.startWorld(info, true)).catch((e) => { console.error(e); this.startWorld(info, true); });
   }
-  startWorld(info, isNew) {
-    const ls = new LoadingScreen(this, isNew ? 'Generating level' : 'Loading level');
+  startWorld(info, isNew, title) {
+    const ls = new LoadingScreen(this, title || (isNew ? 'Generating level' : 'Loading level'));
     ls.sub = 'Building terrain';
     this.openScreen(ls);
     this.closeWorld();
@@ -223,11 +225,12 @@ class Game {
     }).catch((e) => { console.error(e); this.beginWorld(info, isNew, new Set(), new Set()); });
   }
   beginWorld(info, isNew, chunkKeys, entityKeys) {
+    const dim = (info.player && info.player.dim) || 0;
     info.savedKeys = [...chunkKeys];
-    const w = new World(this, info, { storage: this.storage });
+    const w = new World(this, info, { storage: this.storage, dim });
     delete info.savedKeys;
     this.world = w;
-    this.entityKeys = entityKeys;
+    this.entityKeys = dimKeys(entityKeys, dim);
     this.pendingEntityLoads = new Set();
     w.onChunkEntities = (c, m, fromSave) => this.onChunkEntities(c, m, fromSave);
     w.onChunkUnload = (c) => this.onChunkUnload(c);
@@ -254,7 +257,7 @@ class Game {
         });
       }
     }
-    this.hud.chat.length = 0;
+    if (!info.travel) { this.hud.chat.length = 0; this.portalFx = 0; }
     this.deathScreenShown = false;
   }
   tickLoading() {
@@ -288,7 +291,9 @@ class Game {
       // like the old console editions, every new adventure starts with a map
       if (L.isNew && !p.creative) p.inventory.main.set(8, new ItemStack(ITEM_IDS.map, 1, 0));
     }
-    if (!w.spawn) w.spawn = { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) };
+    if (!w.spawn && !w.dim) w.spawn = { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) };
+    const travel = w.info.travel;
+    if (travel) { delete w.info.travel; this.arrive(travel); }
     this.loading = null;
     this.closeScreen();
     this.camera.yaw = p.yaw;
@@ -328,6 +333,12 @@ class Game {
     const info = w.info;
     try {
       info.player = p.save();
+      if (this.homeOnSave) {
+        // died below and quit: wake up back home next time
+        const s = info.spawn || { x: 0, y: 80, z: 0 };
+        Object.assign(info.player, { dim: 0, x: s.x + 0.5, y: s.y, z: s.z + 0.5 });
+        info.travel = { respawn: true };
+      }
       info.time = w.time; info.dayTime = w.dayTime;
       info.raining = w.raining; info.thundering = w.thundering; info.rainTime = w.rainTime; info.thunderTime = w.thunderTime;
       info.entityInit = [...w.entityInit];
@@ -340,9 +351,78 @@ class Game {
       return this.storage.flush();
     } catch (e) { console.error('save failed', e); return Promise.resolve(); }
   }
+  // ------------------------------------------------------------ dimensions
+  // Cross to the other dimension: save this side, then reopen the world on the far side.
+  travel(dim, opts) {
+    const w = this.world, p = this.player;
+    if (!w || !p || w.menu || this.loading) return;
+    opts = opts || {};
+    const info = w.info;
+    if (p.riding) p.riding.dismount();
+    if (p.sleeping) this.wakeUp();
+    const saved = this.saveWorld();
+    const pd = p.save();
+    pd.dim = dim; pd.mount = undefined;
+    if (opts.respawn) {
+      info.travel = { respawn: true };
+      const s = info.spawn || { x: 0, y: 80, z: 0 };
+      pd.x = s.x + 0.5; pd.y = s.y; pd.z = s.z + 0.5;
+    } else {
+      const [tx, tz] = Portals.target(w.dim, p.x, p.z);
+      const link = Portals.nearest(info, dim, tx, tz, dim === 0 ? 128 : 16);
+      info.travel = { dim, x: tx, y: p.y, z: tz, link: link || null };
+      pd.x = link ? link[1] + 0.5 : tx; pd.y = link ? link[2] : p.y; pd.z = link ? link[3] + 0.5 : tz;
+    }
+    const title = opts.respawn ? 'Respawning' : dim === 1 ? 'Entering the Underworld' : 'Leaving the Underworld';
+    const ls = new LoadingScreen(this, title);
+    ls.sub = 'Building terrain';
+    this.openScreen(ls);
+    this.loading = { phase: 'saving', screen: ls, info };
+    const go = () => { info.player = pd; this.storage.putWorld(info).then(() => this.startWorld(info, false, title), () => this.startWorld(info, false, title)); };
+    saved.then(go, go);
+  }
+  // step out of a portal on the far side (or back at home after a death below)
+  arrive(t) {
+    const w = this.world, p = this.player;
+    if (t.respawn) { this.respawn(true); return; }
+    const spot = Portals.arrive(w, t);
+    const dx = spot.axis ? 0 : 1, dz = spot.axis ? 1 : 0;
+    p.setPos(spot.x + 0.5 + dx * 0.5, spot.y, spot.z + 0.5 + dz * 0.5);
+    p.vx = p.vy = p.vz = 0; p.fallDistance = 0;
+    p.portalLock = true; p.portalTime = 0;
+    this.portalFx = 1;
+    this.ambienceTimer = 300 + Math.floor(Math.random() * 400);
+    this.audio.play('portal_travel', 0.6, 0.8 + Math.random() * 0.4);
+    if (w.dim === 1) this.achieve('underworld');
+  }
+  tickPortal() {
+    const p = this.player, w = this.world;
+    let inPortal = false;
+    if (!p.dead && !p.riding && !p.sleeping) {
+      const b = p.box;
+      for (let x = Math.floor(b.x0); x <= Math.floor(b.x1 - 1e-4) && !inPortal; x++) for (let y = Math.floor(b.y0); y <= Math.floor(b.y1 - 1e-4) && !inPortal; y++) for (let z = Math.floor(b.z0); z <= Math.floor(b.z1 - 1e-4); z++) if (w.getBlock(x, y, z) === B.PORTAL) { inPortal = true; break; }
+    }
+    if (!inPortal) p.portalLock = false;
+    if (inPortal && !p.portalLock) {
+      if (p.portalTime === 0) this.audio.play('portal_trigger', 0.5, 0.8 + Math.random() * 0.4);
+      p.portalTime++;
+      this.portalFx = Math.min(1, this.portalFx + 0.0125);
+      if (p.portalTime >= (p.creative ? 2 : 80)) { p.portalTime = 0; this.travel(w.dim === 1 ? 0 : 1); return; }
+    } else {
+      p.portalTime = 0;
+      this.portalFx = Math.max(0, this.portalFx - 0.05);
+    }
+    // the hum of a nearby portal
+    if (w.time % 20 === 0 && Math.random() < 0.25) {
+      const x = Math.floor(p.x) + Math.floor(Math.random() * 17) - 8, y = Math.floor(p.y) + Math.floor(Math.random() * 9) - 4, z = Math.floor(p.z) + Math.floor(Math.random() * 17) - 8;
+      if (w.getBlock(x, y, z) === B.PORTAL) this.audio.play('portal_hum', 0.35, 0.8 + Math.random() * 0.4, x + 0.5, y + 0.5, z + 0.5);
+    }
+  }
   quitToTitle() {
     const p = this.player;
-    if (p && p.dead && this.world && this.world.info.gameMode !== 'hardcore') this.respawn(true);
+    if (p && p.dead && this.world && this.world.info.gameMode !== 'hardcore') {
+      if (this.world.dim) { this.resetVitals(p); this.homeOnSave = true; } else this.respawn(true);
+    }
     this.saveStatus = 'Saving world...';
     const done = () => { this.saveStatus = ''; this.showTitle(); };
     this.saveWorld().then(done, done);
@@ -368,7 +448,7 @@ class Game {
     const w = this.world, key = c.key;
     if (this.entityKeys.has(key)) {
       this.pendingEntityLoads.add(key);
-      this.storage.loadEntities(w.info.id, key).then((list) => {
+      this.storage.loadEntities(w.info.id, key + w.keyBase).then((list) => {
         this.pendingEntityLoads.delete(key);
         if (this.world !== w || !w.chunks.has(key) || !list) return;
         for (const d of list) { const e = entityFromData(w, d); if (e) w.addEntity(e); }
@@ -397,8 +477,8 @@ class Game {
     }
     for (const [k, t] of this.treasures) if ((t.x >> 4) === c.cx && (t.z >> 4) === c.cz) this.treasures.delete(k);
     if (w.menu || this.pendingEntityLoads.has(key)) return;
-    if (list.length) { this.storage.saveEntities(w.info.id, key, list); this.entityKeys.add(key); }
-    else if (this.entityKeys.has(key)) { this.storage.saveEntities(w.info.id, key, null); this.entityKeys.delete(key); }
+    if (list.length) { this.storage.saveEntities(w.info.id, key + w.keyBase, list); this.entityKeys.add(key); }
+    else if (this.entityKeys.has(key)) { this.storage.saveEntities(w.info.id, key + w.keyBase, null); this.entityKeys.delete(key); }
   }
   saveLoadedEntities() {
     const w = this.world;
@@ -414,8 +494,8 @@ class Game {
     for (const key of w.chunks.keys()) {
       if (this.pendingEntityLoads.has(key)) continue;
       const list = groups.get(key);
-      if (list) { this.storage.saveEntities(w.info.id, key, list); this.entityKeys.add(key); }
-      else if (this.entityKeys.has(key)) { this.storage.saveEntities(w.info.id, key, null); this.entityKeys.delete(key); }
+      if (list) { this.storage.saveEntities(w.info.id, key + w.keyBase, list); this.entityKeys.add(key); }
+      else if (this.entityKeys.has(key)) { this.storage.saveEntities(w.info.id, key + w.keyBase, null); this.entityKeys.delete(key); }
     }
   }
   onChunkLoaded(c) {
@@ -585,6 +665,8 @@ class Game {
     this.pfovMod = this.fovMod;
     p.tick(this.input);
     this.tickPlayerEnvironment();
+    this.tickPortal();
+    if (this.loading) return;
     this.interaction.tick();
     this.tickEntities();
     this.pickup();
@@ -600,7 +682,7 @@ class Game {
     this.renderer.atlas.tickAnimations();
     DynamicItems.update(this);
     this.tickWaterways();
-    if (w.time % 40 === 9) this.checkVillages();
+    if (w.time % 40 === 9 && !w.dim) this.checkVillages();
     Circuits.tickPlates(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
@@ -616,7 +698,7 @@ class Game {
     this.fovMod += (fm - this.fovMod) * 0.5;
     if (p.headInWater) this.waterTime = Math.min(600, this.waterTime + 1); else this.waterTime = 0;
     if (w.time % 10 === 0) this.checkDiscoveries();
-    if (w.time % 10 === 5 && this.maps) this.maps.tick();
+    if (w.time % 10 === 5 && this.maps && !w.dim) this.maps.tick();
     if (w.time % 20 === 0) this.checkMilestones();
     if (w.time % 600 === 0) this.saveWorld();
     // death
@@ -644,6 +726,7 @@ class Game {
       if (w.rainTime <= 0) w.rainTime = w.raining ? 12000 + R.nextInt(12000) : 12000 + R.nextInt(168000);
       else if (--w.rainTime <= 0) w.raining = !w.raining;
     }
+    if (w.dim) { w.prevRainStrength = w.rainStrength = 0; w.prevThunderStrength = w.thunderStrength = 0; return; }
     w.prevRainStrength = w.rainStrength; w.prevThunderStrength = w.thunderStrength;
     w.rainStrength = clamp(w.rainStrength + (w.raining ? 0.01 : -0.01), 0, 1);
     w.thunderRaw = clamp((w.thunderRaw || 0) + (w.thundering ? 0.01 : -0.01), 0, 1);
@@ -902,8 +985,15 @@ class Game {
     a.loop('rain', rv * this.settings.sound);
     const wind = clamp((p.y - 95) / 40, 0, 0.45) * (w.canSeeSky(bx, by, bz) ? 1 : 0) + (bio && bio.key === 'moors' ? 0.08 : 0);
     a.loop('wind', wind * this.settings.sound);
-    // eerie cave sounds
-    if (--this.ambienceTimer <= 0) {
+    // the Underworld: a constant low roar and the odd far-off moan
+    a.loop('under_drone', w.dim ? 0.3 * this.settings.sound : 0);
+    if (w.dim) {
+      if (--this.ambienceTimer <= 0) {
+        const ang = Math.random() * TAU;
+        a.play('under_moan', 0.9, 0.7 + Math.random() * 0.4, p.x + Math.sin(ang) * 12, p.y + 4, p.z + Math.cos(ang) * 12);
+        this.ambienceTimer = 600 + Math.floor(Math.random() * 1400);
+      }
+    } else if (--this.ambienceTimer <= 0) {
       const x = bx + Math.floor(Math.random() * 31) - 15, y = by + Math.floor(Math.random() * 15) - 7, z = bz + Math.floor(Math.random() * 31) - 15;
       if (w.getBlock(x, y, z) === 0 && w.getLightRaw(x, y, z) === 0 && y < w.heightAt(x, z) - 4) {
         a.play('cave', 0.7, 0.8 + Math.random() * 0.2, x + 0.5, y + 0.5, z + 0.5);
@@ -997,9 +1087,11 @@ class Game {
       p.discovered.biomes[b] = true;
       this.hud.toast('Biome discovered!', bi.name, this.biomeIcon(bi.key), '#55ff55');
       this.audio.play('discover', 0.7);
-      const n = Object.keys(p.discovered.biomes).length;
+      const known = (dim) => BIOMES.filter((x) => x && (x.dim || 0) === dim);
+      const n = Object.keys(p.discovered.biomes).filter((k) => BIOMES[k] && !BIOMES[k].dim).length;
       if (n >= 10) this.achieve('biomes10');
-      if (n >= BIOMES.filter(Boolean).length) this.achieve('biomesAll');
+      if (known(0).every((x) => p.discovered.biomes[x.id])) this.achieve('biomesAll');
+      if (bi.dim && known(1).every((x) => p.discovered.biomes[x.id])) this.achieve('regions');
     }
   }
   biomeIcon(key) {
@@ -1009,6 +1101,7 @@ class Game {
       birch_forest: [B.LOG, 2], taiga: [B.LOG, 1], snowy_tundra: [B.SNOW, 0], snowy_taiga: [B.SNOW, 0], swamp: [B.LILY_PAD, 0], jungle: [B.LOG, 3],
       mushroom_island: [B.MUSHROOM_RED, 0], beach: [B.SAND, 0], river: [I.water_bucket, 0], autumn_forest: [B.LEAVES, 4], redwood_grove: [B.LOG, 5], moors: [B.FLOWER, 4],
       ashen_wastes: [B.ASH, 0], salt_flats: [B.SALT, 0], meadow: [B.FLOWER, 3], canyon: [B.SAND, 1], stone_shore: [B.COBBLESTONE, 0],
+      brimstone_depths: [B.BRIMSTONE, 0], bone_shoals: [B.BONESAND, 0], cinder_hollows: [B.BASALT, 0], glimmering_grotto: [B.SUNSTONE, 0],
     };
     const e = map[key] || [B.GRASS, 0];
     return new ItemStack(e[0], 1, e[1]);
@@ -1069,13 +1162,18 @@ class Game {
     }
     return n + ' died';
   }
-  respawn(silent) {
-    const p = this.player, w = this.world;
-    if (!p) return;
+  resetVitals(p) {
     p.dead = false; p.deathTime = 0; p.health = p.maxHealth; p.hurtTime = 0; p.hurtResist = 0;
     p.food = 20; p.saturation = 5; p.exhaustion = 0; p.air = 300; p.fire = 0; p.effects = {};
     p.fallDistance = 0; p.vx = p.vy = p.vz = 0; p.sleeping = false; p.useItem = null;
     if (p.riding) p.riding.dismount();
+  }
+  respawn(silent) {
+    const p = this.player, w = this.world;
+    if (!p) return;
+    this.resetVitals(p);
+    // a death in the Underworld wakes you back home
+    if (w.dim) { this.deathScreenShown = false; if (!this.loading) this.travel(0, { respawn: true }); return; }
     let pos = null;
     if (p.spawnPoint) {
       const s = p.spawnPoint;
@@ -1116,6 +1214,13 @@ class Game {
     const hx = (m & 4) ? x : x + d[0], hz = (m & 4) ? z : z + d[1];
     if (w.getBlock(hx, y, hz) !== B.BED) return;
     if (p.distanceSq(hx + 0.5, y + 0.5, hz + 0.5) > 9 && p.distanceSq(x + 0.5, y + 0.5, z + 0.5) > 9) { this.hud.showAction('You are too far away from the bed'); return; }
+    if (w.dim) {
+      // there is no rest in the Underworld: the bed bursts into flame
+      const d2 = HFACE_DIR[m & 3], fx = (m & 4) ? x - d2[0] : x, fz = (m & 4) ? z - d2[1] : z;
+      w.setBlock(hx, y, hz, 0, 0, 4); w.setBlock(fx, y, fz, 0, 0, 4);
+      Behaviors.explode(this, hx + 0.5, y + 0.5, hz + 0.5, 5, { type: 'bed' }, true);
+      return;
+    }
     if (w.isDaytime() && !w.thundering) { this.hud.showAction('You can only sleep at night'); return; }
     const near = w.entitiesInBox(hx - 8, y - 5, hz - 8, hx + 9, y + 6, hz + 9, (e) => e.hostile && !e.dead);
     if (near.length) { this.hud.showAction('You may not rest now, there are monsters nearby'); return; }
@@ -1215,6 +1320,7 @@ class Game {
   checkMilestones() {
     const p = this.player;
     if (p.dead) return;
+    if (this.world.dim) return;
     if (p.y < 14 && !p.creative && !p.achievements.deep) {
       const w = this.world, bx = Math.floor(p.x), by = Math.floor(p.y), bz = Math.floor(p.z);
       let lava = false;

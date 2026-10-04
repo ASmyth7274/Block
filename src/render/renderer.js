@@ -4,6 +4,8 @@
 // ---------------------------------------------------------------------------
 const BRIGHTNESS = new Float32Array(16);
 for (let i = 0; i < 16; i++) { const f = 1 - i / 15; BRIGHTNESS[i] = (1 - f) / (f * 3 + 1); }
+// the Underworld never goes fully black: a dull glow hangs in the air
+const BRIGHTNESS_UNDER = BRIGHTNESS.map((v) => v * 0.87 + 0.13);
 
 class Renderer {
   constructor(game, canvas) {
@@ -198,6 +200,18 @@ class Renderer {
 
   // ------------------------------------------------------------ sky colours
   computeSky(world, partial, camera) {
+    if (world.dim) {
+      // no sky below: the air takes the colour of the region's haze
+      const b = BIOMES[world.biomeAt(Math.floor(camera.x), Math.floor(camera.z))];
+      const want = (b && b.fog) || [0.2, 0.03, 0.03];
+      const now = performance.now(), dt = Math.min(1, ((now - (this.fogT || now)) / 1000));
+      this.fogT = now;
+      if (!this.uFog || this.uFogWorld !== world) { this.uFog = want.slice(); this.uFogWorld = world; }
+      for (let i = 0; i < 3; i++) this.uFog[i] += (want[i] - this.uFog[i]) * Math.min(1, dt * 1.5);
+      this.skyColor = this.uFog.slice(); this.fogColor = this.uFog.slice();
+      this.sunrise = null; this.sunDir = [0, 1, 0]; this.celestial = 0; this.dayFactor = 1; this.rain = 0;
+      return;
+    }
     const a = world.celestialAngle(partial);
     let day = Math.cos(a * TAU) * 2 + 0.5;
     day = clamp(day, 0, 1);
@@ -246,7 +260,9 @@ class Renderer {
     return null;
   }
   updateLightmap(world, partial, extra) {
-    const sunB = world.menu ? 1 : world.sunBrightness(partial) * 0.95 + 0.05;
+    const under = world.dim === 1;
+    const sunB = world.menu ? 1 : under ? 0 : world.sunBrightness(partial) * 0.95 + 0.05;
+    const BR = under ? BRIGHTNESS_UNDER : BRIGHTNESS;
     this.flickerT += (Math.random() - Math.random()) * Math.random() * Math.random() * 0.1;
     this.flickerT *= 0.9;
     this.flicker = 1 + this.flickerT;
@@ -255,8 +271,8 @@ class Renderer {
     const flash = world.lightningFlash > 0 ? 1 : 0;
     const d = this.lightmapData;
     for (let s = 0; s < 16; s++) for (let bl = 0; bl < 16; bl++) {
-      const skyL = BRIGHTNESS[s] * (flash ? 1 : sunB);
-      const blkL = BRIGHTNESS[bl] * (this.flicker * 0.1 + 1.4);
+      const skyL = under ? 0 : BRIGHTNESS[s] * (flash ? 1 : sunB);
+      const blkL = BR[bl] * (this.flicker * 0.1 + 1.4);
       const skyR = skyL * (sunB * 0.65 + 0.35), skyG = skyR, skyB = skyL;
       const bG = blkL * ((blkL * 0.6 + 0.4) * 0.6 + 0.4), bB = blkL * (blkL * blkL * 0.6 + 0.4);
       let r = skyR + blkL, g = skyG + bG, b = skyB + bB;
@@ -387,6 +403,7 @@ class Renderer {
     this.updateLightmap(world, partial, hooks && hooks.lightExtra);
     const rd = settings.renderDistance * 16;
     let fogStart = rd * 0.6, fogEnd = rd;
+    if (world.dim) { fogStart = rd * 0.08; fogEnd = Math.min(rd, 192) * 0.62; }   // thick, hot haze
     let fogColor = this.fogColor;
     const inFluid = hooks && hooks.inFluid;
     if (inFluid === 'water') {
@@ -407,7 +424,7 @@ class Renderer {
     gl.frontFace(gl.CCW);
 
     // ---- sky ----
-    if (inFluid !== 'water' && inFluid !== 'lava') {
+    if (inFluid !== 'water' && inFluid !== 'lava' && !world.dim) {
       gl.disable(gl.DEPTH_TEST);
       gl.depthMask(false);
       const ps = this.progSky;
@@ -477,7 +494,7 @@ class Renderer {
     if (hooks && hooks.drawWorldObjects) hooks.drawWorldObjects(this, partial);
 
     // ---- clouds ----
-    if (settings.clouds !== 'off' && !world.menuNoClouds) this.drawClouds(world, cam, partial, fogColor);
+    if (settings.clouds !== 'off' && !world.menuNoClouds && !world.dim) this.drawClouds(world, cam, partial, fogColor);
 
     // ---- translucent terrain ----
     gl.useProgram(pc.p);

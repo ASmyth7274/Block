@@ -9,6 +9,16 @@ const WG = WorldGenFactory(Noise, GEN_TAB);
 const BIOMES = WG.BIOMES;
 const BIOME_TINTS = BIOMES.map((b) => b ? { grass: hexToRgb(b.grass), foliage: hexToRgb(b.foliage), water: hexToRgb(b.water) } : null);
 
+// Dimensions share one save: the Underworld's chunk and entity records are
+// stored under keys offset by DIM_KEY (an exact double, so keys stay unique).
+const DIM_KEY = 4294967296;
+const DIM_OVERWORLD = 0, DIM_UNDERWORLD = 1;
+function dimKeys(keys, dim) {
+  const out = new Set(), lo = dim * DIM_KEY, hi = lo + DIM_KEY;
+  for (const k of keys) if (k >= lo && k < hi) out.add(k - lo);
+  return out;
+}
+
 // Generation runs in Web Workers built from the very same source functions.
 class GenPool {
   constructor(seed, opts, onChunk) {
@@ -24,7 +34,7 @@ class GenPool {
       'let gen = null;',
       `onmessage = function (e) {
         const m = e.data;
-        if (m.type === 'init') { gen = new WG.Generator(m.seed, m.opts); }
+        if (m.type === 'init') { gen = WG.makeGenerator(m.seed, m.opts); }
         else if (m.type === 'gen') {
           const o = gen.generate(m.cx, m.cz);
           postMessage({ type: 'chunk', cx: o.cx, cz: o.cz, blocks: o.blocks, meta: o.meta, biomes: o.biomes, entities: o.entities, tiles: o.tiles, ticks: o.ticks }, [o.blocks.buffer, o.meta.buffer, o.biomes.buffer]);
@@ -45,7 +55,7 @@ class GenPool {
     }
     if (!this.workers.length) {
       // Fallback: generate on the main thread, one chunk per macrotask
-      this.local = new WG.Generator(seed, opts);
+      this.local = WG.makeGenerator(seed, opts);
       this.localQueue = [];
     }
     this.spawnCallbacks = new Map();
@@ -93,19 +103,22 @@ class World {
     this.info = info;
     this.seed = info.seed | 0;
     this.menu = !!opts.menu;       // title-screen panorama world (never saved)
+    this.dim = opts.dim || 0;       // 0 the overworld, 1 the Underworld
+    this.keyBase = this.dim * DIM_KEY;
     this.chunks = new Map();
     this.light = new LightEngine(this);
-    this.genOpts = { type: info.worldType || 'default', structures: info.structures !== false };
+    this.genOpts = { type: info.worldType || 'default', structures: info.structures !== false, dim: this.dim };
     this.gen = new GenPool(this.seed, this.genOpts, (m) => this.onGenerated(m));
-    this.localGen = new WG.Generator(this.seed, this.genOpts);   // main-thread queries (biomes)
+    this.localGen = WG.makeGenerator(this.seed, this.genOpts);   // main-thread queries (biomes)
     this.requested = new Map();
     this.time = info.time || 0;           // total ticks
     this.dayTime = info.dayTime !== undefined ? info.dayTime : 1000;
     this.rain = info.rain || 0; this.thunder = info.thunder || 0;
+    this.lightningFlash = 0;
     this.rainTime = info.rainTime || (12000 + Math.floor(Math.random() * 168000));
     this.thunderTime = info.thunderTime || (12000 + Math.floor(Math.random() * 168000));
     this.raining = !!info.raining; this.thundering = !!info.thundering;
-    this.rainStrength = this.raining ? 1 : 0; this.thunderStrength = this.thundering ? 1 : 0;
+    this.rainStrength = this.raining && !this.dim ? 1 : 0; this.thunderStrength = this.thundering && !this.dim ? 1 : 0;
     this.prevRainStrength = this.rainStrength; this.prevThunderStrength = this.thunderStrength;
     this.entities = [];
     this.entityMap = new Map();
@@ -114,7 +127,7 @@ class World {
     this.tickPending = new Set();
     this.rng = new Noise.Random();
     this.entityInit = new Set(info.entityInit || []);
-    this.savedKeys = new Set(info.savedKeys || []);
+    this.savedKeys = dimKeys(info.savedKeys || [], this.dim);
     this.storage = opts.storage || null;
     this.loadRadius = 6;
     this._lastChunk = null;
@@ -161,6 +174,7 @@ class World {
     return Math.max((l >> 4) - this.skyDarken(), l & 15);
   }
   skyDarken() {
+    if (this.dim) return 11;   // no sun reaches the Underworld
     // 0 at noon, 11 at midnight (rain/thunder darken further)
     const a = this.celestialAngle(1);
     let f = 1 - (Math.cos(a * TAU) * 2 + 0.5);
@@ -306,7 +320,7 @@ class World {
   requestChunk(cx, cz, key) {
     if (this.storage && this.savedKeys.has(key)) {
       this.requested.set(key, 'load');
-      this.storage.loadChunk(this.info.id, key).then((rec) => {
+      this.storage.loadChunk(this.info.id, key + this.keyBase).then((rec) => {
         if (!this.requested.has(key)) return;
         if (rec) { this.requested.delete(key); this.installChunk(rec, true); }
         else { this.requested.set(key, 'gen'); this.gen.request(cx, cz); }
@@ -362,7 +376,7 @@ class World {
     const rec = serializeChunk(c);
     this.savedKeys.add(c.key);
     c.modified = false;
-    this.storage.saveChunk(this.info.id, c.key, rec);
+    this.storage.saveChunk(this.info.id, c.key + this.keyBase, rec);
   }
   saveAll() {
     for (const c of this.chunks.values()) if (c.modified) this.saveChunk(c);
@@ -392,7 +406,7 @@ class World {
     f *= 1 - this.thunderStrength * 5 / 16;
     return f * 0.8 + 0.2;
   }
-  isDaytime() { return this.skyDarken() < 4; }
+  isDaytime() { return !this.dim && this.skyDarken() < 4; }
 
   // ------------------------------------------------------------ entities
   addEntity(e) {

@@ -150,7 +150,8 @@ const Recipes = (() => {
   }
   // slabs & stairs for stone-like materials
   const mats = [[6, [B.STONE, ANY]], [7, [B.COBBLESTONE, ANY]], [8, [B.STONE_BRICKS, 0]], [9, [B.BRICKS, ANY]], [10, [B.SANDSTONE, ANY]], [11, [B.RED_SANDSTONE, ANY]],
-    [12, [B.SLATE_BRICKS, ANY]], [13, [B.MARBLE_BRICKS, 0]], [14, [B.POLISHED_BASALT, ANY]], [15, [B.MOSSY_COBBLESTONE, ANY]], [16, [B.THATCH, ANY]]];
+    [12, [B.SLATE_BRICKS, ANY]], [13, [B.MARBLE_BRICKS, 0]], [14, [B.POLISHED_BASALT, ANY]], [15, [B.MOSSY_COBBLESTONE, ANY]], [16, [B.THATCH, ANY]],
+    [17, [B.BRIMSTONE_BRICKS, ANY]], [18, [B.QUARTZ_BLOCK, ANY]]];
   for (const [m, x] of mats) {
     shaped([B.SLAB, 6, m], ['###'], { '#': x });
     if (m !== 6) shaped([B.STAIRS, 4, m], ['#  ', '## ', '###'], { '#': x });
@@ -177,9 +178,24 @@ const Recipes = (() => {
   shaped([I.map], ['PPP', 'PCP', 'PPP'], { P: I.paper, C: I.compass });
   shaped([B.SLAB, 6, 16], ['###'], { '#': B.THATCH });
 
+  // ---------------- the Underworld ----------------
+  shaped([B.BRIMSTONE_BRICKS], ['##', '##'], { '#': I.brimstone_brick });
+  shaped([B.BRIMSTONE_FENCE, 6], ['###', '###'], { '#': B.BRIMSTONE_BRICKS });
+  shaped([B.SUNSTONE], ['##', '##'], { '#': I.sunstone_dust });
+  shaped([B.QUARTZ_BLOCK, 1, 0], ['##', '##'], { '#': I.smoky_quartz });
+  shaped([B.QUARTZ_BLOCK, 1, 1], ['#', '#'], { '#': [B.SLAB, 18] });
+  shaped([B.QUARTZ_BLOCK, 2, 2], ['#', '#'], { '#': [B.QUARTZ_BLOCK, 0] });
+  shaped([B.BONE_BLOCK], ['###', '###', '###'], { '#': [I.dye, 0] });
+  shapeless([I.dye, 9, 0], [B.BONE_BLOCK]);
+  shapeless([I.flare_powder, 2], [I.flare_rod]);
+  shapeless([I.fire_charge, 3], [I.gunpowder, I.flare_powder, [I.coal, ANY]]);
+  shapeless([I.magma_cream], [I.slimeball, I.flare_powder]);
+
   // ---------------- smelting ----------------
   smelt(B.COBBLESTONE, [B.STONE], 0.1);
   smelt(B.SAND, [B.GLASS], 0.1);
+  smelt(B.BRIMSTONE, [I.brimstone_brick], 0.1);
+  smelt(B.QUARTZ_ORE, [I.smoky_quartz], 0.2);
   smelt(B.ASH, [B.GLASS], 0.1);
   smelt(I.clay_ball, [I.brick], 0.3);
   smelt(B.CLAY, [B.TERRACOTTA, 1, 0], 0.35);
