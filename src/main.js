@@ -363,17 +363,23 @@ class Game {
     const saved = this.saveWorld();
     const pd = p.save();
     pd.dim = dim; pd.mount = undefined;
-    if (opts.respawn) {
-      info.travel = { respawn: true };
-      const s = info.spawn || { x: 0, y: 80, z: 0 };
-      pd.x = s.x + 0.5; pd.y = s.y; pd.z = s.z + 0.5;
+    if (opts.respawn || opts.home) {
+      // back to your bed (or the world spawn), after a death or through the Star Well
+      info.travel = opts.respawn ? { respawn: true } : { home: true };
+      const s = this.homeSpot();
+      pd.x = s[0]; pd.y = s[1]; pd.z = s[2];
+    } else if (dim === DIM_ISLES) {
+      info.travel = { dim, isles: true };
+      const a = Isles.ARRIVE;
+      pd.x = a[0] + 0.5; pd.y = a[1] + 1; pd.z = a[2] + 0.5;
     } else {
       const [tx, tz] = Portals.target(w.dim, p.x, p.z);
       const link = Portals.nearest(info, dim, tx, tz, dim === 0 ? 128 : 16);
       info.travel = { dim, x: tx, y: p.y, z: tz, link: link || null };
       pd.x = link ? link[1] + 0.5 : tx; pd.y = link ? link[2] : p.y; pd.z = link ? link[3] + 0.5 : tz;
     }
-    const title = opts.respawn ? 'Respawning' : dim === 1 ? 'Entering the Underworld' : 'Leaving the Underworld';
+    const title = opts.respawn ? 'Respawning' : dim === DIM_ISLES ? 'Entering the Far Isles' : w.dim === DIM_ISLES ? 'Leaving the Far Isles'
+      : dim === 1 ? 'Entering the Underworld' : 'Leaving the Underworld';
     const ls = new LoadingScreen(this, title);
     ls.sub = 'Building terrain';
     this.openScreen(ls);
@@ -385,6 +391,16 @@ class Game {
   arrive(t) {
     const w = this.world, p = this.player;
     if (t.respawn) { this.respawn(true); return; }
+    if (t.home || t.isles) {
+      if (t.home) this.placeHome(true);
+      else { const a = Isles.platform(w); p.setPos(a[0], a[1], a[2]); p.yaw = p.pyaw = Math.PI / 2; p.pitch = 0; this.achieve('isles'); }
+      p.vx = p.vy = p.vz = 0; p.fallDistance = 0;
+      p.portalLock = true; p.portalTime = 0;
+      this.portalFx = 1;
+      this.ambienceTimer = 200 + Math.floor(Math.random() * 300);
+      this.audio.play('rift_travel', 0.7, 0.9 + Math.random() * 0.2);
+      return;
+    }
     const spot = Portals.arrive(w, t);
     const dx = spot.axis ? 0 : 1, dz = spot.axis ? 1 : 0;
     p.setPos(spot.x + 0.5 + dx * 0.5, spot.y, spot.z + 0.5 + dz * 0.5);
@@ -397,12 +413,23 @@ class Game {
   }
   tickPortal() {
     const p = this.player, w = this.world;
-    let inPortal = false;
+    let inPortal = false, inRift = false;
     if (!p.dead && !p.riding && !p.sleeping) {
       const b = p.box;
-      for (let x = Math.floor(b.x0); x <= Math.floor(b.x1 - 1e-4) && !inPortal; x++) for (let y = Math.floor(b.y0); y <= Math.floor(b.y1 - 1e-4) && !inPortal; y++) for (let z = Math.floor(b.z0); z <= Math.floor(b.z1 - 1e-4); z++) if (w.getBlock(x, y, z) === B.PORTAL) { inPortal = true; break; }
+      for (let x = Math.floor(b.x0); x <= Math.floor(b.x1 - 1e-4); x++) for (let y = Math.floor(b.y0); y <= Math.floor(b.y1 - 1e-4); y++) for (let z = Math.floor(b.z0); z <= Math.floor(b.z1 - 1e-4); z++) {
+        const id = w.getBlock(x, y, z);
+        if (id === B.PORTAL) inPortal = true; else if (id === B.RIFT) inRift = true;
+      }
     }
-    if (!inPortal) p.portalLock = false;
+    if (inPortal && w.dim === DIM_ISLES) inPortal = false;
+    if (!inPortal && !inRift) p.portalLock = false;
+    // a rift takes you at once: out to the Far Isles, or home through the Star Well
+    if (inRift && !p.portalLock) {
+      p.portalLock = true;
+      if (w.dim === DIM_ISLES) this.leaveIsles();
+      else if (!w.dim) this.travel(DIM_ISLES);
+      return;
+    }
     if (inPortal && !p.portalLock) {
       if (p.portalTime === 0) this.audio.play('portal_trigger', 0.5, 0.8 + Math.random() * 0.4);
       p.portalTime++;
@@ -443,7 +470,7 @@ class Game {
   }
 
   // ------------------------------------------------------------ entity persistence
-  persistable(e) { return e.type === 'item' || e.type === 'xp' || e.type === 'boat' || e.type === 'minecart' || e.type === 'painting' || (e.category && e.category !== 'special' && (e.persistent || e.category === 'creature')); }
+  persistable(e) { return e.type === 'item' || e.type === 'xp' || e.type === 'boat' || e.type === 'minecart' || e.type === 'painting' || e.type === 'star_crystal' || (e.category && e.category !== 'special' && (e.persistent || e.category === 'creature')); }
   onChunkEntities(c, m, fromSave) {
     const w = this.world, key = c.key;
     if (this.entityKeys.has(key)) {
@@ -453,7 +480,7 @@ class Game {
         if (this.world !== w || !w.chunks.has(key) || !list) return;
         for (const d of list) { const e = entityFromData(w, d); if (e) w.addEntity(e); }
       }).catch((e) => { this.pendingEntityLoads.delete(key); console.error(e); });
-    } else if (!w.entityInit.has(key) && m.entities && m.entities.length) {
+    } else if (!w.entityInit.has(key + w.keyBase) && m.entities && m.entities.length) {
       for (const d of m.entities) {
         if (d.type === 'minecart') {
           // chest minecarts left behind in old mineshafts
@@ -461,10 +488,11 @@ class Game {
           c.relic = true;
           if (c.items && d.items) for (const it of d.items) { const s = ItemStack.fromJSON(it); if (s && it.slot >= 0 && it.slot < 27 && !c.items[it.slot]) c.items[it.slot] = s; }
           w.addEntity(c);
-        } else this.spawnMob(d.type, d.x, d.y, d.z, d.extra);
+        } else if (d.type === 'star_crystal') w.addEntity(new StarCrystal(w, d.x, d.y, d.z));
+        else this.spawnMob(d.type, d.x, d.y, d.z, d.extra);
       }
     }
-    if (!fromSave || m.entities) w.entityInit.add(key);
+    if (!fromSave || m.entities) w.entityInit.add(key + w.keyBase);
   }
   onChunkUnload(c) {
     const w = this.world, key = c.key;
@@ -682,7 +710,11 @@ class Game {
     this.renderer.atlas.tickAnimations();
     DynamicItems.update(this);
     this.tickWaterways();
-    if (w.time % 40 === 9) { if (!w.dim) { this.checkVillages(); this.checkVaults(); } else if (w.dim === 1) this.checkFortress(); }
+    if (w.time % 40 === 9) {
+      if (!w.dim) { this.checkVillages(); this.checkVaults(); } else if (w.dim === 1) this.checkFortress();
+      // until the Starwyrm guards it, the Star Well stands open as the way home
+      else if (w.dim === 2 && typeof Wyrm === 'undefined') Isles.setWell(w, true);
+    }
     Circuits.tickPlates(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
@@ -997,12 +1029,20 @@ class Game {
     const wind = clamp((p.y - 95) / 40, 0, 0.45) * (w.canSeeSky(bx, by, bz) ? 1 : 0) + (bio && bio.key === 'moors' ? 0.08 : 0);
     a.loop('wind', wind * this.settings.sound);
     // the Underworld: a constant low roar and the odd far-off moan
-    a.loop('under_drone', w.dim ? 0.3 * this.settings.sound : 0);
-    if (w.dim) {
+    a.loop('under_drone', w.dim === 1 ? 0.3 * this.settings.sound : 0);
+    // the Far Isles: a cold breath of air and, now and then, the stars ringing
+    a.loop('isles_air', w.dim === 2 ? 0.32 * this.settings.sound : 0);
+    if (w.dim === 1) {
       if (--this.ambienceTimer <= 0) {
         const ang = Math.random() * TAU;
         a.play('under_moan', 0.9, 0.7 + Math.random() * 0.4, p.x + Math.sin(ang) * 12, p.y + 4, p.z + Math.cos(ang) * 12);
         this.ambienceTimer = 600 + Math.floor(Math.random() * 1400);
+      }
+    } else if (w.dim === 2) {
+      if (--this.ambienceTimer <= 0) {
+        const ang = Math.random() * TAU;
+        a.play('isles_chime', 0.45, 0.85 + Math.random() * 0.3, p.x + Math.sin(ang) * 10, p.y + 5, p.z + Math.cos(ang) * 10);
+        this.ambienceTimer = 300 + Math.floor(Math.random() * 900);
       }
     } else if (--this.ambienceTimer <= 0) {
       const x = bx + Math.floor(Math.random() * 31) - 15, y = by + Math.floor(Math.random() * 15) - 7, z = bz + Math.floor(Math.random() * 31) - 15;
@@ -1102,7 +1142,8 @@ class Game {
       const n = Object.keys(p.discovered.biomes).filter((k) => BIOMES[k] && !BIOMES[k].dim).length;
       if (n >= 10) this.achieve('biomes10');
       if (known(0).every((x) => p.discovered.biomes[x.id])) this.achieve('biomesAll');
-      if (bi.dim && known(1).every((x) => p.discovered.biomes[x.id])) this.achieve('regions');
+      if (bi.dim === 1 && known(1).every((x) => p.discovered.biomes[x.id])) this.achieve('regions');
+      if (bi.key === 'drift_isles') this.achieve('drift');
     }
   }
   biomeIcon(key) {
@@ -1113,6 +1154,7 @@ class Game {
       mushroom_island: [B.MUSHROOM_RED, 0], beach: [B.SAND, 0], river: [I.water_bucket, 0], autumn_forest: [B.LEAVES, 4], redwood_grove: [B.LOG, 5], moors: [B.FLOWER, 4],
       ashen_wastes: [B.ASH, 0], salt_flats: [B.SALT, 0], meadow: [B.FLOWER, 3], canyon: [B.SAND, 1], stone_shore: [B.COBBLESTONE, 0],
       brimstone_depths: [B.BRIMSTONE, 0], bone_shoals: [B.BONESAND, 0], cinder_hollows: [B.BASALT, 0], glimmering_grotto: [B.SUNSTONE, 0],
+      great_isle: [B.STARSTONE, 0], starlit_gulf: [B.OBSIDIAN, 0], drift_isles: [B.STARSTONE_BRICKS, 0],
     };
     const e = map[key] || [B.GRASS, 0];
     return new ItemStack(e[0], 1, e[1]);
@@ -1185,8 +1227,23 @@ class Game {
     const p = this.player, w = this.world;
     if (!p) return;
     this.resetVitals(p);
-    // a death in the Underworld wakes you back home
+    // a death in another dimension wakes you back home
     if (w.dim) { this.deathScreenShown = false; if (!this.loading) this.travel(0, { respawn: true }); return; }
+    this.placeHome(silent);
+    this.deathScreenShown = false;
+    this.particles.clear();
+    if (!silent) this.closeScreen();
+  }
+  // where home is, as far as anyone can tell from another dimension
+  homeSpot() {
+    const p = this.player, s = p && p.spawnPoint;
+    if (s) { if (Array.isArray(s)) return [s[0] + 0.5, s[1], s[2] + 0.5]; return [s.x + 0.5, s.y + (s.forced ? 0 : 0.6), s.z + 0.5]; }
+    const ws = (this.world && this.world.info.spawn) || { x: 0, y: 80, z: 0 };
+    return [ws.x + 0.5, ws.y, ws.z + 0.5];
+  }
+  // stand the player at their bed, or the world spawn if the bed is gone
+  placeHome(silent) {
+    const p = this.player, w = this.world;
     let pos = null;
     if (p.spawnPoint) {
       const s = p.spawnPoint;
@@ -1197,9 +1254,12 @@ class Game {
     }
     if (!pos) { const s = w.spawn || { x: 0, y: 80, z: 0 }; const y = w.isLoaded(s.x, s.z) ? Math.max(s.y, w.topSolidY(s.x, s.z) + 1) : s.y; pos = [s.x + 0.5, y, s.z + 0.5]; }
     p.setPos(pos[0], pos[1], pos[2]);
-    this.deathScreenShown = false;
-    this.particles.clear();
-    if (!silent) this.closeScreen();
+  }
+  // through the Star Well and home; the first time, the long way round
+  leaveIsles() {
+    const p = this.player;
+    if (!p.seenEnding && Isles.state(this.world.info).kills > 0) { this.openScreen(new EndingScreen(this, () => { p.seenEnding = true; this.travel(0, { home: true }); })); return; }
+    this.travel(0, { home: true });
   }
   releaseBow(p, ticks) {
     const held = p.inventory.held();

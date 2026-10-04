@@ -718,6 +718,7 @@ defBlock(149, 'rift', {
   itemMetaMask: 0, drops: () => [], select: () => null, model: () => [{ b: [0, 0, 0, 16, 12, 16], faces: [1] }],
 });
 defBlock(150, 'starstone', { name: 'Starstone', hardness: 3, resistance: 45, tool: 'pickaxe', needsTool: true });
+defBlock(152, 'starstone_bricks', { name: 'Starstone Bricks', hardness: 3, resistance: 45, tool: 'pickaxe', needsTool: true });
 // infested bricks: something lives inside
 defBlock(151, 'infested_bricks', {
   name: (m) => ['Stone Bricks', 'Mossy Stone Bricks', 'Cracked Stone Bricks', 'Chiseled Stone Bricks'][m & 3],

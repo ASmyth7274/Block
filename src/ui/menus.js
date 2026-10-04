@@ -382,7 +382,9 @@ class VideoScreen extends Screen {
     const row = () => { const r = y; y += 24; return r; };
     let r = row();
     this.add(new Button(L, r, 150, 20, () => 'Graphics: ' + (s.graphics === 'fancy' ? 'Fancy' : 'Fast'), () => { s.graphics = s.graphics === 'fancy' ? 'fast' : 'fancy'; g.saveSettings(); g.applyVideo(); }));
-    this.add(new Slider(Rx, r, 150, (v) => 'Render Distance: ' + Math.round(2 + v * 14) + ' chunks', (s.renderDistance - 2) / 14, (v) => { s.renderDistance = Math.round(2 + v * 14); g.saveSettings(); }, 14));
+    // phones and tablets keep a shorter leash: every chunk costs memory
+    const RD = IS_MOBILE ? 10 : 30;
+    this.add(new Slider(Rx, r, 150, (v) => 'Render Distance: ' + Math.round(2 + v * RD) + ' chunks', clamp((s.renderDistance - 2) / RD, 0, 1), (v) => { s.renderDistance = Math.round(2 + v * RD); g.saveSettings(); }, RD));
     r = row();
     this.add(new Button(L, r, 150, 20, () => 'Smooth Lighting: ' + (s.smoothLighting ? 'ON' : 'OFF'), () => { s.smoothLighting = !s.smoothLighting; g.saveSettings(); g.applyVideo(); }));
     this.add(new Slider(Rx, r, 150, (v) => 'Max Framerate: ' + (v >= 1 ? 'Unlimited' : Math.round(30 + v * 230) + ' fps'), s.maxFps ? (s.maxFps - 30) / 230 : 1, (v) => { s.maxFps = v >= 1 ? 0 : Math.round(30 + v * 230); g.saveSettings(); }, 23));

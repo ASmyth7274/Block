@@ -36,7 +36,7 @@ const Portals = (() => {
     for (let j = 0; j < f.h; j++) for (let i = 0; i < f.w; i++) w.setBlock(f.x + dx * i, f.y + j, f.z + dz * i, B.PORTAL, f.axis, 0);
   }
   function tryLight(w, x, y, z) {
-    if (w.menu) return false;
+    if (w.menu || w.dim === 2) return false;   // no Underworld portal will catch in the Far Isles
     const f = detect(w, x, y, z, 0) || detect(w, x, y, z, 1);
     if (!f) return false;
     fill(w, f);

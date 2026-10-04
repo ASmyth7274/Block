@@ -198,6 +198,9 @@ const Recipes = (() => {
   // ---------------- the Vaults ----------------
   shapeless([I.seeker_eye], [I.wisp_essence, I.flare_powder]);
   shaped([B.IRON_BARS, 16], ['###', '###'], { '#': I.iron_ingot });
+  // ---------------- the Far Isles ----------------
+  shaped([B.STARSTONE_BRICKS, 4], ['##', '##'], { '#': B.STARSTONE });
+  shaped([I.star_crystal], ['GGG', 'GEG', 'GTG'], { G: B.GLASS, E: I.seeker_eye, T: I.wailer_tear });
 
   // ---------------- smelting ----------------
   smelt(B.COBBLESTONE, [B.STONE], 0.1);

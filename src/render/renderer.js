@@ -200,6 +200,20 @@ class Renderer {
 
   // ------------------------------------------------------------ sky colours
   computeSky(world, partial, camera) {
+    if (world.dim === 2) {
+      // the Far Isles: a deep violet void, its haze shifting from isle to gulf
+      const b = BIOMES[world.biomeAt(Math.floor(camera.x), Math.floor(camera.z))];
+      const want = (b && b.fog) || [0.075, 0.055, 0.12];
+      const now = performance.now(), dt = Math.min(1, ((now - (this.fogT || now)) / 1000));
+      this.fogT = now;
+      if (!this.uFog || this.uFogWorld !== world) { this.uFog = want.slice(); this.uFogWorld = world; }
+      for (let i = 0; i < 3; i++) this.uFog[i] += (want[i] - this.uFog[i]) * Math.min(1, dt * 1.5);
+      this.fogColor = this.uFog.slice();
+      this.skyColor = [this.uFog[0] * 0.45, this.uFog[1] * 0.4, this.uFog[2] * 0.62];
+      this.sunrise = null; this.sunDir = [0, 1, 0]; this.dayFactor = 0.4; this.rain = 0;
+      this.celestial = ((world.time + partial) % 192000) / 192000;
+      return;
+    }
     if (world.dim) {
       // no sky below: the air takes the colour of the region's haze
       const b = BIOMES[world.biomeAt(Math.floor(camera.x), Math.floor(camera.z))];
@@ -228,7 +242,7 @@ class Renderer {
     if (world.lightningFlash > 0) { const f = Math.min(1, world.lightningFlash - partial) * 0.45; sr = sr * (1 - f) + 0.8 * f; sg = sg * (1 - f) + 0.8 * f; sb = sb * (1 - f) + f; }
     // fog colour
     let fr = 0.753 * (day * 0.94 + 0.06), fg = 0.847 * (day * 0.94 + 0.06), fb = 1.0 * (day * 0.91 + 0.09);
-    const rdf = 1 - Math.pow(0.25 + 0.75 * this.game.settings.renderDistance / 16, 0.25);
+    const rdf = Math.max(0, 1 - Math.pow(0.25 + 0.75 * Math.min(32, this.game.settings.renderDistance) / 32, 0.25));
     fr += (sr - fr) * rdf; fg += (sg - fg) * rdf; fb += (sb - fb) * rdf;
     // sunrise / sunset
     const sun = this.sunriseColor(a);
@@ -260,9 +274,9 @@ class Renderer {
     return null;
   }
   updateLightmap(world, partial, extra) {
-    const under = world.dim === 1;
-    const sunB = world.menu ? 1 : under ? 0 : world.sunBrightness(partial) * 0.95 + 0.05;
-    const BR = under ? BRIGHTNESS_UNDER : BRIGHTNESS;
+    const under = world.dim === 1, isles = world.dim === 2;
+    const sunB = world.menu ? 1 : under ? 0 : isles ? 0.66 : world.sunBrightness(partial) * 0.95 + 0.05;
+    const BR = under || isles ? BRIGHTNESS_UNDER : BRIGHTNESS;
     this.flickerT += (Math.random() - Math.random()) * Math.random() * Math.random() * 0.1;
     this.flickerT *= 0.9;
     this.flicker = 1 + this.flickerT;
@@ -273,7 +287,8 @@ class Renderer {
     for (let s = 0; s < 16; s++) for (let bl = 0; bl < 16; bl++) {
       const skyL = under ? 0 : BRIGHTNESS[s] * (flash ? 1 : sunB);
       const blkL = BR[bl] * (this.flicker * 0.1 + 1.4);
-      const skyR = skyL * (sunB * 0.65 + 0.35), skyG = skyR, skyB = skyL;
+      let skyR = skyL * (sunB * 0.65 + 0.35), skyG = skyR, skyB = skyL;
+      if (isles) { skyR = skyL * 0.9; skyG = skyL * 0.82; skyB = skyL * 1.04; }   // a cold violet twilight
       const bG = blkL * ((blkL * 0.6 + 0.4) * 0.6 + 0.4), bB = blkL * (blkL * blkL * 0.6 + 0.4);
       let r = skyR + blkL, g = skyG + bG, b = skyB + bB;
       r = r * 0.96 + 0.03; g = g * 0.96 + 0.03; b = b * 0.96 + 0.03;
@@ -403,7 +418,8 @@ class Renderer {
     this.updateLightmap(world, partial, hooks && hooks.lightExtra);
     const rd = settings.renderDistance * 16;
     let fogStart = rd * 0.6, fogEnd = rd;
-    if (world.dim) { fogStart = rd * 0.08; fogEnd = Math.min(rd, 192) * 0.62; }   // thick, hot haze
+    if (world.dim === 1) { fogStart = rd * 0.08; fogEnd = Math.min(rd, 192) * 0.62; }   // thick, hot haze
+    else if (world.dim === 2) { fogStart = rd * 0.25; fogEnd = rd * 0.92; }             // a thin starlit mist
     let fogColor = this.fogColor;
     const inFluid = hooks && hooks.inFluid;
     if (inFluid === 'water') {
@@ -424,7 +440,8 @@ class Renderer {
     gl.frontFace(gl.CCW);
 
     // ---- sky ----
-    if (inFluid !== 'water' && inFluid !== 'lava' && !world.dim) {
+    if (inFluid !== 'water' && inFluid !== 'lava' && world.dim !== 1) {
+      const isles = world.dim === 2;
       gl.disable(gl.DEPTH_TEST);
       gl.depthMask(false);
       const ps = this.progSky;
@@ -436,7 +453,9 @@ class Renderer {
       gl.uniform4fv(ps.u.uSunrise, this.sunrise || [0, 0, 0, 0]);
       // the dark "void" below the horizon only shows when you are below sea level
       const vk = clamp((SEA_LEVEL + 1 - cam.y) / 16, 0, 1);
-      gl.uniform3fv(ps.u.uVoid, [lerp(fogColor[0], this.skyColor[0] * 0.2 + 0.04, vk), lerp(fogColor[1], this.skyColor[1] * 0.2 + 0.04, vk), lerp(fogColor[2], this.skyColor[2] * 0.6 + 0.1, vk)]);
+      if (isles) gl.uniform3fv(ps.u.uVoid, [0.022, 0.014, 0.045]);
+      else gl.uniform3fv(ps.u.uVoid, [lerp(fogColor[0], this.skyColor[0] * 0.2 + 0.04, vk), lerp(fogColor[1], this.skyColor[1] * 0.2 + 0.04, vk), lerp(fogColor[2], this.skyColor[2] * 0.6 + 0.1, vk)]);
+      gl.uniform1f(ps.u.uIsles, isles ? 1 : 0);
       gl.disable(gl.CULL_FACE);
       gl.bindVertexArray(this.skyVAO);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -544,6 +563,18 @@ class Renderer {
     Mat4.multiply(vp, this.skyVP, m);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    if (world.dim === 2) {
+      // no sun, no moon: only the stars, turning slowly overhead
+      const pe = this.useEnt(vp, 2, -1, false);
+      gl.uniform4f(pe.u.uTint, 0.85, 0.82, 1, 1);
+      gl.bindVertexArray(this.starBatch.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, this.starBatch.count);
+      gl.bindVertexArray(null);
+      gl.uniform4f(pe.u.uTint, 1, 1, 1, 1);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.disable(gl.BLEND);
+      return;
+    }
     // stars
     let starB = 1 - (Math.cos(a * TAU) * 2 + 0.25);
     starB = clamp(starB, 0, 1);

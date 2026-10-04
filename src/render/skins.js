@@ -424,6 +424,35 @@ const Skins = (() => {
     return s;
   })();
 
+  // ------------------------------------------------------------ the Far Isles
+  // the gaunt: a long, thin shadow speckled with starlight; its eyes live in a
+  // second skin that is drawn full-bright over the head
+  S.gaunt = (() => {
+    const s = new Skin(); const r = rng('gaunt');
+    const body = C('#17121f'), dark = C('#0e0b14'), speck = C('#5a4a7a'), star = C('#b8a8e8');
+    const pick = (x, y, k) => { const h = (x * 31 + y * 17 + k * 7) % 53; return h === 0 ? star : h < 4 ? speck : vary(r, (x + y) % 4 === 0 ? dark : body, 0.12); };
+    s.box(0, 0, 8, 8, 8, (f, x, y) => {
+      if (f === 'front' && y === 4 && (x === 1 || x === 2 || x === 5 || x === 6)) return [70, 40, 110];
+      if (f === 'front' && y >= 6 && x >= 2 && x <= 5) return dark;
+      return pick(x, y, 1);
+    });
+    s.box(16, 16, 8, 12, 4, (f, x, y) => pick(x, y, 2));
+    s.box(48, 0, 2, 26, 2, (f, x, y) => pick(x, y, 3));
+    s.box(56, 0, 2, 28, 2, (f, x, y) => y > 25 ? vary(r, dark, 0.1) : pick(x, y, 4));
+    return s;
+  })();
+  S.gaunt_eyes = (() => {
+    const s = new Skin();
+    s.box(0, 0, 8, 8, 8, (f, x, y) => {
+      if (f !== 'front') return null;
+      if (y === 4 && (x === 1 || x === 6)) return [196, 140, 255];
+      if (y === 4 && (x === 2 || x === 5)) return [248, 232, 255];
+      if (y === 3 && (x === 2 || x === 5)) return [150, 90, 220];
+      return null;
+    });
+    return s;
+  })();
+
   // ------------------------------------------------------------ the Underworld
   S.mite = (() => {
     const s = new Skin(); const r = rng('mite');

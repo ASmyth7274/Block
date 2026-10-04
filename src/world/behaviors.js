@@ -310,6 +310,17 @@ const Behaviors = (() => {
       if (!player.creative) player.inventory.setHeld(new ItemStack(I.bucket, 1, 0));
       return true;
     }
+    if (stack.id === I.star_crystal && (target === B.OBSIDIAN || target === B.BEDROCK)) {
+      // a star crystal sits on obsidian or bedrock, with room above it
+      const x = hit.x + 0.5, y = hit.y + 1, z = hit.z + 0.5;
+      if (w.getBlock(hit.x, hit.y + 1, hit.z) !== 0 || w.getBlock(hit.x, hit.y + 2, hit.z) !== 0) return false;
+      if (w.entitiesInBox(x - 1, y, z - 1, x + 1, y + 2, z + 1, (e) => !e.removed).length) return false;
+      game.spawnEntity(new StarCrystal(w, x, y, z));
+      game.audio.play('crystal_hum', 0.8, 1.2, x, y + 1, z);
+      if (!player.creative) player.inventory.decrementHeld(1);
+      if (typeof Wyrm !== 'undefined') Wyrm.crystalPlaced(game, hit.x, hit.y, hit.z);
+      return true;
+    }
     if (stack.id === I.seeker_eye && target === B.RIFT_FRAME) {
       if (!Rift.insertEye(game, hit.x, hit.y, hit.z)) return false;
       if (!player.creative) player.inventory.decrementHeld(1);

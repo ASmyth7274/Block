@@ -337,7 +337,7 @@ class Hud {
       'Chunk: ' + (bx & 15) + ' ' + (by & 15) + ' ' + (bz & 15) + ' in ' + (bx >> 4) + ' ' + (by >> 4) + ' ' + (bz >> 4),
       'Facing: ' + facing + ' (' + wrapDegrees(-p.yaw * 180 / Math.PI + 180).toFixed(1) + ' / ' + (-p.pitch * 180 / Math.PI).toFixed(1) + ')',
       'Light: ' + Math.max(l >> 4, l & 15) + ' (' + (l >> 4) + ' sky, ' + (l & 15) + ' block)',
-      'Biome: ' + (b ? b.name : '?') + (w.dim ? ' (Underworld)' : ''),
+      'Biome: ' + (b ? b.name : '?') + (w.dim === 1 ? ' (Underworld)' : w.dim === 2 ? ' (Far Isles)' : ''),
       'Day ' + Math.floor(w.dayTime / 24000) + ', time ' + (w.dayTime % 24000) + (w.raining ? (w.thundering ? ', thunder' : ', rain') : ''),
       'Seed: ' + w.seed,
     ];

@@ -1117,6 +1117,7 @@ defBlock(149, 'rift', {
   itemMetaMask: 0, drops: () => [], select: () => null, model: () => [{ b: [0, 0, 0, 16, 12, 16], faces: [1] }],
 });
 defBlock(150, 'starstone', { name: 'Starstone', hardness: 3, resistance: 45, tool: 'pickaxe', needsTool: true });
+defBlock(152, 'starstone_bricks', { name: 'Starstone Bricks', hardness: 3, resistance: 45, tool: 'pickaxe', needsTool: true });
 // infested bricks: something lives inside
 defBlock(151, 'infested_bricks', {
   name: (m) => ['Stone Bricks', 'Mossy Stone Bricks', 'Cracked Stone Bricks', 'Chiseled Stone Bricks'][m & 3],
@@ -1410,6 +1411,7 @@ defItem('fermented_spider_eye', { name: 'Fermented Spider Eye' });
 defItem('glistering_melon', { name: 'Glistering Melon' });
 // ---- the Vaults ----
 defItem('seeker_eye', { name: "Seeker's Eye", rare: true });
+defItem('star_crystal', { name: 'Star Crystal', rare: true });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -4119,6 +4121,53 @@ const TexGen = (function () {
     { o: '#4a2a10', b: '#c8842a', c: '#5ae0c8', w: '#c0fff0', g: '#2a9a8a', k: '#08201c' });
 })();
 
+// ---- src/render/isleart.js
+// ---------------------------------------------------------------------------
+// Artwork for the Far Isles: the star crystal's cage of light and its core,
+// starstone bricks, and the odd things found out among the isles.
+// ---------------------------------------------------------------------------
+(function () {
+  const { Img, T, reg, sprite, C, mix } = TexGen;
+  // a star crystal's frame: bright struts and braces, empty between
+  reg('star_crystal_glass', (() => {
+    const img = new Img();
+    const edge = C('#efe6ff'), brace = C('#b89cf0'), dim = C('#8a6ad0');
+    for (let i = 0; i < 16; i++) {
+      img.set(i, 0, edge); img.set(i, 15, edge); img.set(0, i, edge); img.set(15, i, edge);
+      if (i > 1 && i < 14) { img.set(i, i, (i % 3) ? brace : dim); img.set(15 - i, i, (i % 3) ? brace : dim); }
+    }
+    for (const [x, y] of [[1, 1], [14, 1], [1, 14], [14, 14]]) img.set(x, y, C('#ffffff'));
+    return img;
+  })());
+  // its heart: a small white star burning in violet
+  reg('star_crystal_core', (() => {
+    const img = new Img();
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const dx = x - 7.5, dy = y - 7.5, d = Math.hypot(dx, dy), ray = Math.min(Math.abs(dx), Math.abs(dy));
+      let c = mix(C('#5a2a9a'), C('#2a0e4a'), Math.min(1, d / 10));
+      if (ray < 1.2 && d < 7.5) c = mix(C('#ffffff'), C('#c8a0ff'), d / 7.5);
+      if (d < 2.6) c = C('#ffffff');
+      else if (d < 4) c = mix(C('#f0e0ff'), c, (d - 2.6) / 1.4);
+      img.set(x, y, c);
+    }
+    return img;
+  })());
+  // dressed starstone
+  reg('starstone_bricks', (() => {
+    const img = T.starstone.copy();
+    const mortar = C('#a8a47e'), hi = C('#f2f0d0');
+    for (let x = 0; x < 16; x++) { img.set(x, 7, mortar); img.set(x, 15, mortar); img.set(x, 0, hi); img.set(x, 8, hi); }
+    for (let y = 0; y < 7; y++) { img.set(7, y, mortar); img.set(8, y, hi); }
+    for (let y = 8; y < 15; y++) { img.set(15, y, mortar); img.set(0, y, hi); }
+    return img;
+  })());
+  sprite('star_crystal', [
+    '................', '.......ww.......', '......wccw......', '.....wcwwcw.....', '....wcwssscw....', '...wcwsSSSscw...',
+    '..wcwsSSWSSscw..', '.wcwsSSWWWSSscw.', '.wcwsSSWWWSSscw.', '..wcwsSSWSSscw..', '...wcwsSSSscw...', '....wcwssscw....',
+    '.....wcwwcw.....', '......wccw......', '.......ww.......', '................'],
+    { w: '#efe6ff', c: '#b89cf0', s: '#5a2a9a', S: '#a070e0', W: '#ffffff' });
+})();
+
 // ---- src/world/worldgen.js
 // ---------------------------------------------------------------------------
 // World generation. Self-contained factory (no outer references) so it can be
@@ -6547,7 +6596,152 @@ function WorldGenFactory(Noise, TAB) {
       for (let k = 0; k < 10; k++) { const x = cx + rng.nextInt(9) - 4, z = cz + rng.nextInt(9) - 4; if (get(x, y - 1, z) === B.BRIMSTONE) set(x, y - 1, z, B.BONESAND); }
     }
   }
-  function makeGenerator(seed, opts) { return (opts && opts.dim === 1) ? new UnderGenerator(seed, opts) : new Generator(seed, opts); }
+  // ------------------------------------------------------------------ the Far Isles
+  // Pale starstone adrift in a starlit void. The Great Isle sits at the centre,
+  // ringed by ten obsidian spires, each crowned with a star crystal; at its
+  // heart the Star Well, dry until the Starwyrm falls. Far out, past a wide
+  // gulf of nothing, the Drift Isles scatter away for ever.
+  const ibiome = (id, key, name, fog, o) => biome(id, key, name, Object.assign({
+    dim: 2, temp: 0.5, rain: 0, depth: 0, top: B.STARSTONE, filler: B.STARSTONE, under: B.STARSTONE, grass: '#8a7aa8', foliage: '#8a7aa8', water: '#8a7ae8',
+    tallGrass: 0, flowers: 0, cane: 0, pumpkins: false, animals: [], structures: [], fog,
+  }, o));
+  BI.I_GREAT = ibiome(44, 'great_isle', 'The Great Isle', [0.075, 0.055, 0.12]);
+  BI.I_GULF = ibiome(45, 'starlit_gulf', 'The Starlit Gulf', [0.05, 0.04, 0.1]);
+  BI.I_DRIFT = ibiome(46, 'drift_isles', 'The Drift Isles', [0.085, 0.06, 0.13]);
+  const ISLES = { ARRIVE: [100, 48, 0], GULF: 760, SPIRE_R: 43 };
+
+  class IslesGenerator extends Generator {
+    constructor(seed, opts) {
+      super(seed, opts);
+      const r = new Random(seedHash(this.seed, 21, 777));
+      this.iEdge = new Octaves(r, 3); this.iHill = new Octaves(r, 3); this.iUnder = new Octaves(r, 3);
+      this.iRough = new Octaves(r, 2); this.iCluster = new Octaves(r, 3);
+      this.driftCache = new Map();
+    }
+    villageAt() { return null; }
+    mineshaftAt() { return null; }
+    findSpawn() { return { x: ISLES.ARRIVE[0], z: ISLES.ARRIVE[2] }; }
+    tempAt() { return 0.5; }
+    biomeAt(x, z) {
+      const r2 = x * x + z * z;
+      return r2 < 220 * 220 ? BI.I_GREAT.id : r2 < (ISLES.GULF - 60) * (ISLES.GULF - 60) ? BI.I_GULF.id : BI.I_DRIFT.id;
+    }
+    // a drift isle somewhere in a 64-block cell of the outer void (or none)
+    driftIsle(i, j) {
+      const key = i + ',' + j;
+      let d = this.driftCache.get(key);
+      if (d !== undefined) return d;
+      d = null;
+      const cx = i * 64 + 32, cz = j * 64 + 32;
+      if (cx * cx + cz * cz > ISLES.GULF * ISLES.GULF) {
+        const rng = new Random(seedHash(this.seed, i, j, 0xD71F));
+        const cl = this.iCluster.noise2(i / 6, j / 6);
+        if (rng.nextFloat() < 0.36 + cl * 0.5) {
+          d = { i, j, x: cx + rng.nextInt(29) - 14, z: cz + rng.nextInt(29) - 14, R: 9 + rng.nextInt(17) + (cl > 0.3 ? 6 : 0), top: 46 + rng.nextInt(22), seed: rng.nextInt(0x7fffffff) };
+        }
+      }
+      if (this.driftCache.size > 20000) this.driftCache.clear();
+      this.driftCache.set(key, d);
+      return d;
+    }
+    // the solid span [bottom, top] of a column, or null over the void
+    column(x, z) {
+      const r = Math.sqrt(x * x + z * z);
+      if (r < 140) {
+        // the Great Isle: a gentle dome with a long root hanging beneath
+        const R = 90 + this.iEdge.noise2(x / 48, z / 48) * 16;
+        if (r >= R) return null;
+        const m = 1 - Math.pow(r / R, 1.8);
+        const top = Math.floor(56 + Math.sqrt(m) * 7 + this.iHill.noise2(x / 24, z / 24) * 2.5 * m);
+        const depth = 2 + Math.pow(m, 0.85) * 44 * (0.82 + 0.18 * this.iUnder.noise2(x / 13, z / 13)) + Math.max(0, this.iRough.noise2(x / 4, z / 4)) * 7 * m;
+        return [Math.max(1, top - Math.floor(depth)), top, null];
+      }
+      if (r < ISLES.GULF - 50) return null;
+      const i0 = Math.floor(x / 64), j0 = Math.floor(z / 64);
+      let best = null, bm = 0;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const d = this.driftIsle(i0 + di, j0 + dj);
+        if (!d) continue;
+        const dx = x - d.x, dz = z - d.z;
+        const R = d.R * (1 + this.iEdge.noise2(x / 22 + d.i * 7.3, z / 22 + d.j * 5.1) * 0.3);
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist >= R) continue;
+        const m = 1 - Math.pow(dist / R, 1.8);
+        if (m <= bm) continue;
+        bm = m;
+        const top = Math.floor(d.top + Math.sqrt(m) * 4 + this.iHill.noise2(x / 18, z / 18) * 2 * m);
+        const depth = 2 + Math.pow(m, 0.85) * d.R * 1.1 * (0.8 + 0.2 * this.iUnder.noise2(x / 11, z / 11)) + Math.max(0, this.iRough.noise2(x / 4, z / 4)) * 5 * m;
+        best = [Math.max(1, top - Math.floor(depth)), top, d];
+      }
+      return best;
+    }
+    generate(cx, cz) {
+      const blocks = new Uint8Array(16 * 16 * H), meta = new Uint8Array(16 * 16 * H), biomes = new Uint8Array(256);
+      const out = { cx, cz, blocks, meta, biomes, entities: [], tiles: [], ticks: [] };
+      const x0 = cx * 16, z0 = cz * 16;
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
+        biomes[z * 16 + x] = this.biomeAt(x0 + x, z0 + z);
+        const col = this.column(x0 + x, z0 + z);
+        if (!col) continue;
+        for (let y = col[0]; y <= col[1]; y++) blocks[IDX(x, y, z)] = B.STARSTONE;
+      }
+      if (Math.abs(cx) <= 9 && Math.abs(cz) <= 9) { this.spires(out); this.starWell(out); }
+      return out;
+    }
+    // ten obsidian spires in a ring, tallest and widest at random; the two
+    // shortest keep their crystals in iron cages
+    spireList() {
+      if (this._spires) return this._spires;
+      const rng = new Random(seedHash(this.seed, 31, 4441));
+      const order = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+      for (let i = 9; i > 0; i--) { const j = rng.nextInt(i + 1); const t = order[i]; order[i] = order[j]; order[j] = t; }
+      const out = [];
+      for (let k = 0; k < 10; k++) {
+        const a = Math.PI * 2 * k / 10 + 0.2, idx = order[k];
+        out.push({ x: Math.round(Math.cos(a) * ISLES.SPIRE_R), z: Math.round(Math.sin(a) * ISLES.SPIRE_R), r: 2 + Math.floor(idx / 3), h: 76 + idx * 3, caged: idx <= 1 });
+      }
+      return (this._spires = out);
+    }
+    spires(out) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16;
+      const set = (x, y, z, id, m) => { if (x < X0 || x >= X0 + 16 || z < Z0 || z >= Z0 + 16 || y < 1 || y >= H - 1) return; const i = IDX(x - X0, y, z - Z0); blocks[i] = id; meta[i] = m || 0; };
+      for (const s of this.spireList()) {
+        if (s.x + s.r + 2 < X0 || s.x - s.r - 2 > X0 + 15 || s.z + s.r + 2 < Z0 || s.z - s.r - 2 > Z0 + 15) continue;
+        for (let x = s.x - s.r; x <= s.x + s.r; x++) for (let z = s.z - s.r; z <= s.z + s.r; z++) {
+          if ((x - s.x) * (x - s.x) + (z - s.z) * (z - s.z) > s.r * s.r + 1) continue;
+          const col = this.column(x, z);
+          for (let y = col ? col[0] + 3 : 40; y < s.h; y++) set(x, y, z, B.OBSIDIAN);
+        }
+        set(s.x, s.h, s.z, B.BEDROCK);
+        if (s.caged) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+          if (Math.abs(dx) === 2 || Math.abs(dz) === 2) for (let y = s.h; y <= s.h + 3; y++) set(s.x + dx, y, s.z + dz, B.IRON_BARS);
+          set(s.x + dx, s.h + 4, s.z + dz, B.IRON_BARS);
+        }
+        if (s.x >= X0 && s.x < X0 + 16 && s.z >= Z0 && s.z < Z0 + 16) out.entities.push({ type: 'star_crystal', x: s.x + 0.5, y: s.h + 1, z: s.z + 0.5 });
+      }
+    }
+    // the Star Well: a ring of bedrock round a dry basin and a torch-lit pillar
+    wellTop() { const c = this.column(0, 0); return c ? c[1] : 60; }
+    starWell(out) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16;
+      if (X0 > 6 || X0 + 15 < -6 || Z0 > 6 || Z0 + 15 < -6) return;
+      const set = (x, y, z, id, m) => { if (x < X0 || x >= X0 + 16 || z < Z0 || z >= Z0 + 16 || y < 1 || y >= H - 1) return; const i = IDX(x - X0, y, z - Z0); blocks[i] = id; meta[i] = m || 0; };
+      const y0 = this.wellTop();
+      for (let x = -6; x <= 6; x++) for (let z = -6; z <= 6; z++) {
+        const d2 = x * x + z * z;
+        if (d2 > 36) continue;
+        for (let y = y0 + 1; y <= y0 + 10; y++) set(x, y, z, 0);
+        if (d2 <= 12.5) { set(x, y0, z, B.BEDROCK); set(x, y0 - 1, z, B.STARSTONE); }
+        if (d2 > 6.5 && d2 <= 12.5) set(x, y0 + 1, z, B.BEDROCK);
+      }
+      for (let y = y0 + 1; y <= y0 + 4; y++) set(0, y, 0, B.BEDROCK);
+      set(1, y0 + 3, 0, B.TORCH, 1); set(-1, y0 + 3, 0, B.TORCH, 2); set(0, y0 + 3, 1, B.TORCH, 3); set(0, y0 + 3, -1, B.TORCH, 4);
+    }
+  }
+  function makeGenerator(seed, opts) {
+    const dim = opts && opts.dim;
+    return dim === 1 ? new UnderGenerator(seed, opts) : dim === 2 ? new IslesGenerator(seed, opts) : new Generator(seed, opts);
+  }
 
   // Writer that clips feature writes to one chunk.
   // mode: 0 = force, 1 = replace air/plants/leaves only (leaves), 2 = replace air & plants (boulders), 3 = log (replace air, leaves, plants)
@@ -6569,7 +6763,7 @@ function WorldGenFactory(Noise, TAB) {
     setIf(x, y, z, id, m, ifId) { if (this.get(x, y, z) === ifId) this.set(x, y, z, id, m, 0); }
   }
 
-  return { BIOMES, BI, Generator, UnderGenerator, makeGenerator, SEA, H, LAVA_SEA };
+  return { BIOMES, BI, Generator, UnderGenerator, IslesGenerator, makeGenerator, SEA, H, LAVA_SEA, ISLES };
 }
 
 // ---- src/world/chunk.js
@@ -6953,10 +7147,11 @@ const WG = WorldGenFactory(Noise, GEN_TAB);
 const BIOMES = WG.BIOMES;
 const BIOME_TINTS = BIOMES.map((b) => b ? { grass: hexToRgb(b.grass), foliage: hexToRgb(b.foliage), water: hexToRgb(b.water) } : null);
 
-// Dimensions share one save: the Underworld's chunk and entity records are
-// stored under keys offset by DIM_KEY (an exact double, so keys stay unique).
+// Dimensions share one save: the Underworld's and the Far Isles' chunk and
+// entity records are stored under keys offset by dim * DIM_KEY (exact doubles,
+// so keys stay unique).
 const DIM_KEY = 4294967296;
-const DIM_OVERWORLD = 0, DIM_UNDERWORLD = 1;
+const DIM_OVERWORLD = 0, DIM_UNDERWORLD = 1, DIM_ISLES = 2;
 function dimKeys(keys, dim) {
   const out = new Set(), lo = dim * DIM_KEY, hi = lo + DIM_KEY;
   for (const k of keys) if (k >= lo && k < hi) out.add(k - lo);
@@ -7047,7 +7242,7 @@ class World {
     this.info = info;
     this.seed = info.seed | 0;
     this.menu = !!opts.menu;       // title-screen panorama world (never saved)
-    this.dim = opts.dim || 0;       // 0 the overworld, 1 the Underworld
+    this.dim = opts.dim || 0;       // 0 the overworld, 1 the Underworld, 2 the Far Isles
     this.keyBase = this.dim * DIM_KEY;
     this.chunks = new Map();
     this.light = new LightEngine(this);
@@ -7118,7 +7313,7 @@ class World {
     return Math.max((l >> 4) - this.skyDarken(), l & 15);
   }
   skyDarken() {
-    if (this.dim) return 11;   // no sun reaches the Underworld
+    if (this.dim) return 11;   // no sun reaches the Underworld or the Far Isles
     // 0 at noon, 11 at midnight (rain/thunder darken further)
     const a = this.celestialAngle(1);
     let f = 1 - (Math.cos(a * TAU) * 2 + 0.5);
@@ -7626,7 +7821,7 @@ void main() {
   // shade codes 252-254 mark decals (wire on the ground): nudged toward the camera so they never z-fight
   uint shb = (a.z >> 24) & 255u;
   float sh = float(shb) / 255.0;
-  if (shb >= 252u) { p *= 0.9985; sh = shb == 254u ? 1.0 : (shb == 253u ? 0.8 : 0.6); }
+  if (shb >= 252u && shb <= 254u) { p *= 0.9985; sh = shb == 254u ? 1.0 : (shb == 253u ? 0.8 : 0.6); }
   gl_Position = uVP * vec4(p, 1.0);
   vUV = vec3(float(a.y & 31u) * 0.0625, float((a.y >> 5) & 31u) * 0.0625, float((a.y >> 10) & 1023u));
   vLight = vec2(float((a.y >> 20) & 63u), float((a.y >> 26) & 63u)) / 60.0;
@@ -7654,13 +7849,27 @@ out vec2 vNdc;
 void main() { vNdc = aPos; gl_Position = vec4(aPos, 0.9999, 1.0); }`,
   skyFS: `#version 300 es
 precision highp float;
-uniform mat4 uInvVP; uniform vec3 uSky; uniform vec3 uFogColor; uniform vec3 uSunDir; uniform vec4 uSunrise; uniform vec3 uVoid;
+uniform mat4 uInvVP; uniform vec3 uSky; uniform vec3 uFogColor; uniform vec3 uSunDir; uniform vec4 uSunrise; uniform vec3 uVoid; uniform float uIsles;
 in vec2 vNdc; out vec4 o;
+float h3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float vn(vec3 x) {
+  vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(h3(i), h3(i + vec3(1, 0, 0)), f.x), mix(h3(i + vec3(0, 1, 0)), h3(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(h3(i + vec3(0, 0, 1)), h3(i + vec3(1, 0, 1)), f.x), mix(h3(i + vec3(0, 1, 1)), h3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
 void main() {
   vec4 p = uInvVP * vec4(vNdc, 1.0, 1.0);
   vec3 d = normalize(p.xyz / p.w);
   float e = d.y;
   vec3 col = mix(uFogColor, uSky, smoothstep(0.02, 0.42, e));
+  if (uIsles > 0.0) {
+    // the Far Isles: a faint river of starlight across the void, violet and teal
+    float n = vn(d * 5.0) * 0.55 + vn(d * 11.0) * 0.3 + vn(d * 23.0) * 0.15;
+    float band = exp(-pow(dot(d, normalize(vec3(0.42, 0.3, 0.86))) / 0.26, 2.0));
+    col += vec3(0.14, 0.06, 0.2) * band * smoothstep(0.25, 0.85, n) * 1.4;
+    col += vec3(0.02, 0.1, 0.11) * pow(band, 3.0) * smoothstep(0.45, 0.9, n);
+    col = mix(col, uFogColor, 1.0 - smoothstep(-0.05, 0.3, e));
+  }
   if (e < 0.0) col = mix(uFogColor, uVoid, smoothstep(0.0, -0.25, e));
   if (uSunrise.a > 0.0) {
     vec2 h = normalize(d.xz + vec2(1e-5));
@@ -8731,6 +8940,20 @@ class Renderer {
 
   // ------------------------------------------------------------ sky colours
   computeSky(world, partial, camera) {
+    if (world.dim === 2) {
+      // the Far Isles: a deep violet void, its haze shifting from isle to gulf
+      const b = BIOMES[world.biomeAt(Math.floor(camera.x), Math.floor(camera.z))];
+      const want = (b && b.fog) || [0.075, 0.055, 0.12];
+      const now = performance.now(), dt = Math.min(1, ((now - (this.fogT || now)) / 1000));
+      this.fogT = now;
+      if (!this.uFog || this.uFogWorld !== world) { this.uFog = want.slice(); this.uFogWorld = world; }
+      for (let i = 0; i < 3; i++) this.uFog[i] += (want[i] - this.uFog[i]) * Math.min(1, dt * 1.5);
+      this.fogColor = this.uFog.slice();
+      this.skyColor = [this.uFog[0] * 0.45, this.uFog[1] * 0.4, this.uFog[2] * 0.62];
+      this.sunrise = null; this.sunDir = [0, 1, 0]; this.dayFactor = 0.4; this.rain = 0;
+      this.celestial = ((world.time + partial) % 192000) / 192000;
+      return;
+    }
     if (world.dim) {
       // no sky below: the air takes the colour of the region's haze
       const b = BIOMES[world.biomeAt(Math.floor(camera.x), Math.floor(camera.z))];
@@ -8759,7 +8982,7 @@ class Renderer {
     if (world.lightningFlash > 0) { const f = Math.min(1, world.lightningFlash - partial) * 0.45; sr = sr * (1 - f) + 0.8 * f; sg = sg * (1 - f) + 0.8 * f; sb = sb * (1 - f) + f; }
     // fog colour
     let fr = 0.753 * (day * 0.94 + 0.06), fg = 0.847 * (day * 0.94 + 0.06), fb = 1.0 * (day * 0.91 + 0.09);
-    const rdf = 1 - Math.pow(0.25 + 0.75 * this.game.settings.renderDistance / 16, 0.25);
+    const rdf = Math.max(0, 1 - Math.pow(0.25 + 0.75 * Math.min(32, this.game.settings.renderDistance) / 32, 0.25));
     fr += (sr - fr) * rdf; fg += (sg - fg) * rdf; fb += (sb - fb) * rdf;
     // sunrise / sunset
     const sun = this.sunriseColor(a);
@@ -8791,9 +9014,9 @@ class Renderer {
     return null;
   }
   updateLightmap(world, partial, extra) {
-    const under = world.dim === 1;
-    const sunB = world.menu ? 1 : under ? 0 : world.sunBrightness(partial) * 0.95 + 0.05;
-    const BR = under ? BRIGHTNESS_UNDER : BRIGHTNESS;
+    const under = world.dim === 1, isles = world.dim === 2;
+    const sunB = world.menu ? 1 : under ? 0 : isles ? 0.66 : world.sunBrightness(partial) * 0.95 + 0.05;
+    const BR = under || isles ? BRIGHTNESS_UNDER : BRIGHTNESS;
     this.flickerT += (Math.random() - Math.random()) * Math.random() * Math.random() * 0.1;
     this.flickerT *= 0.9;
     this.flicker = 1 + this.flickerT;
@@ -8804,7 +9027,8 @@ class Renderer {
     for (let s = 0; s < 16; s++) for (let bl = 0; bl < 16; bl++) {
       const skyL = under ? 0 : BRIGHTNESS[s] * (flash ? 1 : sunB);
       const blkL = BR[bl] * (this.flicker * 0.1 + 1.4);
-      const skyR = skyL * (sunB * 0.65 + 0.35), skyG = skyR, skyB = skyL;
+      let skyR = skyL * (sunB * 0.65 + 0.35), skyG = skyR, skyB = skyL;
+      if (isles) { skyR = skyL * 0.9; skyG = skyL * 0.82; skyB = skyL * 1.04; }   // a cold violet twilight
       const bG = blkL * ((blkL * 0.6 + 0.4) * 0.6 + 0.4), bB = blkL * (blkL * blkL * 0.6 + 0.4);
       let r = skyR + blkL, g = skyG + bG, b = skyB + bB;
       r = r * 0.96 + 0.03; g = g * 0.96 + 0.03; b = b * 0.96 + 0.03;
@@ -8934,7 +9158,8 @@ class Renderer {
     this.updateLightmap(world, partial, hooks && hooks.lightExtra);
     const rd = settings.renderDistance * 16;
     let fogStart = rd * 0.6, fogEnd = rd;
-    if (world.dim) { fogStart = rd * 0.08; fogEnd = Math.min(rd, 192) * 0.62; }   // thick, hot haze
+    if (world.dim === 1) { fogStart = rd * 0.08; fogEnd = Math.min(rd, 192) * 0.62; }   // thick, hot haze
+    else if (world.dim === 2) { fogStart = rd * 0.25; fogEnd = rd * 0.92; }             // a thin starlit mist
     let fogColor = this.fogColor;
     const inFluid = hooks && hooks.inFluid;
     if (inFluid === 'water') {
@@ -8955,7 +9180,8 @@ class Renderer {
     gl.frontFace(gl.CCW);
 
     // ---- sky ----
-    if (inFluid !== 'water' && inFluid !== 'lava' && !world.dim) {
+    if (inFluid !== 'water' && inFluid !== 'lava' && world.dim !== 1) {
+      const isles = world.dim === 2;
       gl.disable(gl.DEPTH_TEST);
       gl.depthMask(false);
       const ps = this.progSky;
@@ -8967,7 +9193,9 @@ class Renderer {
       gl.uniform4fv(ps.u.uSunrise, this.sunrise || [0, 0, 0, 0]);
       // the dark "void" below the horizon only shows when you are below sea level
       const vk = clamp((SEA_LEVEL + 1 - cam.y) / 16, 0, 1);
-      gl.uniform3fv(ps.u.uVoid, [lerp(fogColor[0], this.skyColor[0] * 0.2 + 0.04, vk), lerp(fogColor[1], this.skyColor[1] * 0.2 + 0.04, vk), lerp(fogColor[2], this.skyColor[2] * 0.6 + 0.1, vk)]);
+      if (isles) gl.uniform3fv(ps.u.uVoid, [0.022, 0.014, 0.045]);
+      else gl.uniform3fv(ps.u.uVoid, [lerp(fogColor[0], this.skyColor[0] * 0.2 + 0.04, vk), lerp(fogColor[1], this.skyColor[1] * 0.2 + 0.04, vk), lerp(fogColor[2], this.skyColor[2] * 0.6 + 0.1, vk)]);
+      gl.uniform1f(ps.u.uIsles, isles ? 1 : 0);
       gl.disable(gl.CULL_FACE);
       gl.bindVertexArray(this.skyVAO);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -9075,6 +9303,18 @@ class Renderer {
     Mat4.multiply(vp, this.skyVP, m);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    if (world.dim === 2) {
+      // no sun, no moon: only the stars, turning slowly overhead
+      const pe = this.useEnt(vp, 2, -1, false);
+      gl.uniform4f(pe.u.uTint, 0.85, 0.82, 1, 1);
+      gl.bindVertexArray(this.starBatch.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, this.starBatch.count);
+      gl.bindVertexArray(null);
+      gl.uniform4f(pe.u.uTint, 1, 1, 1, 1);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.disable(gl.BLEND);
+      return;
+    }
     // stars
     let starB = 1 - (Math.cos(a * TAU) * 2 + 0.25);
     starB = clamp(starB, 0, 1);
@@ -9795,7 +10035,7 @@ const IS_TOUCH = (() => {
 const IS_MOBILE = IS_TOUCH && Math.min(screen.width, screen.height) < 900;
 
 const DEFAULT_SETTINGS = {
-  renderDistance: IS_MOBILE ? 4 : 8,
+  renderDistance: IS_MOBILE ? 4 : 12,
   fov: 70,
   sensitivity: 0.5,
   invertMouse: false,
@@ -11728,7 +11968,7 @@ class Player extends Living {
       exhaustion: this.exhaustion, air: this.air, xpLevel: this.xpLevel, xp: this.xp, xpTotal: this.xpTotal, score: this.score,
       gameMode: this.gameMode, flying: this.flying, inventory: this.inventory.toJSON(), spawnPoint: this.spawnPoint, fire: this.fire,
       fallDistance: this.fallDistance, stats: this.stats, discovered: this.discovered, achievements: this.achievements, effects: this.effects,
-      enchantSeed: this.enchantSeed, dim: (this.world && this.world.dim) || 0,
+      enchantSeed: this.enchantSeed, dim: (this.world && this.world.dim) || 0, effectAmp: this.effectAmp, seenEnding: this.seenEnding || undefined,
     };
   }
   load(d) {
@@ -11748,6 +11988,8 @@ class Player extends Living {
     if (d.discovered) this.discovered = Object.assign({ biomes: {}, mobs: {}, items: {}, structures: {} }, d.discovered);
     if (d.achievements) this.achievements = d.achievements;
     if (d.effects) this.effects = d.effects;
+    if (d.effectAmp) this.effectAmp = d.effectAmp;
+    this.seenEnding = !!d.seenEnding;
     if (d.enchantSeed !== undefined) this.enchantSeed = d.enchantSeed;
     this.pendingMount = d.mount ? { x: d.mount.x, y: d.mount.y, z: d.mount.z, t: 200 } : null;
   }
@@ -11953,6 +12195,9 @@ const Recipes = (() => {
   // ---------------- the Vaults ----------------
   shapeless([I.seeker_eye], [I.wisp_essence, I.flare_powder]);
   shaped([B.IRON_BARS, 16], ['###', '###'], { '#': I.iron_ingot });
+  // ---------------- the Far Isles ----------------
+  shaped([B.STARSTONE_BRICKS, 4], ['##', '##'], { '#': B.STARSTONE });
+  shaped([I.star_crystal], ['GGG', 'GEG', 'GTG'], { G: B.GLASS, E: I.seeker_eye, T: I.wailer_tear });
 
   // ---------------- smelting ----------------
   smelt(B.COBBLESTONE, [B.STONE], 0.1);
@@ -12831,6 +13076,17 @@ const Behaviors = (() => {
       w.scheduleTick(x, y, z, tickRate(fid, w));
       game.audio.play(fid === B.WATER ? 'bucket_empty' : 'bucket_empty_lava', 0.8);
       if (!player.creative) player.inventory.setHeld(new ItemStack(I.bucket, 1, 0));
+      return true;
+    }
+    if (stack.id === I.star_crystal && (target === B.OBSIDIAN || target === B.BEDROCK)) {
+      // a star crystal sits on obsidian or bedrock, with room above it
+      const x = hit.x + 0.5, y = hit.y + 1, z = hit.z + 0.5;
+      if (w.getBlock(hit.x, hit.y + 1, hit.z) !== 0 || w.getBlock(hit.x, hit.y + 2, hit.z) !== 0) return false;
+      if (w.entitiesInBox(x - 1, y, z - 1, x + 1, y + 2, z + 1, (e) => !e.removed).length) return false;
+      game.spawnEntity(new StarCrystal(w, x, y, z));
+      game.audio.play('crystal_hum', 0.8, 1.2, x, y + 1, z);
+      if (!player.creative) player.inventory.decrementHeld(1);
+      if (typeof Wyrm !== 'undefined') Wyrm.crystalPlaced(game, hit.x, hit.y, hit.z);
       return true;
     }
     if (stack.id === I.seeker_eye && target === B.RIFT_FRAME) {
@@ -14300,7 +14556,7 @@ const Portals = (() => {
     for (let j = 0; j < f.h; j++) for (let i = 0; i < f.w; i++) w.setBlock(f.x + dx * i, f.y + j, f.z + dz * i, B.PORTAL, f.axis, 0);
   }
   function tryLight(w, x, y, z) {
-    if (w.menu) return false;
+    if (w.menu || w.dim === 2) return false;   // no Underworld portal will catch in the Far Isles
     const f = detect(w, x, y, z, 0) || detect(w, x, y, z, 1);
     if (!f) return false;
     fill(w, f);
@@ -14491,6 +14747,45 @@ class SeekerEye extends Entity {
   }
   save() { return null; }
 }
+
+// ---- src/world/isles.js
+// ---------------------------------------------------------------------------
+// The Far Isles: where you land, and what the place remembers of you (is the
+// Starwyrm still alive, where have the gateways opened).
+// ---------------------------------------------------------------------------
+const Isles = (() => {
+  const ARRIVE = WG.ISLES.ARRIVE;
+  function state(info) {
+    if (!info.isles) info.isles = { wyrmDead: false, kills: 0, gateways: [], wyrm: null };
+    return info.isles;
+  }
+  // an obsidian platform out over the void, rebuilt and cleared on every arrival
+  function platform(w) {
+    const [px, py, pz] = ARRIVE;
+    for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+      w.setBlock(px + dx, py, pz + dz, B.OBSIDIAN, 0);
+      for (let y = 1; y <= 3; y++) w.setBlock(px + dx, py + y, pz + dz, 0, 0);
+    }
+    return [px + 0.5, py + 1, pz + 0.5];
+  }
+  // the Star Well's basin: a ring of bedrock round the pillar at the centre of the Great Isle
+  function wellCells(w) {
+    const y = w.localGen.wellTop ? w.localGen.wellTop() + 1 : 61, out = [];
+    for (let x = -3; x <= 3; x++) for (let z = -3; z <= 3; z++) { const d2 = x * x + z * z; if (d2 <= 6.5 && (x || z)) out.push([x, y, z]); }
+    return out;
+  }
+  // fill the well with stars (the way home), or let it run dry
+  function setWell(w, open) {
+    if (!w.isLoaded(0, 0) || !w.isLoaded(-1, -1) || !w.isLoaded(-1, 0) || !w.isLoaded(0, -1)) return false;
+    for (const [x, y, z] of wellCells(w)) {
+      const id = w.getBlock(x, y, z);
+      if (open && id === 0) w.setBlock(x, y, z, B.RIFT, 0);
+      else if (!open && id === B.RIFT) w.setBlock(x, y, z, 0, 0);
+    }
+    return true;
+  }
+  return { ARRIVE, state, platform, wellCells, setWell };
+})();
 
 // ---- src/game/interact.js
 // ---------------------------------------------------------------------------
@@ -15512,6 +15807,35 @@ const Skins = (() => {
     return s;
   })();
 
+  // ------------------------------------------------------------ the Far Isles
+  // the gaunt: a long, thin shadow speckled with starlight; its eyes live in a
+  // second skin that is drawn full-bright over the head
+  S.gaunt = (() => {
+    const s = new Skin(); const r = rng('gaunt');
+    const body = C('#17121f'), dark = C('#0e0b14'), speck = C('#5a4a7a'), star = C('#b8a8e8');
+    const pick = (x, y, k) => { const h = (x * 31 + y * 17 + k * 7) % 53; return h === 0 ? star : h < 4 ? speck : vary(r, (x + y) % 4 === 0 ? dark : body, 0.12); };
+    s.box(0, 0, 8, 8, 8, (f, x, y) => {
+      if (f === 'front' && y === 4 && (x === 1 || x === 2 || x === 5 || x === 6)) return [70, 40, 110];
+      if (f === 'front' && y >= 6 && x >= 2 && x <= 5) return dark;
+      return pick(x, y, 1);
+    });
+    s.box(16, 16, 8, 12, 4, (f, x, y) => pick(x, y, 2));
+    s.box(48, 0, 2, 26, 2, (f, x, y) => pick(x, y, 3));
+    s.box(56, 0, 2, 28, 2, (f, x, y) => y > 25 ? vary(r, dark, 0.1) : pick(x, y, 4));
+    return s;
+  })();
+  S.gaunt_eyes = (() => {
+    const s = new Skin();
+    s.box(0, 0, 8, 8, 8, (f, x, y) => {
+      if (f !== 'front') return null;
+      if (y === 4 && (x === 1 || x === 6)) return [196, 140, 255];
+      if (y === 4 && (x === 2 || x === 5)) return [248, 232, 255];
+      if (y === 3 && (x === 2 || x === 5)) return [150, 90, 220];
+      return null;
+    });
+    return s;
+  })();
+
   // ------------------------------------------------------------ the Underworld
   S.mite = (() => {
     const s = new Skin(); const r = rng('mite');
@@ -16310,6 +16634,15 @@ const MODELS = (() => {
       }
       return m;
     })(),
+    // the gaunt: a head and body on long, thin limbs, nearly three blocks tall
+    gaunt: {
+      head: { pivot: [0, 38, 0], boxes: [bx([-4, 0, -4], [8, 8, 8], [0, 0])] },
+      body: { pivot: [0, 38, 0], boxes: [bx([-4, -12, -2], [8, 12, 4], [16, 16])] },
+      rarm: { pivot: [5, 36, 0], boxes: [bx([-1, -28, -1], [2, 28, 2], [56, 0])] },
+      larm: { pivot: [-5, 36, 0], boxes: [bx([-1, -28, -1], [2, 28, 2], [56, 0], { mirror: true })] },
+      rleg: { pivot: [2, 26, 0], boxes: [bx([-1, -26, -1], [2, 26, 2], [48, 0])] },
+      lleg: { pivot: [-2, 26, 0], boxes: [bx([-1, -26, -1], [2, 26, 2], [48, 0], { mirror: true })] },
+    },
     // a vault mite: seven segments, widest near the head
     mite: (() => {
       const m = {}, sz = [[3, 2, 2], [4, 3, 2], [6, 4, 3], [3, 3, 3], [2, 2, 3], [2, 1, 2], [1, 1, 2]];
@@ -17491,44 +17824,78 @@ const SOUND_DEFS = (() => {
   const { render, noise, rnd, Biquad, env } = DSP;
   const S = {};
   // ----- block materials -----
-  const crunch = (dur, lp, hp, grain, decay) => () => {
-    const f1 = new Biquad('lp', lp, 0.8), f2 = new Biquad('hp', hp, 0.7);
-    let g = 1, gt = 0;
+  // Each material has its own character: rock cracks and crumbles, wood knocks
+  // hollow, gravel and dirt crunch, grass rustles, sand hisses, cloth thumps.
+  // struck resonances: [start, freq, amp, decay]
+  const ring = (list, t) => { let s = 0; for (const [at, f, a, d] of list) { const u = t - at; if (u >= 0 && u < d * 7) s += Math.sin(2 * Math.PI * f * u) * a * Math.exp(-u / d); } return s; };
+  // rock: a hard clack, chips flying off, grit trickling after, a little weight underneath
+  const rock = (dur, chips, bright, body, grit) => () => {
+    const ev = [], f0 = (1700 + rnd() * 1300) * bright;
+    ev.push([0, f0, 0.55, 0.011], [0, f0 * 1.58, 0.4, 0.008], [0, f0 * 2.41, 0.28, 0.005], [0, f0 * 0.53, 0.3, 0.016]);
+    for (let i = 0; i < chips; i++) { const at = 0.006 + Math.pow(rnd(), 1.7) * dur * 0.75; ev.push([at, (1400 + rnd() * 4200) * bright, (0.1 + rnd() * 0.32) * (1 - at / dur), 0.002 + rnd() * 0.008]); }
+    const hp = new Biquad('hp', 1100 * bright, 0.7), lp = new Biquad('lp', 170, 0.8);
+    let g = 0, gt = 0;
     return render(dur, (t) => {
-      if (t > gt) { g = 0.3 + rnd() * 0.7; gt = t + grain * (0.5 + rnd()); }
-      return f2.p(f1.p(noise())) * g * env(t, 0.004, decay);
+      if (t > gt) { g = rnd() < 0.45 ? 0 : 0.3 + rnd() * 0.7; gt = t + 0.0015 + rnd() * 0.006; }
+      const n = noise();
+      return ring(ev, t) + hp.p(n) * g * grit * Math.exp(-t / (dur * 0.3)) + lp.p(n) * body * 7 * Math.exp(-t / 0.025) + n * Math.exp(-t / 0.0015) * 0.7;
     });
   };
-  const knock = (freq, res, dur, decay) => () => {
-    const bp = new Biquad('bp', freq * 3, res);
-    let ph = 0;
+  // granular crunch: grains arriving at `rate` per second, each colouring the noise a little differently
+  const grains = (dur, rate, f0, f1, q, gd, body, attack, swish) => () => {
+    const bp = new Biquad('bp', f0, q), lp = new Biquad('lp', 200, 0.7), hp = new Biquad('hp', 2500, 0.7);
+    let e = 0, next = 0;
+    const k = Math.exp(-1 / (DSP.SR * gd));
     return render(dur, (t) => {
-      ph += 2 * Math.PI * freq * (1 - t * 0.6) / DSP.SR;
-      return (Math.sin(ph) * 0.6 + bp.p(noise()) * 0.8) * env(t, 0.002, decay);
+      if (t >= next) { e += 0.35 + rnd() * 0.65; bp.set(f0 + rnd() * (f1 - f0), q); next = t - Math.log(1 - rnd() * 0.999) / rate; }
+      e *= k;
+      const shape = (t < attack ? t / attack : 1) * Math.exp(-t / (dur * 0.38));
+      const n = noise();
+      return (bp.p(n) * e * 2 + lp.p(n) * body * 5 * Math.exp(-t / 0.04) + (swish ? hp.p(n) * swish * Math.sin(Math.PI * Math.min(1, t / dur)) : 0)) * shape;
     });
   };
-  S.stone_break = crunch(0.22, 3500, 700, 0.012, 0.06); S.stone_hit = crunch(0.1, 3200, 900, 0.01, 0.03); S.stone_step = crunch(0.1, 2600, 600, 0.015, 0.03); S.stone_place = crunch(0.18, 3000, 500, 0.012, 0.05);
-  S.wood_break = knock(140, 4, 0.25, 0.07); S.wood_hit = knock(170, 5, 0.12, 0.035); S.wood_step = knock(150, 3, 0.1, 0.03); S.wood_place = knock(130, 4, 0.2, 0.06);
-  S.gravel_break = crunch(0.25, 1600, 200, 0.02, 0.07); S.gravel_hit = crunch(0.12, 1400, 250, 0.02, 0.035); S.gravel_step = crunch(0.12, 1300, 200, 0.025, 0.035); S.gravel_place = crunch(0.2, 1500, 200, 0.02, 0.06);
-  S.grass_break = crunch(0.25, 6000, 1800, 0.008, 0.07); S.grass_hit = crunch(0.12, 5500, 2000, 0.008, 0.04); S.grass_step = crunch(0.14, 5000, 1600, 0.01, 0.045); S.grass_place = crunch(0.2, 6000, 1600, 0.008, 0.06);
-  S.sand_break = crunch(0.25, 7000, 2500, 0.004, 0.08); S.sand_hit = crunch(0.12, 7000, 2500, 0.004, 0.04); S.sand_step = crunch(0.14, 6500, 2400, 0.005, 0.05); S.sand_place = crunch(0.2, 7000, 2500, 0.004, 0.07);
-  S.cloth_break = crunch(0.2, 700, 80, 0.03, 0.06); S.cloth_hit = crunch(0.1, 700, 80, 0.03, 0.03); S.cloth_step = crunch(0.1, 600, 80, 0.03, 0.03); S.cloth_place = crunch(0.18, 700, 80, 0.03, 0.05);
-  S.snow_break = crunch(0.25, 3500, 1200, 0.006, 0.07); S.snow_hit = crunch(0.12, 3500, 1300, 0.006, 0.035); S.snow_step = crunch(0.14, 3200, 1100, 0.008, 0.045); S.snow_place = crunch(0.2, 3500, 1200, 0.006, 0.06);
+  // wood: a hollow knock with a dry crack on top
+  const woody = (dur, f0, crack, decay) => () => {
+    const f = f0 * (0.9 + rnd() * 0.2);
+    const modes = [[f, 1, decay], [f * 2.32, 0.55, decay * 0.55], [f * 3.95, 0.32, decay * 0.33], [f * 5.7, 0.18, decay * 0.2]];
+    const bp = new Biquad('bp', 1800 + rnd() * 900, 1.4);
+    const chips = []; for (let i = 0; i < crack * 5; i++) chips.push([rnd() * dur * 0.5, 900 + rnd() * 2400, 0.15 + rnd() * 0.2, 0.004 + rnd() * 0.006]);
+    return render(dur, (t) => {
+      let s = 0; for (const [mf, a, d] of modes) s += Math.sin(2 * Math.PI * mf * t) * a * Math.exp(-t / d);
+      return s + bp.p(noise()) * crack * 1.6 * Math.exp(-t / 0.014) + ring(chips, t);
+    });
+  };
+  // cloth: a soft, muffled thump
+  const muffled = (dur, f, attack, decay) => () => {
+    const lp = new Biquad('lp', f, 0.7), lp2 = new Biquad('lp', f * 0.35, 0.7);
+    return render(dur, (t) => { const n = noise(); return (lp.p(n) + lp2.p(n) * 1.5) * (t < attack ? t / attack : Math.exp(-(t - attack) / decay)); });
+  };
+  S.stone_break = rock(0.34, 16, 1, 0.55, 0.35); S.stone_hit = rock(0.13, 5, 1.08, 0.35, 0.22); S.stone_step = rock(0.09, 2, 0.75, 0.6, 0.12); S.stone_place = rock(0.26, 9, 0.92, 0.85, 0.28);
+  S.wood_break = woody(0.32, 175, 1, 0.07); S.wood_hit = woody(0.14, 200, 0.5, 0.04); S.wood_step = woody(0.1, 160, 0.25, 0.03); S.wood_place = woody(0.24, 150, 0.6, 0.065);
+  S.gravel_break = grains(0.3, 260, 380, 2600, 1.6, 0.0045, 0.7, 0.003, 0); S.gravel_hit = grains(0.13, 220, 400, 2400, 1.6, 0.004, 0.5, 0.003, 0);
+  S.gravel_step = grains(0.13, 240, 350, 2000, 1.5, 0.004, 0.6, 0.004, 0); S.gravel_place = grains(0.24, 240, 380, 2400, 1.6, 0.0045, 0.8, 0.003, 0);
+  S.grass_break = grains(0.28, 380, 2400, 7600, 1.1, 0.0025, 0.18, 0.006, 0.25); S.grass_hit = grains(0.13, 320, 2600, 7200, 1.1, 0.0025, 0.12, 0.005, 0.15);
+  S.grass_step = grains(0.15, 340, 2200, 6800, 1.1, 0.0025, 0.15, 0.008, 0.2); S.grass_place = grains(0.24, 360, 2400, 7600, 1.1, 0.0025, 0.2, 0.006, 0.22);
+  S.sand_break = grains(0.32, 1100, 3600, 9500, 0.8, 0.0016, 0.06, 0.025, 0.35); S.sand_hit = grains(0.14, 900, 3800, 9000, 0.8, 0.0016, 0.04, 0.015, 0.25);
+  S.sand_step = grains(0.17, 1000, 3400, 8800, 0.8, 0.0016, 0.05, 0.02, 0.3); S.sand_place = grains(0.26, 1000, 3600, 9500, 0.8, 0.0016, 0.07, 0.02, 0.32);
+  S.snow_break = () => { const base = grains(0.3, 300, 1300, 5200, 2.4, 0.003, 0.15, 0.005, 0.1)(); const sq = []; for (let i = 0; i < 5; i++) sq.push([rnd() * 0.18, 1100 + rnd() * 900, 0.12, 0.012]); return render((base.length + 0.5) / DSP.SR, (t, i) => base[i] + ring(sq, t)); };
+  S.snow_hit = grains(0.13, 260, 1400, 5000, 2.4, 0.003, 0.12, 0.005, 0.08); S.snow_step = grains(0.15, 280, 1200, 4800, 2.4, 0.003, 0.15, 0.006, 0.1);
+  S.snow_place = grains(0.24, 300, 1300, 5200, 2.4, 0.003, 0.18, 0.005, 0.1);
+  S.cloth_break = muffled(0.24, 950, 0.012, 0.06); S.cloth_hit = muffled(0.12, 900, 0.01, 0.03); S.cloth_step = muffled(0.11, 800, 0.012, 0.03); S.cloth_place = muffled(0.2, 900, 0.012, 0.05);
+  // glass: a bright crash and a shower of tinkling pieces
   S.glass_break = () => {
-    const parts = []; for (let i = 0; i < 9; i++) parts.push([2500 + rnd() * 5500, rnd() * 0.15, 0.03 + rnd() * 0.12]);
-    const hp = new Biquad('hp', 3000, 0.7);
-    return render(0.6, (t) => {
-      let s = hp.p(noise()) * env(t, 0.001, 0.04) * 0.6;
-      for (const [f, st, d] of parts) if (t > st) s += Math.sin(2 * Math.PI * f * (t - st)) * Math.exp(-(t - st) / d) * 0.4;
-      return s;
-    });
+    const parts = []; for (let i = 0; i < 16; i++) parts.push([Math.pow(rnd(), 1.5) * 0.22, 2400 + rnd() * 6000, 0.12 + rnd() * 0.25, 0.02 + rnd() * 0.12]);
+    const hp = new Biquad('hp', 2800, 0.7);
+    return render(0.7, (t) => hp.p(noise()) * (env(t, 0.001, 0.05) * 0.9 + Math.exp(-t / 0.2) * 0.08) + ring(parts, t));
   };
+  // metal: struck rock, brighter, with a short ring to it
   S.metal_break = () => {
-    const pf = [440, 1050, 1730, 2600, 3900].map((f) => f * (0.9 + rnd() * 0.2));
-    return render(0.6, (t) => { let s = noise() * env(t, 0.001, 0.01) * 0.5; pf.forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t) * Math.exp(-t / (0.3 / (i + 1))) / (i + 1); }); return s; });
+    const base = rock(0.32, 10, 1.45, 0.3, 0.25)(), pf = [610, 1470, 2520, 3610].map((f) => f * (0.92 + rnd() * 0.16));
+    return render((base.length + 0.5) / DSP.SR, (t, i) => { let s = base[i]; pf.forEach((f, k) => { s += Math.sin(2 * Math.PI * f * t) * Math.exp(-t / (0.16 / (k + 1))) * 0.35 / (k + 1); }); return s; });
   };
-  S.metal_hit = S.metal_place = S.metal_break; S.metal_step = S.stone_step; S.glass_hit = S.stone_hit; S.glass_step = S.stone_step; S.glass_place = S.stone_place;
-  S.ladder_step = knock(220, 3, 0.1, 0.03); S.ladder_break = S.wood_break; S.ladder_hit = S.wood_hit; S.ladder_place = S.wood_place;
+  S.metal_hit = rock(0.12, 4, 1.5, 0.2, 0.2); S.metal_step = rock(0.09, 2, 1.3, 0.4, 0.1); S.metal_place = S.metal_break;
+  S.glass_hit = rock(0.12, 4, 1.3, 0.2, 0.15); S.glass_step = rock(0.09, 2, 1.1, 0.4, 0.1); S.glass_place = rock(0.24, 8, 1.2, 0.6, 0.2);
+  S.ladder_step = woody(0.1, 230, 0.3, 0.03); S.ladder_break = S.wood_break; S.ladder_hit = S.wood_hit; S.ladder_place = S.wood_place;
   // ----- ui & items -----
   S.click = () => render(0.06, (t) => (Math.sin(2 * Math.PI * 1400 * t) * 0.6 + noise() * 0.3) * env(t, 0.0005, 0.012));
   S.pop = () => render(0.12, (t) => Math.sin(2 * Math.PI * (300 + t * 3000) * t) * env(t, 0.002, 0.03));
@@ -17839,6 +18206,71 @@ const SOUND_DEFS = (() => {
     });
   };
   S.wind = () => { const bp = new Biquad('bp', 400, 1); return render(4, (t) => { bp.set(300 + Math.sin(t * 0.8) * 200, 1.5); return bp.p(noise()) * Math.sin(Math.PI * t / 4); }); };
+
+  // ----- the Far Isles -----
+  // the air between the isles: a slow breath with a cold shimmer on top (looped)
+  S.isles_air = () => {
+    const lp = new Biquad('lp', 380, 0.7), bp = new Biquad('bp', 2400, 9);
+    return render(8, (t) => {
+      const w = Math.sin(Math.PI * 2 * t / 8), w2 = Math.sin(Math.PI * 2 * t / 4 + 1);
+      bp.set(2100 + w2 * 500, 9);
+      let s = lp.p(noise()) * (0.9 + 0.3 * w) + bp.p(noise()) * 0.05 * (0.6 + 0.4 * w2);
+      s += (Math.sin(2 * Math.PI * 55 * t) * 0.12 + Math.sin(2 * Math.PI * 82.5 * t) * 0.06) * (0.7 + 0.3 * w);
+      return s;
+    });
+  };
+  // a far-off chime, as if the stars rang
+  S.isles_chime = () => {
+    const notes = [880, 987.8, 1174.7, 1318.5, 1568, 1760], a = notes[Math.floor(rnd() * notes.length)], b = a * (rnd() < 0.5 ? 1.5 : 1.25);
+    const dl = new Float32Array(Math.floor(DSP.SR * 0.23)); let di = 0;
+    return render(4.5, (t) => {
+      let s = Math.sin(2 * Math.PI * a * t) * Math.exp(-t / 1.4) * 0.4 + Math.sin(2 * Math.PI * a * 2.76 * t) * Math.exp(-t / 0.4) * 0.08;
+      if (t > 0.45) s += Math.sin(2 * Math.PI * b * (t - 0.45)) * Math.exp(-(t - 0.45) / 1.2) * 0.3;
+      const out = s + dl[di] * 0.5; dl[di] = out; di = (di + 1) % dl.length;
+      return out;
+    });
+  };
+  // stepping through a rift: a rush of air folding in on itself
+  S.rift_travel = () => {
+    const bp = new Biquad('bp', 300, 2);
+    return render(2.4, (t) => {
+      bp.set(200 + Math.pow(t / 2.4, 0.5) * 2600, 2.5);
+      let s = bp.p(noise()) * Math.sin(Math.PI * t / 2.4);
+      [261.6, 329.6, 392, 523.3].forEach((f, i) => { const st = 0.6 + i * 0.18; if (t > st) s += Math.sin(2 * Math.PI * f * (t - st)) * Math.exp(-(t - st) / 0.9) * 0.18; });
+      return s;
+    });
+  };
+  // the gaunt: a low, warbling murmur that seems to come from the wrong place
+  const warble = (f0, f1, dur, wob, shriek) => () => {
+    const f1a = new Biquad('bp', 600, 5), f2a = new Biquad('bp', 1500, 6), hp = new Biquad('hp', 200, 0.7);
+    let ph = 0;
+    return render(dur, (t) => {
+      const u = t / dur;
+      const f = f0 + (f1 - f0) * u + Math.sin(t * 2 * Math.PI * wob) * f0 * 0.18;
+      ph += 2 * Math.PI * f / DSP.SR;
+      f1a.set(500 + Math.sin(t * 7) * 250, 5);
+      const src = ((ph / (2 * Math.PI)) % 1) * 2 - 1 + noise() * (shriek || 0.15);
+      return hp.p(f1a.p(src) + f2a.p(src) * 0.6) * Math.sin(Math.PI * Math.min(1, u * 1.1));
+    });
+  };
+  S.gaunt_say = warble(70, 52, 1.4, 5.5, 0.2);
+  S.gaunt_stare = warble(180, 640, 1.5, 11, 0.9);
+  S.gaunt_hurt = warble(150, 95, 0.4, 14, 0.5);
+  S.gaunt_death = warble(120, 35, 2.2, 7, 0.4);
+  S.gaunt_warp = () => {
+    const bp = new Biquad('bp', 1500, 3);
+    return render(0.6, (t) => { bp.set(2600 - t * 3600, 3); return bp.p(noise()) * env(t, 0.01, 0.18) + Math.sin(2 * Math.PI * (700 - t * 1000) * t) * env(t, 0.005, 0.12) * 0.4; });
+  };
+  // a star crystal shattering
+  S.crystal_break = () => {
+    const hp = new Biquad('hp', 2500, 0.8);
+    return render(1.6, (t) => {
+      let s = hp.p(noise()) * env(t, 0.002, 0.25) * 0.8;
+      [1046.5, 1396.9, 1760, 2093].forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t * (1 + i * 0.002)) * Math.exp(-t / (0.5 + i * 0.15)) * 0.2; });
+      return s;
+    });
+  };
+  S.crystal_hum = () => render(3, (t) => (Math.sin(2 * Math.PI * 440 * t) * 0.5 + Math.sin(2 * Math.PI * 660.4 * t) * 0.3 + Math.sin(2 * Math.PI * 880.9 * t) * 0.15) * Math.sin(Math.PI * t / 3));
   return S;
 })();
 
@@ -18087,6 +18519,8 @@ class MusicEngine {
     const g = this.game;
     if (!g.world || g.world.menu) return 'menu';
     const p = g.player, w = g.world;
+    if (this.forceMood) return this.forceMood;
+    if (w.dim === 2) return 'isles';
     if (w.dim) return 'underworld';
     if (p && p.creative) return Math.random() < 0.5 ? 'creative' : 'day';
     if (p && p.y < 52 && !w.canSeeSky(Math.floor(p.x), Math.floor(p.y + 1), Math.floor(p.z))) return 'underground';
@@ -18096,13 +18530,14 @@ class MusicEngine {
   compose(mood) {
     const R = Math.random, pick = (a) => a[Math.floor(R() * a.length)];
     const MODES = { ionian: [0, 2, 4, 5, 7, 9, 11], lydian: [0, 2, 4, 6, 7, 9, 11], mixolydian: [0, 2, 4, 5, 7, 9, 10], dorian: [0, 2, 3, 5, 7, 9, 10], aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10] };
-    const under = mood === 'underworld';
+    const under = mood === 'underworld', isles = mood === 'isles', wyrm = mood === 'wyrm', ending = mood === 'ending';
     const modeName = under ? pick(['phrygian', 'aeolian', 'phrygian']) : mood === 'night' ? pick(['dorian', 'aeolian', 'ionian', 'lydian']) : mood === 'underground' ? pick(['aeolian', 'dorian', 'aeolian'])
+      : isles ? pick(['lydian', 'dorian', 'lydian', 'ionian']) : wyrm ? pick(['aeolian', 'phrygian', 'aeolian']) : ending ? pick(['ionian', 'lydian'])
       : mood === 'menu' ? pick(['ionian', 'lydian', 'mixolydian', 'ionian']) : pick(['ionian', 'lydian', 'ionian', 'mixolydian', 'dorian']);
     const mode = MODES[modeName];
     const minor = modeName === 'dorian' || modeName === 'aeolian' || modeName === 'phrygian';
-    const tonic = under ? 43 + Math.floor(R() * 6) : 50 + Math.floor(R() * 8);
-    const bpm = under ? 44 + R() * 10 : mood === 'underground' ? 52 + R() * 10 : mood === 'night' ? 58 + R() * 12 : mood === 'menu' ? 66 + R() * 14 : 62 + R() * 16;
+    const tonic = under ? 43 + Math.floor(R() * 6) : isles ? 55 + Math.floor(R() * 6) : wyrm ? 45 + Math.floor(R() * 5) : 50 + Math.floor(R() * 8);
+    const bpm = under ? 44 + R() * 10 : isles ? 46 + R() * 10 : wyrm ? 84 + R() * 12 : ending ? 58 + R() * 6 : mood === 'underground' ? 52 + R() * 10 : mood === 'night' ? 58 + R() * 12 : mood === 'menu' ? 66 + R() * 14 : 62 + R() * 16;
     const beat = 60 / bpm;
     const meter = R() < 0.25 ? 3 : 4;
     const bar = beat * meter;
@@ -18114,14 +18549,15 @@ class MusicEngine {
     const ev = [];
     const add = (t, m, v, d) => { if (m >= 28 && m <= 96) ev.push({ t: t + (R() - 0.5) * 0.025, m, v: clamp(v, 0.05, 1), d }); };
     let t = 0.4;
-    const phrases = (mood === 'underground' || under) ? 3 + Math.floor(R() * 2) : 4 + Math.floor(R() * 3);
+    const phrases = (mood === 'underground' || under) ? 3 + Math.floor(R() * 2) : ending ? 6 : wyrm ? 5 : 4 + Math.floor(R() * 3);
     const progA = pick(progs), progB = R() < 0.6 ? pick(progs) : progA;
     const accomp = ['roll', 'arp8', 'arp4', 'sparse', 'pedal'];
     let motif = null;
     for (let ph = 0; ph < phrases; ph++) {
       const prog = ph % 2 === 1 ? progB : progA;
-      const style = under ? pick(['sparse', 'pedal', 'pedal', 'roll']) : mood === 'underground' ? pick(['sparse', 'pedal', 'roll']) : pick(accomp);
-      const withMelody = ph > 0 && R() < (under ? 0.4 : mood === 'underground' ? 0.45 : 0.75);
+      const style = under ? pick(['sparse', 'pedal', 'pedal', 'roll']) : mood === 'underground' ? pick(['sparse', 'pedal', 'roll'])
+        : isles ? pick(['sparse', 'pedal', 'arp4', 'sparse']) : wyrm ? pick(['arp8', 'arp8', 'roll']) : ending ? pick(['roll', 'arp8', 'arp4']) : pick(accomp);
+      const withMelody = ph > 0 && R() < (under ? 0.4 : mood === 'underground' ? 0.45 : isles ? 0.5 : ending ? 0.9 : 0.75);
       if (withMelody && (!motif || R() < 0.4)) motif = this.makeMotif(meter, R);
       const accV = mood === 'menu' ? 0.42 : 0.34;
       for (let b = 0; b < prog.length; b++) {
@@ -18130,7 +18566,8 @@ class MusicEngine {
         const ch = chordOf(d, ext);
         const bass = ch[0] - 12 * (ch[0] > 52 ? 2 : 1);
         if (R() < 0.85) add(t, bass, accV + 0.1, bar * 1.2);
-        if (under && R() < 0.35) add(t + beat * 0.02, bass - 12, accV * 0.8, bar * 1.6);   // a low toll
+        if ((under || wyrm) && R() < (wyrm ? 0.6 : 0.35)) add(t + beat * 0.02, bass - 12, accV * 0.8, bar * 1.6);   // a low toll
+        if (isles && R() < 0.5) add(t + beat * (1 + Math.floor(R() * meter)) + beat * 0.5, deg(d + 21 + pick([0, 2, 4])), 0.16 + R() * 0.06, beat * 3);   // starlight
         if (R() < 0.3) add(t + beat * (meter === 3 ? 2 : 2), bass + 7, accV * 0.7, bar * 0.6);
         const up = ch.map((m) => m + (m < 55 ? 12 : 0));
         switch (style) {
@@ -18781,7 +19218,7 @@ class Hud {
       'Chunk: ' + (bx & 15) + ' ' + (by & 15) + ' ' + (bz & 15) + ' in ' + (bx >> 4) + ' ' + (by >> 4) + ' ' + (bz >> 4),
       'Facing: ' + facing + ' (' + wrapDegrees(-p.yaw * 180 / Math.PI + 180).toFixed(1) + ' / ' + (-p.pitch * 180 / Math.PI).toFixed(1) + ')',
       'Light: ' + Math.max(l >> 4, l & 15) + ' (' + (l >> 4) + ' sky, ' + (l & 15) + ' block)',
-      'Biome: ' + (b ? b.name : '?') + (w.dim ? ' (Underworld)' : ''),
+      'Biome: ' + (b ? b.name : '?') + (w.dim === 1 ? ' (Underworld)' : w.dim === 2 ? ' (Far Isles)' : ''),
       'Day ' + Math.floor(w.dayTime / 24000) + ', time ' + (w.dayTime % 24000) + (w.raining ? (w.thundering ? ', thunder' : ', rain') : ''),
       'Seed: ' + w.seed,
     ];
@@ -19315,7 +19752,9 @@ class VideoScreen extends Screen {
     const row = () => { const r = y; y += 24; return r; };
     let r = row();
     this.add(new Button(L, r, 150, 20, () => 'Graphics: ' + (s.graphics === 'fancy' ? 'Fancy' : 'Fast'), () => { s.graphics = s.graphics === 'fancy' ? 'fast' : 'fancy'; g.saveSettings(); g.applyVideo(); }));
-    this.add(new Slider(Rx, r, 150, (v) => 'Render Distance: ' + Math.round(2 + v * 14) + ' chunks', (s.renderDistance - 2) / 14, (v) => { s.renderDistance = Math.round(2 + v * 14); g.saveSettings(); }, 14));
+    // phones and tablets keep a shorter leash: every chunk costs memory
+    const RD = IS_MOBILE ? 10 : 30;
+    this.add(new Slider(Rx, r, 150, (v) => 'Render Distance: ' + Math.round(2 + v * RD) + ' chunks', clamp((s.renderDistance - 2) / RD, 0, 1), (v) => { s.renderDistance = Math.round(2 + v * RD); g.saveSettings(); }, RD));
     r = row();
     this.add(new Button(L, r, 150, 20, () => 'Smooth Lighting: ' + (s.smoothLighting ? 'ON' : 'OFF'), () => { s.smoothLighting = !s.smoothLighting; g.saveSettings(); g.applyVideo(); }));
     this.add(new Slider(Rx, r, 150, (v) => 'Max Framerate: ' + (v >= 1 ? 'Unlimited' : Math.round(30 + v * 230) + ' fps'), s.maxFps ? (s.maxFps - 30) / 230 : 1, (v) => { s.maxFps = v >= 1 ? 0 : Math.round(30 + v * 230); g.saveSettings(); }, 23));
@@ -19503,6 +19942,134 @@ class HowToPlayScreen extends Screen {
     if (e.key === 'ArrowRight') { this.page = (this.page + 1) % HOW_TO_PLAY.length; return; }
     if (e.key === 'ArrowLeft') { this.page = (this.page + HOW_TO_PLAY.length - 1) % HOW_TO_PLAY.length; return; }
     super.keyDown(e);
+  }
+}
+
+// ---- src/ui/ending.js
+// ---------------------------------------------------------------------------
+// The way home from the Far Isles, the first time: a poem and the credits,
+// rising slowly through a field of stars. Hold a key (or touch) to hurry it,
+// Escape to skip.
+// ---------------------------------------------------------------------------
+const ENDING_TEXT = [
+  '§bTHE LONG WAY HOME', '',
+  'The first morning, you had nothing.',
+  'A hill of grass. A square sun.',
+  'A tree that let you take it apart, piece by piece.', '',
+  'You did not know the rules,',
+  'so you made some up.',
+  'Wood becomes planks. Planks become a table.',
+  'A table becomes everything else.', '',
+  'That first night was long.',
+  'You dug into a hillside and shut the door behind you with dirt,',
+  'and listened to the things that walk in the dark,',
+  'and waited for the light.', '',
+  'It came. It always comes.',
+  'That was the first thing the world taught you.', '',
+  '§dThen you went looking.', '',
+  'Down, through stone that rang under your pick,',
+  'past seams of coal and iron, past water falling in the dark,',
+  'to where the lava lights the caves from below.', '',
+  'Out, across plains and moors and autumn woods,',
+  'to villages where people trade in jade',
+  'and every house has a door you could knock on.', '',
+  'Through a frame of black glass into a hotter country,',
+  'where the wailers weep and the charred keep their old forts,',
+  'and back again, with your hands full.', '',
+  'You followed a seeker\'s eye into the earth,',
+  'and found the Vaults, and the frame, and the twelve empty sockets.',
+  'You filled them. You stepped through.', '',
+  'And here, at the edge of everything,',
+  'past the last of the stone and the last of the sky,',
+  'the Starwyrm waited, as it had always waited,',
+  'for someone stubborn enough to come.', '',
+  '§dYou were stubborn enough.', '', '', '',
+  'Listen.', '',
+  'Nothing you built was ever small.',
+  'A dirt hut is a promise: I will be here tomorrow.',
+  'A torch on a cave wall is a promise: I will find my way back.',
+  'A bridge across the void is a promise: I am not finished.', '',
+  'The world is made of little squares,',
+  'and so is everything worth making.',
+  'One at a time. Then another. Then another.', '',
+  'There are isles beyond these isles.',
+  'There are seas no one has sailed and caves no one has lit.',
+  'There are mountains you walked past without climbing.', '',
+  '§dThey will keep.', '',
+  'Go home now. Sleep in your own bed.',
+  'Wake to the square sun over the hill of grass.', '',
+  'The world is still out there,',
+  'and it is still yours,',
+  'and it is not finished either.',
+  '', '', '', '', '', '',
+  '§e§lBLOCKLANDS', '',
+  '§7for the days when the world was new',
+  '§7and nobody had mapped it yet', '', '', '',
+  '§bWorlds, creatures & words', 'made for you', '',
+  '§bMusic', 'composed fresh, every time,', 'by the little piano inside your computer', '',
+  '§bEvery texture', 'painted pixel by pixel', '', '', '',
+  '§7With thanks to everyone who ever',
+  '§7built a dirt hut on the first night,',
+  '§7lost a pickaxe to lava,',
+  '§7or walked a little further',
+  '§7just to see what was over the next hill.', '', '', '', '',
+  '§fThank you for playing.',
+];
+
+class EndingScreen extends Screen {
+  constructor(game, onDone) {
+    super(game);
+    this.background = 'none';
+    this.onDone = onDone;
+    this.scroll = 0; this.prevScroll = 0;
+    this.fast = false; this.held = 0;
+    this.done = false;
+    const rng = new Noise.Random(5150);
+    this.stars = Array.from({ length: 160 }, () => [rng.nextFloat(), rng.nextFloat(), 0.3 + rng.nextFloat() * 0.7, rng.nextFloat() * TAU]);
+    this.t = 0;
+    if (game.music) { game.music.stop(2); game.music.nextStart = performance.now() + 2500; game.music.forceMood = 'ending'; }
+  }
+  tick() {
+    this.t++;
+    this.prevScroll = this.scroll;
+    this.scroll += (this.fast || this.held > 0 ? 2.4 : 0.55);
+    if (this.held > 0) this.held--;
+    const total = ENDING_TEXT.length * 12 + this.H + 40;
+    if (this.scroll > total) this.close();
+  }
+  draw(gui, mx, my) {
+    const W = this.W, H = this.H, ctx = gui.ctx;
+    gui.rect(0, 0, W, H, '#05030a');
+    // the stars drift up behind the words, more slowly
+    for (const [sx, sy, b, ph] of this.stars) {
+      const y = ((sy * H - this.scroll * 0.25 * b) % H + H) % H;
+      const tw = 0.6 + 0.4 * Math.sin(this.t * 0.07 + ph);
+      const v = Math.floor(120 + 135 * b * tw);
+      gui.rect(Math.floor(sx * W), Math.floor(y), b > 0.85 ? 2 : 1, b > 0.85 ? 2 : 1, 'rgb(' + Math.floor(v * 0.85) + ',' + Math.floor(v * 0.8) + ',' + v + ')');
+    }
+    const y0 = H + 20 - this.scroll;
+    ENDING_TEXT.forEach((line, i) => {
+      const y = Math.floor(y0 + i * 12);
+      if (y < -12 || y > H + 12 || !line) return;
+      const big = line.indexOf('§l') >= 0;
+      const fade = Math.min(1, Math.min(y + 12, H - y) / 40);
+      ctx.globalAlpha = clamp(fade, 0, 1);
+      if (big) { const s = line.replace(/§./g, ''); gui.textScaled(s, Math.floor(W / 2 - gui.textWidth(s)), y - 4, '#ffe866', 2, true); }
+      else gui.textCentered(line, W / 2, y, '#e8e4f4', true);
+      ctx.globalAlpha = 1;
+    });
+    if (this.t < 200) { ctx.globalAlpha = clamp((200 - this.t) / 60, 0, 1); gui.textRight(this.game.touch && this.game.touch.active ? 'Tap and hold to hurry' : 'Hold any key to hurry, Esc to skip', W - 4, 4, '#6a6480'); ctx.globalAlpha = 1; }
+  }
+  keyDown(e) { if (e.key === 'Escape') { this.close(); return; } this.fast = true; }
+  keyUp() { this.fast = false; }
+  mouseDown() { this.fast = true; return true; }
+  mouseUp() { this.fast = false; }
+  close() {
+    if (this.done) return;
+    this.done = true;
+    if (this.game.music && this.game.music.forceMood === 'ending') this.game.music.forceMood = null;
+    this.game.openScreen(null);
+    if (this.onDone) this.onDone();
   }
 }
 
@@ -20072,11 +20639,12 @@ const CREATIVE_TABS = (() => {
     blk(B.COBALT_BLOCK), blk(B.COAL_BLOCK), blk(B.STARMETAL_BLOCK), blk(B.EMBER_BLOCK), blk(B.SULFUR_BLOCK), ...all(B.SLAB), ...all(B.STAIRS), blk(B.BRICKS), blk(B.TNT), blk(B.BOOKSHELF), blk(B.OBSIDIAN),
     ...all(B.STONE_BRICKS), blk(B.SNOW), blk(B.ICE), blk(B.PACKED_ICE), blk(B.CLAY), ...all(B.TERRACOTTA), ...all(B.STAINED_GLASS), blk(B.SLATE), blk(B.SLATE_BRICKS), blk(B.MARBLE), ...all(B.MARBLE_BRICKS),
     blk(B.BASALT), blk(B.POLISHED_BASALT), blk(B.ASH), blk(B.PEAT), blk(B.SALT), blk(B.SCORCHED_STONE), blk(B.THATCH), blk(B.QUICKSAND), blk(B.HAY_BALE), blk(B.HUGE_MUSHROOM_BROWN), blk(B.HUGE_MUSHROOM_RED), blk(B.RUNESTONE),
-    blk(B.BRIMSTONE), blk(B.BONESAND), blk(B.QUARTZ_ORE), blk(B.SUNSTONE), ...all(B.QUARTZ_BLOCK), blk(B.BRIMSTONE_BRICKS), blk(B.BONE_BLOCK)] });
+    blk(B.BRIMSTONE), blk(B.BONESAND), blk(B.QUARTZ_ORE), blk(B.SUNSTONE), ...all(B.QUARTZ_BLOCK), blk(B.BRIMSTONE_BRICKS), blk(B.BONE_BLOCK), blk(B.STARSTONE), blk(B.STARSTONE_BRICKS)] });
   T.push({ name: 'Decoration', icon: [B.FLOWER, 0], list: [
     ...all(B.SAPLING), ...all(B.LEAVES), blk(B.COBWEB), ...all(B.TALL_GRASS), blk(B.DEAD_BUSH), ...all(B.FLOWER), blk(B.MUSHROOM_BROWN), blk(B.MUSHROOM_RED), blk(B.GLOWSHROOM), blk(B.LUMITE_CRYSTAL),
     blk(B.TORCH), blk(B.CHEST), blk(B.CRAFTING_TABLE), blk(B.FURNACE), blk(B.ENCHANTING_TABLE), blk(B.LADDER), blk(B.ROPE), blk(B.SNOW_LAYER), blk(B.CACTUS), blk(B.PUMPKIN), blk(B.JACK_O_LANTERN), blk(B.MELON), blk(B.VINE),
     blk(B.LILY_PAD), blk(B.CATTAIL), blk(B.BRAMBLE), blk(B.LEAF_LITTER), ...all(B.FENCE), blk(B.FENCE_GATE), blk(B.TRAPDOOR), blk(B.GLASS_PANE), ...all(B.CARPET), blk(B.LUMITE_LAMP), blk(B.MOB_SPAWNER), blk(B.BRIMSTONE_FENCE), [I.bloodcap, 0],
+    blk(B.IRON_BARS), blk(B.RIFT_FRAME), ...all(B.INFESTED_BRICKS), [I.star_crystal, 0],
     [I.door_wood, 0], [I.door_iron, 0], [I.bed, 0], ...WOOD.map((w, i) => [I.sign, i]), [I.painting, 0]] });
   T.push({ name: 'Tools', icon: [I.iron_axe, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ['shovel', 'pickaxe', 'axe', 'hoe'].map((k) => [I[m + '_' + k], 0])),
     ...items(['flint_and_steel', 'shears', 'fishing_rod', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'compass', 'clock', 'map', 'prospector_rod', 'wayfinder', 'journal', 'message_bottle'])] });
@@ -20091,7 +20659,7 @@ const CREATIVE_TABS = (() => {
     'fish', 'cooked_fish', 'salmon', 'cooked_salmon', 'sunfish', 'pufferfish', 'glimmerfin', 'carrot', 'potato', 'baked_potato', 'poison_potato', 'cookie', 'melon_slice', 'mushroom_stew', 'glow_berries', 'pumpkin_pie', 'berry_pie', 'berries', 'rotten_flesh', 'spider_eye']) });
   T.push({ name: 'Materials', icon: [I.stick, 0], list: [...items(['coal']), [I.coal, 1], ...items(['diamond', 'iron_ingot', 'gold_ingot', 'gold_nugget', 'cobalt_ingot', 'starmetal_ingot', 'jade', 'ember_dust', 'sulfur', 'lumite_shard', 'salt',
     'stick', 'bowl', 'string', 'cattail_fiber', 'feather', 'flint', 'gunpowder', 'leather', 'bone', 'clay_ball', 'brick', 'paper', 'book', 'slimeball', 'wheat', 'seeds', 'sugar', 'sugar_cane', 'wisp_essence',
-      'sunstone_dust', 'smoky_quartz', 'brimstone_brick', 'wailer_tear', 'flare_rod', 'flare_powder', 'magma_cream', 'fire_charge']),
+      'sunstone_dust', 'smoky_quartz', 'brimstone_brick', 'wailer_tear', 'flare_rod', 'flare_powder', 'magma_cream', 'fire_charge', 'seeker_eye']),
     ...[...Array(16).keys()].map((d) => [I.dye, d])] });
   T.push({ name: 'Creatures', icon: [I.spawn_egg, 1], list: [] });   // filled when mobs load
   T.push({ name: 'Search', icon: [I.compass, 0], list: [], search: true });
@@ -20470,6 +21038,9 @@ const MILESTONES = [
   { id: 'flare', name: 'Playing with Fire', desc: 'Collect a flare rod', icon: () => [ITEM_IDS.flare_rod, 0] },
   { id: 'wailer', name: 'Hush Now', desc: 'Bring down a wailer', icon: () => [ITEM_IDS.wailer_tear, 0] },
   { id: 'regions', name: 'Underworld Cartographer', desc: 'Discover every region of the Underworld', icon: () => [B.SUNSTONE, 0] },
+  { id: 'isles', name: 'The Far Isles', desc: 'Step through the rift', icon: () => [B.STARSTONE, 0] },
+  { id: 'crystal', name: 'Lights Out', desc: 'Shatter a star crystal', icon: () => [ITEM_IDS.star_crystal, 0] },
+  { id: 'drift', name: 'Adrift', desc: 'Reach the Drift Isles beyond the gulf', icon: () => [B.STARSTONE_BRICKS, 0] },
 ];
 const BIOME_DESCRIPTIONS = {
   ocean: 'Endless water. Sunken ruins rest on the sea floor.', deep_ocean: 'The water grows dark and cold.', plains: 'Rolling grass, wildflowers and the occasional lonely oak.',
@@ -20481,6 +21052,9 @@ const BIOME_DESCRIPTIONS = {
   salt_flats: 'Blinding white salt crust. Stars fall here often.', meadow: 'Flowers in every colour.', canyon: 'Banded red cliffs rich in gold.', stone_shore: 'Bare stone where mountains meet the sea.',
   brimstone_depths: 'Underworld. Lava seas beneath a roof of red rock, lit by sunstone.', bone_shoals: 'Underworld. Drifts of bone sand and the ribs of long-dead giants. Bloodcap grows wild.',
   cinder_hollows: 'Underworld. Ash, basalt pillars and smouldering vents. Magma slimes bask here.', glimmering_grotto: 'Underworld. Smoky quartz spires and clusters of sunstone: a rare, bright refuge.',
+  great_isle: 'Far Isles. Pale starstone ringed by obsidian spires, each crowned with a star crystal. Something vast circles overhead.',
+  starlit_gulf: 'Far Isles. Nothing at all, for hundreds of blocks: just the void and the stars.',
+  drift_isles: 'Far Isles. Islands without number, scattered out across the void beyond the gulf.',
 };
 class JournalScreen extends Screen {
   constructor(game, parent) { super(game); this.parent = parent; this.background = 'world'; this.tab = 0; this.page = 0; this.pauses = !!parent; }
@@ -23290,6 +23864,7 @@ function entityFromData(world, d) {
   else if (d.type === 'boat') e = new Boat(world, d.x, d.y, d.z, d.wood || 0);
   else if (d.type === 'minecart') e = new Minecart(world, d.x, d.y, d.z, d.kind || 0);
   else if (d.type === 'painting') e = new Painting(world, d.bx | 0, d.by | 0, d.bz | 0, d.facing || 0, d.art);
+  else if (d.type === 'star_crystal') e = new StarCrystal(world, d.x, d.y, d.z);
   else if (MOB_CLASSES[d.type]) e = new MOB_CLASSES[d.type](world);
   if (!e) return null;
   e.load(d);
@@ -23319,7 +23894,8 @@ class MobSpawner {
     if (!w.gameRules.doMobSpawning) return;
     const rd = Math.min(g.settings.renderDistance, 6);
     const area = (rd * 2 + 1) * (rd * 2 + 1);
-    if (w.dim) { if (this.tickUnder) this.tickUnder(rd, area); return; }
+    if (w.dim === 1) { if (this.tickUnder) this.tickUnder(rd, area); return; }
+    if (w.dim === 2) { if (this.tickIsles) this.tickIsles(rd, area); return; }
     const capMonster = Math.max(8, Math.round(48 * area / 169));
     if (w.difficulty > 0 && this.counts.monster < capMonster) {
       for (let i = 0; i < 2; i++) if (this.spawnMonsterPack(rd)) { this.counts.monster += 1; }
@@ -24014,6 +24590,269 @@ function releaseMite(game, x, y, z, foe) {
 }
 MOB_CLASSES.mite = Mite;
 
+// ---- src/entity/islemobs.js
+// ---------------------------------------------------------------------------
+// Creatures and wonders of the Far Isles: the gaunt, a long thin shadow that
+// minds its own business until you meet its eyes, and the star crystals that
+// crown the spires of the Great Isle.
+// ---------------------------------------------------------------------------
+MOB_TYPES.push(
+  { key: 'gaunt', name: 'Gaunt', egg: ['#17121f', '#9a6ae0'], cat: 'monster', lore: 'A long, thin shadow speckled with starlight, at home on the Far Isles and seen now and then under our own night sky. It will let you pass. Just don\'t look it in the eye.' },
+);
+MOB_TYPES.forEach((m, i) => { if (m) { m.index = i; MOB_INDEX[m.key] = m; } });
+
+// what a gaunt will pick up and wander off with
+const GAUNT_CARRY = new Set([B.GRASS, B.DIRT, B.SAND, B.GRAVEL, B.FLOWER, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.CLAY, B.PUMPKIN, B.MELON, B.MYCELIUM, B.CACTUS, B.TNT, B.PODZOL].filter((id) => id !== undefined));
+
+class Gaunt extends Monster {
+  constructor(world) {
+    super(world, 'gaunt');
+    this.maxHealth = this.health = 40;
+    this.w = 0.6; this.h = 2.9; this.eye = 2.55;
+    this.baseSpeed = 0.3; this.damage = 7;
+    this.hostile = false;
+    this.anger = 0; this.shake = 0; this.warpCool = 0;
+    this.carried = null;
+    this.talkInterval = 200;
+    this.followRange = 64;
+    this.xpValue = 5;
+  }
+  get angry() { return this.anger > 0; }
+  // is the player looking it in the face?
+  isStaredAt(p) {
+    if (!p || p.dead || (p.effects && p.effects.invisible)) return false;
+    let dx = this.x - p.x, dy = this.y + this.eye - (p.y + p.eye), dz = this.z - p.z;
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (d > 64 || d < 0.5) return false;
+    dx /= d; dy /= d; dz /= d;
+    const cp = Math.cos(p.pitch), lx = -Math.sin(p.yaw) * cp, ly = Math.sin(p.pitch), lz = -Math.cos(p.yaw) * cp;
+    if (lx * dx + ly * dy + lz * dz <= 1 - 0.025 / d) return false;
+    return this.canSee(p);
+  }
+  provoke(e, stare) {
+    if (!e || e.type !== 'player' || !e.survivalLike || this.world.difficulty === 0) return;
+    const was = this.anger > 0;
+    this.anger = 600 + this.rnd(400);
+    this.target = e; this.unseen = 0;
+    if (!was) this.game.audio.play(stare ? 'gaunt_stare' : 'gaunt_say', stare ? 1.6 : 1.2, this.soundPitch(), this.x, this.y + this.eye, this.z);
+    if (stare) this.shake = 30;
+  }
+  onRevenge(e) { this.provoke(e, false); }
+  aiTick(game) {
+    const w = this.world, p = game.player;
+    if (this.warpCool > 0) this.warpCool--;
+    if (this.shake > 0) this.shake--;
+    if (this.anger <= 0 && p && p.survivalLike && this.age % 3 === 0 && this.isStaredAt(p)) this.provoke(p, true);
+    if (this.anger > 0) {
+      this.anger--;
+      this.hostile = true;
+      const t = this.target;
+      if (t && !t.dead && t.survivalLike && w.difficulty > 0 && this.distSqTo(t) < 64 * 64) {
+        const d2 = this.distanceSq(t.x, t.y, t.z);
+        // far away, or stuck: step through the air toward its quarry
+        if (this.warpCool <= 0 && ((d2 > 256 && Math.random() < 0.04) || (this.pathDone && d2 > 16 && Math.random() < 0.03))) { if (this.warpToward(t)) return; }
+        const dd = this.chase(1.0);
+        this.tryMelee(t, dd, this.damage);
+        return;
+      }
+      this.target = null; this.anger = 0;
+    } else { this.hostile = false; this.target = null; }
+    if (this.pathDone && Math.random() < 1 / 100) this.wander(12, 4, 0.8);
+    this.idleLook(game); this.keepWatching();
+    if (w.gameRules.mobGriefing) this.fiddle();
+  }
+  mobTick(game) {
+    const w = this.world;
+    // water burns it, and it will not stand in the rain
+    const wet = this.inWater || w.isRainingAt(Math.floor(this.x), Math.floor(this.y + this.h), Math.floor(this.z));
+    if (wet) { if (this.age % 10 === 0) this.hurt(1, { type: 'drown' }); if (this.warpCool <= 0) this.teleportRandom(); }
+    // in plain daylight it drifts away somewhere shadier
+    if (!this.angry && w.isDaytime() && this.age % 20 === 0 && Math.random() < 0.15 && w.canSeeSky(Math.floor(this.x), Math.floor(this.y + 2), Math.floor(this.z))) this.teleportRandom();
+    if (this.age % 4 === 0 && game.settings.particles !== 'minimal') {
+      const a = Math.random() * TAU;
+      game.particles.add({ x: this.x + Math.cos(a) * 0.4, y: this.y + Math.random() * this.h, z: this.z + Math.sin(a) * 0.4, vx: 0, vy: -0.02, vz: 0, size: 0.04, life: 20, layer: game.particles.layer('particle_glint'), r: 0.6, g: 0.35, b: 1, collide: false, bright: true, fade: true });
+    }
+  }
+  hurt(amount, src) {
+    // it is never where the arrow lands
+    if (src && (src.type === 'arrow' || src.type === 'thrown')) { if (this.teleportRandom()) return false; }
+    const ok = super.hurt(amount, src);
+    if (ok && !this.dead && src && src.type === 'player' && Math.random() < 0.15) this.teleportRandom();
+    return ok;
+  }
+  // ---- stepping through space ----
+  teleportTo(x, y, z) {
+    const w = this.world, bx = Math.floor(x), bz = Math.floor(z);
+    let by = Math.min(CH_H - 4, Math.floor(y));
+    if (!w.isLoaded(bx, bz) || by < 2) return false;
+    while (by > 1 && !BT.solid[w.getBlock(bx, by - 1, bz)]) by--;
+    const below = w.getBlock(bx, by - 1, bz);
+    if (by <= 1 || BT.fluid[below] || !BT.solid[below]) return false;
+    for (let k = 0; k < 3; k++) { const id = w.getBlock(bx, by + k, bz); if (BT.solid[id] || BT.fluid[id]) return false; }
+    const ox = this.x, oy = this.y, oz = this.z, g = this.game;
+    this.setPos(bx + 0.5, by, bz + 0.5);
+    this.vx = this.vy = this.vz = 0; this.fallDistance = 0;
+    this.clearPath();
+    this.warpCool = 20;
+    if (g.settings.particles !== 'minimal') {
+      const L = g.particles.layer('particle_glint');
+      for (let i = 0; i < 48; i++) {
+        const f = i / 47;
+        g.particles.add({ x: ox + (this.x - ox) * f + (Math.random() - 0.5) * 0.8, y: oy + (this.y - oy) * f + Math.random() * this.h, z: oz + (this.z - oz) * f + (Math.random() - 0.5) * 0.8,
+          vx: (Math.random() - 0.5) * 0.04, vy: (Math.random() - 0.5) * 0.04, vz: (Math.random() - 0.5) * 0.04, size: 0.06, life: 16 + Math.floor(Math.random() * 16), layer: L, r: 0.65, g: 0.4, b: 1, collide: false, bright: true, fade: true });
+      }
+    }
+    g.audio.play('gaunt_warp', 1, 1, ox, oy, oz);
+    g.audio.play('gaunt_warp', 1, 1, this.x, this.y, this.z);
+    return true;
+  }
+  teleportRandom() {
+    for (let i = 0; i < 16; i++) if (this.teleportTo(this.x + (Math.random() - 0.5) * 64, this.y + Math.random() * 32 - 12, this.z + (Math.random() - 0.5) * 64)) return true;
+    return false;
+  }
+  warpToward(t) {
+    let dx = this.x - t.x, dy = this.y + this.eye - (t.y + t.eye), dz = this.z - t.z;
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+    dx /= d; dy /= d; dz /= d;
+    for (let i = 0; i < 8; i++) {
+      if (this.teleportTo(this.x + (Math.random() - 0.5) * 8 - dx * 16, this.y + Math.random() * 16 - 8 - dy * 16, this.z + (Math.random() - 0.5) * 8 - dz * 16)) return true;
+    }
+    return false;
+  }
+  // ---- idle hands ----
+  fiddle() {
+    const w = this.world;
+    if (!this.carried) {
+      if (Math.random() > 0.05) return;
+      const x = Math.floor(this.x + Math.random() * 4 - 2), y = Math.floor(this.y + Math.random() * 3), z = Math.floor(this.z + Math.random() * 4 - 2);
+      const id = w.getBlock(x, y, z);
+      if (!GAUNT_CARRY.has(id) || w.getBlock(x, y + 1, z) === B.CACTUS) return;
+      this.carried = [id === B.MYCELIUM || id === B.PODZOL ? B.DIRT : id, w.getMeta(x, y, z)];
+      w.setBlock(x, y, z, 0, 0);
+    } else {
+      if (Math.random() > 0.0006) return;
+      const x = Math.floor(this.x + Math.random() * 2 - 1), y = Math.floor(this.y + Math.random() * 2), z = Math.floor(this.z + Math.random() * 2 - 1);
+      const below = w.getBlock(x, y - 1, z);
+      if (w.getBlock(x, y, z) !== 0 || !BT.opaque[below] || below === B.BEDROCK) return;
+      w.setBlock(x, y, z, this.carried[0], this.carried[1]);
+      this.carried = null;
+    }
+  }
+  dropLoot(game, byPlayer) {
+    if (Math.random() < 0.5 + (byPlayer ? this.looting * 0.15 : 0)) this.drop(ITEM_IDS.wisp_essence, 1 + (byPlayer && this.looting ? this.rnd(this.looting + 1) : 0));
+    if (this.carried) { this.drop(this.carried[0], 1, this.carried[0] === B.FLOWER ? this.carried[1] : 0); this.carried = null; }
+  }
+  saySound() { return this.angry ? 'gaunt_stare' : 'gaunt_say'; }
+  hurtSound() { return 'gaunt_hurt'; }
+  deathSound() { return 'gaunt_death'; }
+  soundPitch() { return (Math.random() - Math.random()) * 0.1 + 1; }
+  render(er, rx, ry, rz, partial) {
+    const [sky, blk] = er.lightAt(this.x, this.y + 2, this.z);
+    const pose = er.bipedPose(this, partial, 'biped');
+    // long limbs move slowly; arms come up to carry a block
+    pose.rarm[0] *= 0.5; pose.larm[0] *= 0.5; pose.rleg[0] *= 0.6; pose.lleg[0] *= 0.6;
+    if (this.carried) { pose.rarm = [0.45, 0, -0.06]; pose.larm = [0.45, 0, 0.06]; }
+    if (this.shake > 0 || this.angry) {
+      const j = this.angry ? 0.6 : 1.2;
+      pose.head = { rot: pose.head, off: [(Math.random() - 0.5) * j, (this.angry ? 2 : 0) + (Math.random() - 0.5) * j, (Math.random() - 0.5) * j] };
+    }
+    const base = er.baseMatrix(this, rx, ry, rz, partial);
+    er.drawModel(MODELS.gaunt, 'gaunt', base, pose, er.entColor(this), sky, blk);
+    er.drawModel(MODELS.gaunt, 'gaunt_eyes', base, pose, [255, 255, 255, 255], -1, 0, { only: ['head'], inflate: 0.03 });
+    if (this.carried) {
+      let m = M3.mul(base, M3.trans(0, 16, -10));
+      m = M3.mul(m, M3.scale(10, 10, 10));
+      m = M3.mul(m, M3.trans(-0.5, 0, -0.5));
+      er.drawItem(new ItemStack(this.carried[0], 1, this.carried[1]), m, sky, blk, 255);
+    }
+  }
+  save() { const d = super.save(); if (this.anger) d.anger = this.anger; if (this.carried) d.carried = this.carried; return d; }
+  load(d) { super.load(d); this.anger = d.anger || 0; this.carried = d.carried || null; }
+}
+MOB_CLASSES.gaunt = Gaunt;
+
+// ---------------------------------------------------------------------------
+// A star crystal: a cage of light round a burning core, set on the spires.
+// It feeds the Starwyrm while it stands; any blow shatters it, explosively.
+// ---------------------------------------------------------------------------
+class StarCrystal extends Entity {
+  constructor(world, x, y, z) {
+    super(world);
+    this.type = 'star_crystal';
+    this.w = 2; this.h = 2;
+    this.noGravity = true;
+    this.spin = Math.random() * 400;
+    if (x !== undefined) this.setPos(x, y, z);
+  }
+  tick(game) {
+    this.px = this.x; this.py = this.y; this.pz = this.z;
+    this.age++; this.spin++;
+    this.updateBox();
+    if (this.age % 6 === 0 && game.settings.particles !== 'minimal' && game.player && game.player.distanceSq(this.x, this.y, this.z) < 48 * 48) {
+      const a = Math.random() * TAU;
+      game.particles.add({ x: this.x + Math.cos(a) * 0.9, y: this.y + 0.6 + Math.random() * 1.2, z: this.z + Math.sin(a) * 0.9, vx: 0, vy: 0.015, vz: 0, size: 0.05, life: 30, layer: game.particles.layer('particle_glint'), r: 0.8, g: 0.6, b: 1, collide: false, bright: true, fade: true });
+    }
+    if (this.age % 80 === 0 && game.player && game.player.distanceSq(this.x, this.y, this.z) < 20 * 20) game.audio.play('crystal_hum', 0.25, 0.9 + Math.random() * 0.2, this.x, this.y + 1, this.z);
+  }
+  hurt(amount, src) {
+    if (this.removed || (src && src.type === 'void')) { this.removed = true; return false; }
+    this.shatter(src);
+    return true;
+  }
+  shatter(src) {
+    const g = this.game || this.world.game;
+    this.removed = true;
+    g.audio.play('crystal_break', 1.6, 0.9 + Math.random() * 0.2, this.x, this.y + 1, this.z);
+    for (let i = 0; i < 40; i++) g.particles.sparkle(this.x, this.y + 1, this.z, 0.85, 0.6, 1, 1, 2.2);
+    Behaviors.explode(g, this.x, this.y + 1, this.z, 6, null, false);
+    if (src && src.entity && src.entity.type === 'player') g.achieve('crystal');
+    if (typeof Wyrm !== 'undefined') Wyrm.crystalLost(g, this, src);
+  }
+  render(er, rx, ry, rz, partial) {
+    const t = this.spin + partial, b = er.r.batch;
+    const bob = Math.sin(t * 0.2) / 2 + 0.5, lift = (bob * bob + bob) * 0.2;
+    const glass = er.r.atlas.layer('star_crystal_glass'), core = er.r.atlas.layer('star_crystal_core');
+    const cy = ry + 1.05 + lift;
+    const tilt = M3.mul(M3.rx(Math.PI / 4), M3.rz(0.6155));
+    let m = M3.mul(M3.trans(rx, cy, rz), M3.ry(t * 3 * DEG));
+    // the outer cage, the inner cage turning the other way, and the core
+    const m1 = M3.mul(m, tilt);
+    er.texBox(b, m1, [-0.44, -0.44, -0.44, 0.44, 0.44, 0.44], glass, -1, 0, 1 / 0.88);
+    const m2 = M3.mul(M3.mul(M3.mul(m, M3.ry(-t * 5 * DEG)), tilt), M3.scale(0.875, 0.875, 0.875));
+    er.texBox(b, m2, [-0.44, -0.44, -0.44, 0.44, 0.44, 0.44], glass, -1, 0, 1 / 0.88);
+    const m3 = M3.mul(M3.mul(M3.mul(m, M3.ry(t * 7 * DEG)), tilt), M3.scale(0.55, 0.55, 0.55));
+    er.texBox(b, m3, [-0.44, -0.44, -0.44, 0.44, 0.44, 0.44], core, -1, 0, 1 / 0.88);
+    er.glow(rx, cy, rz, 1.1 + Math.sin(t * 0.15) * 0.1, [190, 140, 255, 110]);
+    if (this.beam) this.beam(er, rx, cy, rz, partial);
+  }
+  save() { return { type: 'star_crystal', x: this.x, y: this.y, z: this.z }; }
+  load(d) { this.setPos(d.x, d.y, d.z); }
+}
+
+// ---------------------------------------------------------------------------
+// Natural spawning on the Far Isles: gaunts, everywhere, at any hour
+// ---------------------------------------------------------------------------
+MobSpawner.prototype.tickIsles = function (rd, area) {
+  const g = this.game, w = g.world, p = g.player;
+  const cap = Math.max(6, Math.round(20 * area / 169));
+  if (w.difficulty === 0 || this.counts.monster >= cap || this.t % 4) return;
+  const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
+  const cx = pcx + this.rnd(rd * 2 + 1) - rd, cz = pcz + this.rnd(rd * 2 + 1) - rd;
+  if (!w.getChunk(cx, cz)) return;
+  const x0 = cx * 16 + this.rnd(16), z0 = cz * 16 + this.rnd(16);
+  let n = 0;
+  for (let k = 0; k < 6 && n < 3; k++) {
+    const x = x0 + this.rnd(7) - 3, z = z0 + this.rnd(7) - 3;
+    if (!w.isLoaded(x, z)) continue;
+    const y = w.topSolidY(x, z) + 1;
+    if (y < 2 || w.getBlock(x, y - 1, z) !== B.STARSTONE) continue;
+    if ((x + 0.5 - p.x) ** 2 + (y - p.y) ** 2 + (z + 0.5 - p.z) ** 2 < 24 * 24) continue;
+    if (!this.canStand(x, y, z, 3)) continue;
+    g.spawnMob('gaunt', x + 0.5, y, z + 0.5);
+    n++; this.counts.monster++;
+  }
+};
+
 // ---- src/main.js
 // ---------------------------------------------------------------------------
 // Blocklands: the game shell. Main loop, camera, world lifecycle & saving,
@@ -24379,17 +25218,23 @@ class Game {
     const saved = this.saveWorld();
     const pd = p.save();
     pd.dim = dim; pd.mount = undefined;
-    if (opts.respawn) {
-      info.travel = { respawn: true };
-      const s = info.spawn || { x: 0, y: 80, z: 0 };
-      pd.x = s.x + 0.5; pd.y = s.y; pd.z = s.z + 0.5;
+    if (opts.respawn || opts.home) {
+      // back to your bed (or the world spawn), after a death or through the Star Well
+      info.travel = opts.respawn ? { respawn: true } : { home: true };
+      const s = this.homeSpot();
+      pd.x = s[0]; pd.y = s[1]; pd.z = s[2];
+    } else if (dim === DIM_ISLES) {
+      info.travel = { dim, isles: true };
+      const a = Isles.ARRIVE;
+      pd.x = a[0] + 0.5; pd.y = a[1] + 1; pd.z = a[2] + 0.5;
     } else {
       const [tx, tz] = Portals.target(w.dim, p.x, p.z);
       const link = Portals.nearest(info, dim, tx, tz, dim === 0 ? 128 : 16);
       info.travel = { dim, x: tx, y: p.y, z: tz, link: link || null };
       pd.x = link ? link[1] + 0.5 : tx; pd.y = link ? link[2] : p.y; pd.z = link ? link[3] + 0.5 : tz;
     }
-    const title = opts.respawn ? 'Respawning' : dim === 1 ? 'Entering the Underworld' : 'Leaving the Underworld';
+    const title = opts.respawn ? 'Respawning' : dim === DIM_ISLES ? 'Entering the Far Isles' : w.dim === DIM_ISLES ? 'Leaving the Far Isles'
+      : dim === 1 ? 'Entering the Underworld' : 'Leaving the Underworld';
     const ls = new LoadingScreen(this, title);
     ls.sub = 'Building terrain';
     this.openScreen(ls);
@@ -24401,6 +25246,16 @@ class Game {
   arrive(t) {
     const w = this.world, p = this.player;
     if (t.respawn) { this.respawn(true); return; }
+    if (t.home || t.isles) {
+      if (t.home) this.placeHome(true);
+      else { const a = Isles.platform(w); p.setPos(a[0], a[1], a[2]); p.yaw = p.pyaw = Math.PI / 2; p.pitch = 0; this.achieve('isles'); }
+      p.vx = p.vy = p.vz = 0; p.fallDistance = 0;
+      p.portalLock = true; p.portalTime = 0;
+      this.portalFx = 1;
+      this.ambienceTimer = 200 + Math.floor(Math.random() * 300);
+      this.audio.play('rift_travel', 0.7, 0.9 + Math.random() * 0.2);
+      return;
+    }
     const spot = Portals.arrive(w, t);
     const dx = spot.axis ? 0 : 1, dz = spot.axis ? 1 : 0;
     p.setPos(spot.x + 0.5 + dx * 0.5, spot.y, spot.z + 0.5 + dz * 0.5);
@@ -24413,12 +25268,23 @@ class Game {
   }
   tickPortal() {
     const p = this.player, w = this.world;
-    let inPortal = false;
+    let inPortal = false, inRift = false;
     if (!p.dead && !p.riding && !p.sleeping) {
       const b = p.box;
-      for (let x = Math.floor(b.x0); x <= Math.floor(b.x1 - 1e-4) && !inPortal; x++) for (let y = Math.floor(b.y0); y <= Math.floor(b.y1 - 1e-4) && !inPortal; y++) for (let z = Math.floor(b.z0); z <= Math.floor(b.z1 - 1e-4); z++) if (w.getBlock(x, y, z) === B.PORTAL) { inPortal = true; break; }
+      for (let x = Math.floor(b.x0); x <= Math.floor(b.x1 - 1e-4); x++) for (let y = Math.floor(b.y0); y <= Math.floor(b.y1 - 1e-4); y++) for (let z = Math.floor(b.z0); z <= Math.floor(b.z1 - 1e-4); z++) {
+        const id = w.getBlock(x, y, z);
+        if (id === B.PORTAL) inPortal = true; else if (id === B.RIFT) inRift = true;
+      }
     }
-    if (!inPortal) p.portalLock = false;
+    if (inPortal && w.dim === DIM_ISLES) inPortal = false;
+    if (!inPortal && !inRift) p.portalLock = false;
+    // a rift takes you at once: out to the Far Isles, or home through the Star Well
+    if (inRift && !p.portalLock) {
+      p.portalLock = true;
+      if (w.dim === DIM_ISLES) this.leaveIsles();
+      else if (!w.dim) this.travel(DIM_ISLES);
+      return;
+    }
     if (inPortal && !p.portalLock) {
       if (p.portalTime === 0) this.audio.play('portal_trigger', 0.5, 0.8 + Math.random() * 0.4);
       p.portalTime++;
@@ -24459,7 +25325,7 @@ class Game {
   }
 
   // ------------------------------------------------------------ entity persistence
-  persistable(e) { return e.type === 'item' || e.type === 'xp' || e.type === 'boat' || e.type === 'minecart' || e.type === 'painting' || (e.category && e.category !== 'special' && (e.persistent || e.category === 'creature')); }
+  persistable(e) { return e.type === 'item' || e.type === 'xp' || e.type === 'boat' || e.type === 'minecart' || e.type === 'painting' || e.type === 'star_crystal' || (e.category && e.category !== 'special' && (e.persistent || e.category === 'creature')); }
   onChunkEntities(c, m, fromSave) {
     const w = this.world, key = c.key;
     if (this.entityKeys.has(key)) {
@@ -24469,7 +25335,7 @@ class Game {
         if (this.world !== w || !w.chunks.has(key) || !list) return;
         for (const d of list) { const e = entityFromData(w, d); if (e) w.addEntity(e); }
       }).catch((e) => { this.pendingEntityLoads.delete(key); console.error(e); });
-    } else if (!w.entityInit.has(key) && m.entities && m.entities.length) {
+    } else if (!w.entityInit.has(key + w.keyBase) && m.entities && m.entities.length) {
       for (const d of m.entities) {
         if (d.type === 'minecart') {
           // chest minecarts left behind in old mineshafts
@@ -24477,10 +25343,11 @@ class Game {
           c.relic = true;
           if (c.items && d.items) for (const it of d.items) { const s = ItemStack.fromJSON(it); if (s && it.slot >= 0 && it.slot < 27 && !c.items[it.slot]) c.items[it.slot] = s; }
           w.addEntity(c);
-        } else this.spawnMob(d.type, d.x, d.y, d.z, d.extra);
+        } else if (d.type === 'star_crystal') w.addEntity(new StarCrystal(w, d.x, d.y, d.z));
+        else this.spawnMob(d.type, d.x, d.y, d.z, d.extra);
       }
     }
-    if (!fromSave || m.entities) w.entityInit.add(key);
+    if (!fromSave || m.entities) w.entityInit.add(key + w.keyBase);
   }
   onChunkUnload(c) {
     const w = this.world, key = c.key;
@@ -24698,7 +25565,11 @@ class Game {
     this.renderer.atlas.tickAnimations();
     DynamicItems.update(this);
     this.tickWaterways();
-    if (w.time % 40 === 9) { if (!w.dim) { this.checkVillages(); this.checkVaults(); } else if (w.dim === 1) this.checkFortress(); }
+    if (w.time % 40 === 9) {
+      if (!w.dim) { this.checkVillages(); this.checkVaults(); } else if (w.dim === 1) this.checkFortress();
+      // until the Starwyrm guards it, the Star Well stands open as the way home
+      else if (w.dim === 2 && typeof Wyrm === 'undefined') Isles.setWell(w, true);
+    }
     Circuits.tickPlates(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
@@ -25013,12 +25884,20 @@ class Game {
     const wind = clamp((p.y - 95) / 40, 0, 0.45) * (w.canSeeSky(bx, by, bz) ? 1 : 0) + (bio && bio.key === 'moors' ? 0.08 : 0);
     a.loop('wind', wind * this.settings.sound);
     // the Underworld: a constant low roar and the odd far-off moan
-    a.loop('under_drone', w.dim ? 0.3 * this.settings.sound : 0);
-    if (w.dim) {
+    a.loop('under_drone', w.dim === 1 ? 0.3 * this.settings.sound : 0);
+    // the Far Isles: a cold breath of air and, now and then, the stars ringing
+    a.loop('isles_air', w.dim === 2 ? 0.32 * this.settings.sound : 0);
+    if (w.dim === 1) {
       if (--this.ambienceTimer <= 0) {
         const ang = Math.random() * TAU;
         a.play('under_moan', 0.9, 0.7 + Math.random() * 0.4, p.x + Math.sin(ang) * 12, p.y + 4, p.z + Math.cos(ang) * 12);
         this.ambienceTimer = 600 + Math.floor(Math.random() * 1400);
+      }
+    } else if (w.dim === 2) {
+      if (--this.ambienceTimer <= 0) {
+        const ang = Math.random() * TAU;
+        a.play('isles_chime', 0.45, 0.85 + Math.random() * 0.3, p.x + Math.sin(ang) * 10, p.y + 5, p.z + Math.cos(ang) * 10);
+        this.ambienceTimer = 300 + Math.floor(Math.random() * 900);
       }
     } else if (--this.ambienceTimer <= 0) {
       const x = bx + Math.floor(Math.random() * 31) - 15, y = by + Math.floor(Math.random() * 15) - 7, z = bz + Math.floor(Math.random() * 31) - 15;
@@ -25118,7 +25997,8 @@ class Game {
       const n = Object.keys(p.discovered.biomes).filter((k) => BIOMES[k] && !BIOMES[k].dim).length;
       if (n >= 10) this.achieve('biomes10');
       if (known(0).every((x) => p.discovered.biomes[x.id])) this.achieve('biomesAll');
-      if (bi.dim && known(1).every((x) => p.discovered.biomes[x.id])) this.achieve('regions');
+      if (bi.dim === 1 && known(1).every((x) => p.discovered.biomes[x.id])) this.achieve('regions');
+      if (bi.key === 'drift_isles') this.achieve('drift');
     }
   }
   biomeIcon(key) {
@@ -25129,6 +26009,7 @@ class Game {
       mushroom_island: [B.MUSHROOM_RED, 0], beach: [B.SAND, 0], river: [I.water_bucket, 0], autumn_forest: [B.LEAVES, 4], redwood_grove: [B.LOG, 5], moors: [B.FLOWER, 4],
       ashen_wastes: [B.ASH, 0], salt_flats: [B.SALT, 0], meadow: [B.FLOWER, 3], canyon: [B.SAND, 1], stone_shore: [B.COBBLESTONE, 0],
       brimstone_depths: [B.BRIMSTONE, 0], bone_shoals: [B.BONESAND, 0], cinder_hollows: [B.BASALT, 0], glimmering_grotto: [B.SUNSTONE, 0],
+      great_isle: [B.STARSTONE, 0], starlit_gulf: [B.OBSIDIAN, 0], drift_isles: [B.STARSTONE_BRICKS, 0],
     };
     const e = map[key] || [B.GRASS, 0];
     return new ItemStack(e[0], 1, e[1]);
@@ -25201,8 +26082,23 @@ class Game {
     const p = this.player, w = this.world;
     if (!p) return;
     this.resetVitals(p);
-    // a death in the Underworld wakes you back home
+    // a death in another dimension wakes you back home
     if (w.dim) { this.deathScreenShown = false; if (!this.loading) this.travel(0, { respawn: true }); return; }
+    this.placeHome(silent);
+    this.deathScreenShown = false;
+    this.particles.clear();
+    if (!silent) this.closeScreen();
+  }
+  // where home is, as far as anyone can tell from another dimension
+  homeSpot() {
+    const p = this.player, s = p && p.spawnPoint;
+    if (s) { if (Array.isArray(s)) return [s[0] + 0.5, s[1], s[2] + 0.5]; return [s.x + 0.5, s.y + (s.forced ? 0 : 0.6), s.z + 0.5]; }
+    const ws = (this.world && this.world.info.spawn) || { x: 0, y: 80, z: 0 };
+    return [ws.x + 0.5, ws.y, ws.z + 0.5];
+  }
+  // stand the player at their bed, or the world spawn if the bed is gone
+  placeHome(silent) {
+    const p = this.player, w = this.world;
     let pos = null;
     if (p.spawnPoint) {
       const s = p.spawnPoint;
@@ -25213,9 +26109,12 @@ class Game {
     }
     if (!pos) { const s = w.spawn || { x: 0, y: 80, z: 0 }; const y = w.isLoaded(s.x, s.z) ? Math.max(s.y, w.topSolidY(s.x, s.z) + 1) : s.y; pos = [s.x + 0.5, y, s.z + 0.5]; }
     p.setPos(pos[0], pos[1], pos[2]);
-    this.deathScreenShown = false;
-    this.particles.clear();
-    if (!silent) this.closeScreen();
+  }
+  // through the Star Well and home; the first time, the long way round
+  leaveIsles() {
+    const p = this.player;
+    if (!p.seenEnding && Isles.state(this.world.info).kills > 0) { this.openScreen(new EndingScreen(this, () => { p.seenEnding = true; this.travel(0, { home: true }); })); return; }
+    this.travel(0, { home: true });
   }
   releaseBow(p, ticks) {
     const held = p.inventory.held();

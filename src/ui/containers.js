@@ -564,11 +564,12 @@ const CREATIVE_TABS = (() => {
     blk(B.COBALT_BLOCK), blk(B.COAL_BLOCK), blk(B.STARMETAL_BLOCK), blk(B.EMBER_BLOCK), blk(B.SULFUR_BLOCK), ...all(B.SLAB), ...all(B.STAIRS), blk(B.BRICKS), blk(B.TNT), blk(B.BOOKSHELF), blk(B.OBSIDIAN),
     ...all(B.STONE_BRICKS), blk(B.SNOW), blk(B.ICE), blk(B.PACKED_ICE), blk(B.CLAY), ...all(B.TERRACOTTA), ...all(B.STAINED_GLASS), blk(B.SLATE), blk(B.SLATE_BRICKS), blk(B.MARBLE), ...all(B.MARBLE_BRICKS),
     blk(B.BASALT), blk(B.POLISHED_BASALT), blk(B.ASH), blk(B.PEAT), blk(B.SALT), blk(B.SCORCHED_STONE), blk(B.THATCH), blk(B.QUICKSAND), blk(B.HAY_BALE), blk(B.HUGE_MUSHROOM_BROWN), blk(B.HUGE_MUSHROOM_RED), blk(B.RUNESTONE),
-    blk(B.BRIMSTONE), blk(B.BONESAND), blk(B.QUARTZ_ORE), blk(B.SUNSTONE), ...all(B.QUARTZ_BLOCK), blk(B.BRIMSTONE_BRICKS), blk(B.BONE_BLOCK)] });
+    blk(B.BRIMSTONE), blk(B.BONESAND), blk(B.QUARTZ_ORE), blk(B.SUNSTONE), ...all(B.QUARTZ_BLOCK), blk(B.BRIMSTONE_BRICKS), blk(B.BONE_BLOCK), blk(B.STARSTONE), blk(B.STARSTONE_BRICKS)] });
   T.push({ name: 'Decoration', icon: [B.FLOWER, 0], list: [
     ...all(B.SAPLING), ...all(B.LEAVES), blk(B.COBWEB), ...all(B.TALL_GRASS), blk(B.DEAD_BUSH), ...all(B.FLOWER), blk(B.MUSHROOM_BROWN), blk(B.MUSHROOM_RED), blk(B.GLOWSHROOM), blk(B.LUMITE_CRYSTAL),
     blk(B.TORCH), blk(B.CHEST), blk(B.CRAFTING_TABLE), blk(B.FURNACE), blk(B.ENCHANTING_TABLE), blk(B.LADDER), blk(B.ROPE), blk(B.SNOW_LAYER), blk(B.CACTUS), blk(B.PUMPKIN), blk(B.JACK_O_LANTERN), blk(B.MELON), blk(B.VINE),
     blk(B.LILY_PAD), blk(B.CATTAIL), blk(B.BRAMBLE), blk(B.LEAF_LITTER), ...all(B.FENCE), blk(B.FENCE_GATE), blk(B.TRAPDOOR), blk(B.GLASS_PANE), ...all(B.CARPET), blk(B.LUMITE_LAMP), blk(B.MOB_SPAWNER), blk(B.BRIMSTONE_FENCE), [I.bloodcap, 0],
+    blk(B.IRON_BARS), blk(B.RIFT_FRAME), ...all(B.INFESTED_BRICKS), [I.star_crystal, 0],
     [I.door_wood, 0], [I.door_iron, 0], [I.bed, 0], ...WOOD.map((w, i) => [I.sign, i]), [I.painting, 0]] });
   T.push({ name: 'Tools', icon: [I.iron_axe, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ['shovel', 'pickaxe', 'axe', 'hoe'].map((k) => [I[m + '_' + k], 0])),
     ...items(['flint_and_steel', 'shears', 'fishing_rod', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'compass', 'clock', 'map', 'prospector_rod', 'wayfinder', 'journal', 'message_bottle'])] });
@@ -583,7 +584,7 @@ const CREATIVE_TABS = (() => {
     'fish', 'cooked_fish', 'salmon', 'cooked_salmon', 'sunfish', 'pufferfish', 'glimmerfin', 'carrot', 'potato', 'baked_potato', 'poison_potato', 'cookie', 'melon_slice', 'mushroom_stew', 'glow_berries', 'pumpkin_pie', 'berry_pie', 'berries', 'rotten_flesh', 'spider_eye']) });
   T.push({ name: 'Materials', icon: [I.stick, 0], list: [...items(['coal']), [I.coal, 1], ...items(['diamond', 'iron_ingot', 'gold_ingot', 'gold_nugget', 'cobalt_ingot', 'starmetal_ingot', 'jade', 'ember_dust', 'sulfur', 'lumite_shard', 'salt',
     'stick', 'bowl', 'string', 'cattail_fiber', 'feather', 'flint', 'gunpowder', 'leather', 'bone', 'clay_ball', 'brick', 'paper', 'book', 'slimeball', 'wheat', 'seeds', 'sugar', 'sugar_cane', 'wisp_essence',
-      'sunstone_dust', 'smoky_quartz', 'brimstone_brick', 'wailer_tear', 'flare_rod', 'flare_powder', 'magma_cream', 'fire_charge']),
+      'sunstone_dust', 'smoky_quartz', 'brimstone_brick', 'wailer_tear', 'flare_rod', 'flare_powder', 'magma_cream', 'fire_charge', 'seeker_eye']),
     ...[...Array(16).keys()].map((d) => [I.dye, d])] });
   T.push({ name: 'Creatures', icon: [I.spawn_egg, 1], list: [] });   // filled when mobs load
   T.push({ name: 'Search', icon: [I.compass, 0], list: [], search: true });

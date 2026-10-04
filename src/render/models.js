@@ -136,6 +136,15 @@ const MODELS = (() => {
       }
       return m;
     })(),
+    // the gaunt: a head and body on long, thin limbs, nearly three blocks tall
+    gaunt: {
+      head: { pivot: [0, 38, 0], boxes: [bx([-4, 0, -4], [8, 8, 8], [0, 0])] },
+      body: { pivot: [0, 38, 0], boxes: [bx([-4, -12, -2], [8, 12, 4], [16, 16])] },
+      rarm: { pivot: [5, 36, 0], boxes: [bx([-1, -28, -1], [2, 28, 2], [56, 0])] },
+      larm: { pivot: [-5, 36, 0], boxes: [bx([-1, -28, -1], [2, 28, 2], [56, 0], { mirror: true })] },
+      rleg: { pivot: [2, 26, 0], boxes: [bx([-1, -26, -1], [2, 26, 2], [48, 0])] },
+      lleg: { pivot: [-2, 26, 0], boxes: [bx([-1, -26, -1], [2, 26, 2], [48, 0], { mirror: true })] },
+    },
     // a vault mite: seven segments, widest near the head
     mite: (() => {
       const m = {}, sz = [[3, 2, 2], [4, 3, 2], [6, 4, 3], [3, 3, 3], [2, 2, 3], [2, 1, 2], [1, 1, 2]];

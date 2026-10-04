@@ -324,7 +324,7 @@ class Player extends Living {
       exhaustion: this.exhaustion, air: this.air, xpLevel: this.xpLevel, xp: this.xp, xpTotal: this.xpTotal, score: this.score,
       gameMode: this.gameMode, flying: this.flying, inventory: this.inventory.toJSON(), spawnPoint: this.spawnPoint, fire: this.fire,
       fallDistance: this.fallDistance, stats: this.stats, discovered: this.discovered, achievements: this.achievements, effects: this.effects,
-      enchantSeed: this.enchantSeed, dim: (this.world && this.world.dim) || 0,
+      enchantSeed: this.enchantSeed, dim: (this.world && this.world.dim) || 0, effectAmp: this.effectAmp, seenEnding: this.seenEnding || undefined,
     };
   }
   load(d) {
@@ -344,6 +344,8 @@ class Player extends Living {
     if (d.discovered) this.discovered = Object.assign({ biomes: {}, mobs: {}, items: {}, structures: {} }, d.discovered);
     if (d.achievements) this.achievements = d.achievements;
     if (d.effects) this.effects = d.effects;
+    if (d.effectAmp) this.effectAmp = d.effectAmp;
+    this.seenEnding = !!d.seenEnding;
     if (d.enchantSeed !== undefined) this.enchantSeed = d.enchantSeed;
     this.pendingMount = d.mount ? { x: d.mount.x, y: d.mount.y, z: d.mount.z, t: 200 } : null;
   }

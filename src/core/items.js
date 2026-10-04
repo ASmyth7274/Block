@@ -242,6 +242,7 @@ defItem('fermented_spider_eye', { name: 'Fermented Spider Eye' });
 defItem('glistering_melon', { name: 'Glistering Melon' });
 // ---- the Vaults ----
 defItem('seeker_eye', { name: "Seeker's Eye", rare: true });
+defItem('star_crystal', { name: 'Star Crystal', rare: true });
 
 // ---------------------------------------------------------------------------
 // Helpers

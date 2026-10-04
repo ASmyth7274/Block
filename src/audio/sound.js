@@ -43,44 +43,78 @@ const SOUND_DEFS = (() => {
   const { render, noise, rnd, Biquad, env } = DSP;
   const S = {};
   // ----- block materials -----
-  const crunch = (dur, lp, hp, grain, decay) => () => {
-    const f1 = new Biquad('lp', lp, 0.8), f2 = new Biquad('hp', hp, 0.7);
-    let g = 1, gt = 0;
+  // Each material has its own character: rock cracks and crumbles, wood knocks
+  // hollow, gravel and dirt crunch, grass rustles, sand hisses, cloth thumps.
+  // struck resonances: [start, freq, amp, decay]
+  const ring = (list, t) => { let s = 0; for (const [at, f, a, d] of list) { const u = t - at; if (u >= 0 && u < d * 7) s += Math.sin(2 * Math.PI * f * u) * a * Math.exp(-u / d); } return s; };
+  // rock: a hard clack, chips flying off, grit trickling after, a little weight underneath
+  const rock = (dur, chips, bright, body, grit) => () => {
+    const ev = [], f0 = (1700 + rnd() * 1300) * bright;
+    ev.push([0, f0, 0.55, 0.011], [0, f0 * 1.58, 0.4, 0.008], [0, f0 * 2.41, 0.28, 0.005], [0, f0 * 0.53, 0.3, 0.016]);
+    for (let i = 0; i < chips; i++) { const at = 0.006 + Math.pow(rnd(), 1.7) * dur * 0.75; ev.push([at, (1400 + rnd() * 4200) * bright, (0.1 + rnd() * 0.32) * (1 - at / dur), 0.002 + rnd() * 0.008]); }
+    const hp = new Biquad('hp', 1100 * bright, 0.7), lp = new Biquad('lp', 170, 0.8);
+    let g = 0, gt = 0;
     return render(dur, (t) => {
-      if (t > gt) { g = 0.3 + rnd() * 0.7; gt = t + grain * (0.5 + rnd()); }
-      return f2.p(f1.p(noise())) * g * env(t, 0.004, decay);
+      if (t > gt) { g = rnd() < 0.45 ? 0 : 0.3 + rnd() * 0.7; gt = t + 0.0015 + rnd() * 0.006; }
+      const n = noise();
+      return ring(ev, t) + hp.p(n) * g * grit * Math.exp(-t / (dur * 0.3)) + lp.p(n) * body * 7 * Math.exp(-t / 0.025) + n * Math.exp(-t / 0.0015) * 0.7;
     });
   };
-  const knock = (freq, res, dur, decay) => () => {
-    const bp = new Biquad('bp', freq * 3, res);
-    let ph = 0;
+  // granular crunch: grains arriving at `rate` per second, each colouring the noise a little differently
+  const grains = (dur, rate, f0, f1, q, gd, body, attack, swish) => () => {
+    const bp = new Biquad('bp', f0, q), lp = new Biquad('lp', 200, 0.7), hp = new Biquad('hp', 2500, 0.7);
+    let e = 0, next = 0;
+    const k = Math.exp(-1 / (DSP.SR * gd));
     return render(dur, (t) => {
-      ph += 2 * Math.PI * freq * (1 - t * 0.6) / DSP.SR;
-      return (Math.sin(ph) * 0.6 + bp.p(noise()) * 0.8) * env(t, 0.002, decay);
+      if (t >= next) { e += 0.35 + rnd() * 0.65; bp.set(f0 + rnd() * (f1 - f0), q); next = t - Math.log(1 - rnd() * 0.999) / rate; }
+      e *= k;
+      const shape = (t < attack ? t / attack : 1) * Math.exp(-t / (dur * 0.38));
+      const n = noise();
+      return (bp.p(n) * e * 2 + lp.p(n) * body * 5 * Math.exp(-t / 0.04) + (swish ? hp.p(n) * swish * Math.sin(Math.PI * Math.min(1, t / dur)) : 0)) * shape;
     });
   };
-  S.stone_break = crunch(0.22, 3500, 700, 0.012, 0.06); S.stone_hit = crunch(0.1, 3200, 900, 0.01, 0.03); S.stone_step = crunch(0.1, 2600, 600, 0.015, 0.03); S.stone_place = crunch(0.18, 3000, 500, 0.012, 0.05);
-  S.wood_break = knock(140, 4, 0.25, 0.07); S.wood_hit = knock(170, 5, 0.12, 0.035); S.wood_step = knock(150, 3, 0.1, 0.03); S.wood_place = knock(130, 4, 0.2, 0.06);
-  S.gravel_break = crunch(0.25, 1600, 200, 0.02, 0.07); S.gravel_hit = crunch(0.12, 1400, 250, 0.02, 0.035); S.gravel_step = crunch(0.12, 1300, 200, 0.025, 0.035); S.gravel_place = crunch(0.2, 1500, 200, 0.02, 0.06);
-  S.grass_break = crunch(0.25, 6000, 1800, 0.008, 0.07); S.grass_hit = crunch(0.12, 5500, 2000, 0.008, 0.04); S.grass_step = crunch(0.14, 5000, 1600, 0.01, 0.045); S.grass_place = crunch(0.2, 6000, 1600, 0.008, 0.06);
-  S.sand_break = crunch(0.25, 7000, 2500, 0.004, 0.08); S.sand_hit = crunch(0.12, 7000, 2500, 0.004, 0.04); S.sand_step = crunch(0.14, 6500, 2400, 0.005, 0.05); S.sand_place = crunch(0.2, 7000, 2500, 0.004, 0.07);
-  S.cloth_break = crunch(0.2, 700, 80, 0.03, 0.06); S.cloth_hit = crunch(0.1, 700, 80, 0.03, 0.03); S.cloth_step = crunch(0.1, 600, 80, 0.03, 0.03); S.cloth_place = crunch(0.18, 700, 80, 0.03, 0.05);
-  S.snow_break = crunch(0.25, 3500, 1200, 0.006, 0.07); S.snow_hit = crunch(0.12, 3500, 1300, 0.006, 0.035); S.snow_step = crunch(0.14, 3200, 1100, 0.008, 0.045); S.snow_place = crunch(0.2, 3500, 1200, 0.006, 0.06);
+  // wood: a hollow knock with a dry crack on top
+  const woody = (dur, f0, crack, decay) => () => {
+    const f = f0 * (0.9 + rnd() * 0.2);
+    const modes = [[f, 1, decay], [f * 2.32, 0.55, decay * 0.55], [f * 3.95, 0.32, decay * 0.33], [f * 5.7, 0.18, decay * 0.2]];
+    const bp = new Biquad('bp', 1800 + rnd() * 900, 1.4);
+    const chips = []; for (let i = 0; i < crack * 5; i++) chips.push([rnd() * dur * 0.5, 900 + rnd() * 2400, 0.15 + rnd() * 0.2, 0.004 + rnd() * 0.006]);
+    return render(dur, (t) => {
+      let s = 0; for (const [mf, a, d] of modes) s += Math.sin(2 * Math.PI * mf * t) * a * Math.exp(-t / d);
+      return s + bp.p(noise()) * crack * 1.6 * Math.exp(-t / 0.014) + ring(chips, t);
+    });
+  };
+  // cloth: a soft, muffled thump
+  const muffled = (dur, f, attack, decay) => () => {
+    const lp = new Biquad('lp', f, 0.7), lp2 = new Biquad('lp', f * 0.35, 0.7);
+    return render(dur, (t) => { const n = noise(); return (lp.p(n) + lp2.p(n) * 1.5) * (t < attack ? t / attack : Math.exp(-(t - attack) / decay)); });
+  };
+  S.stone_break = rock(0.34, 16, 1, 0.55, 0.35); S.stone_hit = rock(0.13, 5, 1.08, 0.35, 0.22); S.stone_step = rock(0.09, 2, 0.75, 0.6, 0.12); S.stone_place = rock(0.26, 9, 0.92, 0.85, 0.28);
+  S.wood_break = woody(0.32, 175, 1, 0.07); S.wood_hit = woody(0.14, 200, 0.5, 0.04); S.wood_step = woody(0.1, 160, 0.25, 0.03); S.wood_place = woody(0.24, 150, 0.6, 0.065);
+  S.gravel_break = grains(0.3, 260, 380, 2600, 1.6, 0.0045, 0.7, 0.003, 0); S.gravel_hit = grains(0.13, 220, 400, 2400, 1.6, 0.004, 0.5, 0.003, 0);
+  S.gravel_step = grains(0.13, 240, 350, 2000, 1.5, 0.004, 0.6, 0.004, 0); S.gravel_place = grains(0.24, 240, 380, 2400, 1.6, 0.0045, 0.8, 0.003, 0);
+  S.grass_break = grains(0.28, 380, 2400, 7600, 1.1, 0.0025, 0.18, 0.006, 0.25); S.grass_hit = grains(0.13, 320, 2600, 7200, 1.1, 0.0025, 0.12, 0.005, 0.15);
+  S.grass_step = grains(0.15, 340, 2200, 6800, 1.1, 0.0025, 0.15, 0.008, 0.2); S.grass_place = grains(0.24, 360, 2400, 7600, 1.1, 0.0025, 0.2, 0.006, 0.22);
+  S.sand_break = grains(0.32, 1100, 3600, 9500, 0.8, 0.0016, 0.06, 0.025, 0.35); S.sand_hit = grains(0.14, 900, 3800, 9000, 0.8, 0.0016, 0.04, 0.015, 0.25);
+  S.sand_step = grains(0.17, 1000, 3400, 8800, 0.8, 0.0016, 0.05, 0.02, 0.3); S.sand_place = grains(0.26, 1000, 3600, 9500, 0.8, 0.0016, 0.07, 0.02, 0.32);
+  S.snow_break = () => { const base = grains(0.3, 300, 1300, 5200, 2.4, 0.003, 0.15, 0.005, 0.1)(); const sq = []; for (let i = 0; i < 5; i++) sq.push([rnd() * 0.18, 1100 + rnd() * 900, 0.12, 0.012]); return render((base.length + 0.5) / DSP.SR, (t, i) => base[i] + ring(sq, t)); };
+  S.snow_hit = grains(0.13, 260, 1400, 5000, 2.4, 0.003, 0.12, 0.005, 0.08); S.snow_step = grains(0.15, 280, 1200, 4800, 2.4, 0.003, 0.15, 0.006, 0.1);
+  S.snow_place = grains(0.24, 300, 1300, 5200, 2.4, 0.003, 0.18, 0.005, 0.1);
+  S.cloth_break = muffled(0.24, 950, 0.012, 0.06); S.cloth_hit = muffled(0.12, 900, 0.01, 0.03); S.cloth_step = muffled(0.11, 800, 0.012, 0.03); S.cloth_place = muffled(0.2, 900, 0.012, 0.05);
+  // glass: a bright crash and a shower of tinkling pieces
   S.glass_break = () => {
-    const parts = []; for (let i = 0; i < 9; i++) parts.push([2500 + rnd() * 5500, rnd() * 0.15, 0.03 + rnd() * 0.12]);
-    const hp = new Biquad('hp', 3000, 0.7);
-    return render(0.6, (t) => {
-      let s = hp.p(noise()) * env(t, 0.001, 0.04) * 0.6;
-      for (const [f, st, d] of parts) if (t > st) s += Math.sin(2 * Math.PI * f * (t - st)) * Math.exp(-(t - st) / d) * 0.4;
-      return s;
-    });
+    const parts = []; for (let i = 0; i < 16; i++) parts.push([Math.pow(rnd(), 1.5) * 0.22, 2400 + rnd() * 6000, 0.12 + rnd() * 0.25, 0.02 + rnd() * 0.12]);
+    const hp = new Biquad('hp', 2800, 0.7);
+    return render(0.7, (t) => hp.p(noise()) * (env(t, 0.001, 0.05) * 0.9 + Math.exp(-t / 0.2) * 0.08) + ring(parts, t));
   };
+  // metal: struck rock, brighter, with a short ring to it
   S.metal_break = () => {
-    const pf = [440, 1050, 1730, 2600, 3900].map((f) => f * (0.9 + rnd() * 0.2));
-    return render(0.6, (t) => { let s = noise() * env(t, 0.001, 0.01) * 0.5; pf.forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t) * Math.exp(-t / (0.3 / (i + 1))) / (i + 1); }); return s; });
+    const base = rock(0.32, 10, 1.45, 0.3, 0.25)(), pf = [610, 1470, 2520, 3610].map((f) => f * (0.92 + rnd() * 0.16));
+    return render((base.length + 0.5) / DSP.SR, (t, i) => { let s = base[i]; pf.forEach((f, k) => { s += Math.sin(2 * Math.PI * f * t) * Math.exp(-t / (0.16 / (k + 1))) * 0.35 / (k + 1); }); return s; });
   };
-  S.metal_hit = S.metal_place = S.metal_break; S.metal_step = S.stone_step; S.glass_hit = S.stone_hit; S.glass_step = S.stone_step; S.glass_place = S.stone_place;
-  S.ladder_step = knock(220, 3, 0.1, 0.03); S.ladder_break = S.wood_break; S.ladder_hit = S.wood_hit; S.ladder_place = S.wood_place;
+  S.metal_hit = rock(0.12, 4, 1.5, 0.2, 0.2); S.metal_step = rock(0.09, 2, 1.3, 0.4, 0.1); S.metal_place = S.metal_break;
+  S.glass_hit = rock(0.12, 4, 1.3, 0.2, 0.15); S.glass_step = rock(0.09, 2, 1.1, 0.4, 0.1); S.glass_place = rock(0.24, 8, 1.2, 0.6, 0.2);
+  S.ladder_step = woody(0.1, 230, 0.3, 0.03); S.ladder_break = S.wood_break; S.ladder_hit = S.wood_hit; S.ladder_place = S.wood_place;
   // ----- ui & items -----
   S.click = () => render(0.06, (t) => (Math.sin(2 * Math.PI * 1400 * t) * 0.6 + noise() * 0.3) * env(t, 0.0005, 0.012));
   S.pop = () => render(0.12, (t) => Math.sin(2 * Math.PI * (300 + t * 3000) * t) * env(t, 0.002, 0.03));
@@ -391,6 +425,71 @@ const SOUND_DEFS = (() => {
     });
   };
   S.wind = () => { const bp = new Biquad('bp', 400, 1); return render(4, (t) => { bp.set(300 + Math.sin(t * 0.8) * 200, 1.5); return bp.p(noise()) * Math.sin(Math.PI * t / 4); }); };
+
+  // ----- the Far Isles -----
+  // the air between the isles: a slow breath with a cold shimmer on top (looped)
+  S.isles_air = () => {
+    const lp = new Biquad('lp', 380, 0.7), bp = new Biquad('bp', 2400, 9);
+    return render(8, (t) => {
+      const w = Math.sin(Math.PI * 2 * t / 8), w2 = Math.sin(Math.PI * 2 * t / 4 + 1);
+      bp.set(2100 + w2 * 500, 9);
+      let s = lp.p(noise()) * (0.9 + 0.3 * w) + bp.p(noise()) * 0.05 * (0.6 + 0.4 * w2);
+      s += (Math.sin(2 * Math.PI * 55 * t) * 0.12 + Math.sin(2 * Math.PI * 82.5 * t) * 0.06) * (0.7 + 0.3 * w);
+      return s;
+    });
+  };
+  // a far-off chime, as if the stars rang
+  S.isles_chime = () => {
+    const notes = [880, 987.8, 1174.7, 1318.5, 1568, 1760], a = notes[Math.floor(rnd() * notes.length)], b = a * (rnd() < 0.5 ? 1.5 : 1.25);
+    const dl = new Float32Array(Math.floor(DSP.SR * 0.23)); let di = 0;
+    return render(4.5, (t) => {
+      let s = Math.sin(2 * Math.PI * a * t) * Math.exp(-t / 1.4) * 0.4 + Math.sin(2 * Math.PI * a * 2.76 * t) * Math.exp(-t / 0.4) * 0.08;
+      if (t > 0.45) s += Math.sin(2 * Math.PI * b * (t - 0.45)) * Math.exp(-(t - 0.45) / 1.2) * 0.3;
+      const out = s + dl[di] * 0.5; dl[di] = out; di = (di + 1) % dl.length;
+      return out;
+    });
+  };
+  // stepping through a rift: a rush of air folding in on itself
+  S.rift_travel = () => {
+    const bp = new Biquad('bp', 300, 2);
+    return render(2.4, (t) => {
+      bp.set(200 + Math.pow(t / 2.4, 0.5) * 2600, 2.5);
+      let s = bp.p(noise()) * Math.sin(Math.PI * t / 2.4);
+      [261.6, 329.6, 392, 523.3].forEach((f, i) => { const st = 0.6 + i * 0.18; if (t > st) s += Math.sin(2 * Math.PI * f * (t - st)) * Math.exp(-(t - st) / 0.9) * 0.18; });
+      return s;
+    });
+  };
+  // the gaunt: a low, warbling murmur that seems to come from the wrong place
+  const warble = (f0, f1, dur, wob, shriek) => () => {
+    const f1a = new Biquad('bp', 600, 5), f2a = new Biquad('bp', 1500, 6), hp = new Biquad('hp', 200, 0.7);
+    let ph = 0;
+    return render(dur, (t) => {
+      const u = t / dur;
+      const f = f0 + (f1 - f0) * u + Math.sin(t * 2 * Math.PI * wob) * f0 * 0.18;
+      ph += 2 * Math.PI * f / DSP.SR;
+      f1a.set(500 + Math.sin(t * 7) * 250, 5);
+      const src = ((ph / (2 * Math.PI)) % 1) * 2 - 1 + noise() * (shriek || 0.15);
+      return hp.p(f1a.p(src) + f2a.p(src) * 0.6) * Math.sin(Math.PI * Math.min(1, u * 1.1));
+    });
+  };
+  S.gaunt_say = warble(70, 52, 1.4, 5.5, 0.2);
+  S.gaunt_stare = warble(180, 640, 1.5, 11, 0.9);
+  S.gaunt_hurt = warble(150, 95, 0.4, 14, 0.5);
+  S.gaunt_death = warble(120, 35, 2.2, 7, 0.4);
+  S.gaunt_warp = () => {
+    const bp = new Biquad('bp', 1500, 3);
+    return render(0.6, (t) => { bp.set(2600 - t * 3600, 3); return bp.p(noise()) * env(t, 0.01, 0.18) + Math.sin(2 * Math.PI * (700 - t * 1000) * t) * env(t, 0.005, 0.12) * 0.4; });
+  };
+  // a star crystal shattering
+  S.crystal_break = () => {
+    const hp = new Biquad('hp', 2500, 0.8);
+    return render(1.6, (t) => {
+      let s = hp.p(noise()) * env(t, 0.002, 0.25) * 0.8;
+      [1046.5, 1396.9, 1760, 2093].forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t * (1 + i * 0.002)) * Math.exp(-t / (0.5 + i * 0.15)) * 0.2; });
+      return s;
+    });
+  };
+  S.crystal_hum = () => render(3, (t) => (Math.sin(2 * Math.PI * 440 * t) * 0.5 + Math.sin(2 * Math.PI * 660.4 * t) * 0.3 + Math.sin(2 * Math.PI * 880.9 * t) * 0.15) * Math.sin(Math.PI * t / 3));
   return S;
 })();
 

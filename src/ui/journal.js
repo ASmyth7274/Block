@@ -48,6 +48,9 @@ const MILESTONES = [
   { id: 'flare', name: 'Playing with Fire', desc: 'Collect a flare rod', icon: () => [ITEM_IDS.flare_rod, 0] },
   { id: 'wailer', name: 'Hush Now', desc: 'Bring down a wailer', icon: () => [ITEM_IDS.wailer_tear, 0] },
   { id: 'regions', name: 'Underworld Cartographer', desc: 'Discover every region of the Underworld', icon: () => [B.SUNSTONE, 0] },
+  { id: 'isles', name: 'The Far Isles', desc: 'Step through the rift', icon: () => [B.STARSTONE, 0] },
+  { id: 'crystal', name: 'Lights Out', desc: 'Shatter a star crystal', icon: () => [ITEM_IDS.star_crystal, 0] },
+  { id: 'drift', name: 'Adrift', desc: 'Reach the Drift Isles beyond the gulf', icon: () => [B.STARSTONE_BRICKS, 0] },
 ];
 const BIOME_DESCRIPTIONS = {
   ocean: 'Endless water. Sunken ruins rest on the sea floor.', deep_ocean: 'The water grows dark and cold.', plains: 'Rolling grass, wildflowers and the occasional lonely oak.',
@@ -59,6 +62,9 @@ const BIOME_DESCRIPTIONS = {
   salt_flats: 'Blinding white salt crust. Stars fall here often.', meadow: 'Flowers in every colour.', canyon: 'Banded red cliffs rich in gold.', stone_shore: 'Bare stone where mountains meet the sea.',
   brimstone_depths: 'Underworld. Lava seas beneath a roof of red rock, lit by sunstone.', bone_shoals: 'Underworld. Drifts of bone sand and the ribs of long-dead giants. Bloodcap grows wild.',
   cinder_hollows: 'Underworld. Ash, basalt pillars and smouldering vents. Magma slimes bask here.', glimmering_grotto: 'Underworld. Smoky quartz spires and clusters of sunstone: a rare, bright refuge.',
+  great_isle: 'Far Isles. Pale starstone ringed by obsidian spires, each crowned with a star crystal. Something vast circles overhead.',
+  starlit_gulf: 'Far Isles. Nothing at all, for hundreds of blocks: just the void and the stars.',
+  drift_isles: 'Far Isles. Islands without number, scattered out across the void beyond the gulf.',
 };
 class JournalScreen extends Screen {
   constructor(game, parent) { super(game); this.parent = parent; this.background = 'world'; this.tab = 0; this.page = 0; this.pauses = !!parent; }

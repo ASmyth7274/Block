@@ -14,7 +14,7 @@ void main() {
   // shade codes 252-254 mark decals (wire on the ground): nudged toward the camera so they never z-fight
   uint shb = (a.z >> 24) & 255u;
   float sh = float(shb) / 255.0;
-  if (shb >= 252u) { p *= 0.9985; sh = shb == 254u ? 1.0 : (shb == 253u ? 0.8 : 0.6); }
+  if (shb >= 252u && shb <= 254u) { p *= 0.9985; sh = shb == 254u ? 1.0 : (shb == 253u ? 0.8 : 0.6); }
   gl_Position = uVP * vec4(p, 1.0);
   vUV = vec3(float(a.y & 31u) * 0.0625, float((a.y >> 5) & 31u) * 0.0625, float((a.y >> 10) & 1023u));
   vLight = vec2(float((a.y >> 20) & 63u), float((a.y >> 26) & 63u)) / 60.0;
@@ -42,13 +42,27 @@ out vec2 vNdc;
 void main() { vNdc = aPos; gl_Position = vec4(aPos, 0.9999, 1.0); }`,
   skyFS: `#version 300 es
 precision highp float;
-uniform mat4 uInvVP; uniform vec3 uSky; uniform vec3 uFogColor; uniform vec3 uSunDir; uniform vec4 uSunrise; uniform vec3 uVoid;
+uniform mat4 uInvVP; uniform vec3 uSky; uniform vec3 uFogColor; uniform vec3 uSunDir; uniform vec4 uSunrise; uniform vec3 uVoid; uniform float uIsles;
 in vec2 vNdc; out vec4 o;
+float h3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float vn(vec3 x) {
+  vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(h3(i), h3(i + vec3(1, 0, 0)), f.x), mix(h3(i + vec3(0, 1, 0)), h3(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(h3(i + vec3(0, 0, 1)), h3(i + vec3(1, 0, 1)), f.x), mix(h3(i + vec3(0, 1, 1)), h3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
 void main() {
   vec4 p = uInvVP * vec4(vNdc, 1.0, 1.0);
   vec3 d = normalize(p.xyz / p.w);
   float e = d.y;
   vec3 col = mix(uFogColor, uSky, smoothstep(0.02, 0.42, e));
+  if (uIsles > 0.0) {
+    // the Far Isles: a faint river of starlight across the void, violet and teal
+    float n = vn(d * 5.0) * 0.55 + vn(d * 11.0) * 0.3 + vn(d * 23.0) * 0.15;
+    float band = exp(-pow(dot(d, normalize(vec3(0.42, 0.3, 0.86))) / 0.26, 2.0));
+    col += vec3(0.14, 0.06, 0.2) * band * smoothstep(0.25, 0.85, n) * 1.4;
+    col += vec3(0.02, 0.1, 0.11) * pow(band, 3.0) * smoothstep(0.45, 0.9, n);
+    col = mix(col, uFogColor, 1.0 - smoothstep(-0.05, 0.3, e));
+  }
   if (e < 0.0) col = mix(uFogColor, uVoid, smoothstep(0.0, -0.25, e));
   if (uSunrise.a > 0.0) {
     vec2 h = normalize(d.xz + vec2(1e-5));

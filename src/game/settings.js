@@ -8,7 +8,7 @@ const IS_TOUCH = (() => {
 const IS_MOBILE = IS_TOUCH && Math.min(screen.width, screen.height) < 900;
 
 const DEFAULT_SETTINGS = {
-  renderDistance: IS_MOBILE ? 4 : 8,
+  renderDistance: IS_MOBILE ? 4 : 12,
   fov: 70,
   sensitivity: 0.5,
   invertMouse: false,

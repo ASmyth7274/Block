@@ -1926,6 +1926,7 @@ function entityFromData(world, d) {
   else if (d.type === 'boat') e = new Boat(world, d.x, d.y, d.z, d.wood || 0);
   else if (d.type === 'minecart') e = new Minecart(world, d.x, d.y, d.z, d.kind || 0);
   else if (d.type === 'painting') e = new Painting(world, d.bx | 0, d.by | 0, d.bz | 0, d.facing || 0, d.art);
+  else if (d.type === 'star_crystal') e = new StarCrystal(world, d.x, d.y, d.z);
   else if (MOB_CLASSES[d.type]) e = new MOB_CLASSES[d.type](world);
   if (!e) return null;
   e.load(d);
@@ -1955,7 +1956,8 @@ class MobSpawner {
     if (!w.gameRules.doMobSpawning) return;
     const rd = Math.min(g.settings.renderDistance, 6);
     const area = (rd * 2 + 1) * (rd * 2 + 1);
-    if (w.dim) { if (this.tickUnder) this.tickUnder(rd, area); return; }
+    if (w.dim === 1) { if (this.tickUnder) this.tickUnder(rd, area); return; }
+    if (w.dim === 2) { if (this.tickIsles) this.tickIsles(rd, area); return; }
     const capMonster = Math.max(8, Math.round(48 * area / 169));
     if (w.difficulty > 0 && this.counts.monster < capMonster) {
       for (let i = 0; i < 2; i++) if (this.spawnMonsterPack(rd)) { this.counts.monster += 1; }

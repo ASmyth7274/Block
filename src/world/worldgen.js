@@ -2426,7 +2426,152 @@ function WorldGenFactory(Noise, TAB) {
       for (let k = 0; k < 10; k++) { const x = cx + rng.nextInt(9) - 4, z = cz + rng.nextInt(9) - 4; if (get(x, y - 1, z) === B.BRIMSTONE) set(x, y - 1, z, B.BONESAND); }
     }
   }
-  function makeGenerator(seed, opts) { return (opts && opts.dim === 1) ? new UnderGenerator(seed, opts) : new Generator(seed, opts); }
+  // ------------------------------------------------------------------ the Far Isles
+  // Pale starstone adrift in a starlit void. The Great Isle sits at the centre,
+  // ringed by ten obsidian spires, each crowned with a star crystal; at its
+  // heart the Star Well, dry until the Starwyrm falls. Far out, past a wide
+  // gulf of nothing, the Drift Isles scatter away for ever.
+  const ibiome = (id, key, name, fog, o) => biome(id, key, name, Object.assign({
+    dim: 2, temp: 0.5, rain: 0, depth: 0, top: B.STARSTONE, filler: B.STARSTONE, under: B.STARSTONE, grass: '#8a7aa8', foliage: '#8a7aa8', water: '#8a7ae8',
+    tallGrass: 0, flowers: 0, cane: 0, pumpkins: false, animals: [], structures: [], fog,
+  }, o));
+  BI.I_GREAT = ibiome(44, 'great_isle', 'The Great Isle', [0.075, 0.055, 0.12]);
+  BI.I_GULF = ibiome(45, 'starlit_gulf', 'The Starlit Gulf', [0.05, 0.04, 0.1]);
+  BI.I_DRIFT = ibiome(46, 'drift_isles', 'The Drift Isles', [0.085, 0.06, 0.13]);
+  const ISLES = { ARRIVE: [100, 48, 0], GULF: 760, SPIRE_R: 43 };
+
+  class IslesGenerator extends Generator {
+    constructor(seed, opts) {
+      super(seed, opts);
+      const r = new Random(seedHash(this.seed, 21, 777));
+      this.iEdge = new Octaves(r, 3); this.iHill = new Octaves(r, 3); this.iUnder = new Octaves(r, 3);
+      this.iRough = new Octaves(r, 2); this.iCluster = new Octaves(r, 3);
+      this.driftCache = new Map();
+    }
+    villageAt() { return null; }
+    mineshaftAt() { return null; }
+    findSpawn() { return { x: ISLES.ARRIVE[0], z: ISLES.ARRIVE[2] }; }
+    tempAt() { return 0.5; }
+    biomeAt(x, z) {
+      const r2 = x * x + z * z;
+      return r2 < 220 * 220 ? BI.I_GREAT.id : r2 < (ISLES.GULF - 60) * (ISLES.GULF - 60) ? BI.I_GULF.id : BI.I_DRIFT.id;
+    }
+    // a drift isle somewhere in a 64-block cell of the outer void (or none)
+    driftIsle(i, j) {
+      const key = i + ',' + j;
+      let d = this.driftCache.get(key);
+      if (d !== undefined) return d;
+      d = null;
+      const cx = i * 64 + 32, cz = j * 64 + 32;
+      if (cx * cx + cz * cz > ISLES.GULF * ISLES.GULF) {
+        const rng = new Random(seedHash(this.seed, i, j, 0xD71F));
+        const cl = this.iCluster.noise2(i / 6, j / 6);
+        if (rng.nextFloat() < 0.36 + cl * 0.5) {
+          d = { i, j, x: cx + rng.nextInt(29) - 14, z: cz + rng.nextInt(29) - 14, R: 9 + rng.nextInt(17) + (cl > 0.3 ? 6 : 0), top: 46 + rng.nextInt(22), seed: rng.nextInt(0x7fffffff) };
+        }
+      }
+      if (this.driftCache.size > 20000) this.driftCache.clear();
+      this.driftCache.set(key, d);
+      return d;
+    }
+    // the solid span [bottom, top] of a column, or null over the void
+    column(x, z) {
+      const r = Math.sqrt(x * x + z * z);
+      if (r < 140) {
+        // the Great Isle: a gentle dome with a long root hanging beneath
+        const R = 90 + this.iEdge.noise2(x / 48, z / 48) * 16;
+        if (r >= R) return null;
+        const m = 1 - Math.pow(r / R, 1.8);
+        const top = Math.floor(56 + Math.sqrt(m) * 7 + this.iHill.noise2(x / 24, z / 24) * 2.5 * m);
+        const depth = 2 + Math.pow(m, 0.85) * 44 * (0.82 + 0.18 * this.iUnder.noise2(x / 13, z / 13)) + Math.max(0, this.iRough.noise2(x / 4, z / 4)) * 7 * m;
+        return [Math.max(1, top - Math.floor(depth)), top, null];
+      }
+      if (r < ISLES.GULF - 50) return null;
+      const i0 = Math.floor(x / 64), j0 = Math.floor(z / 64);
+      let best = null, bm = 0;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const d = this.driftIsle(i0 + di, j0 + dj);
+        if (!d) continue;
+        const dx = x - d.x, dz = z - d.z;
+        const R = d.R * (1 + this.iEdge.noise2(x / 22 + d.i * 7.3, z / 22 + d.j * 5.1) * 0.3);
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist >= R) continue;
+        const m = 1 - Math.pow(dist / R, 1.8);
+        if (m <= bm) continue;
+        bm = m;
+        const top = Math.floor(d.top + Math.sqrt(m) * 4 + this.iHill.noise2(x / 18, z / 18) * 2 * m);
+        const depth = 2 + Math.pow(m, 0.85) * d.R * 1.1 * (0.8 + 0.2 * this.iUnder.noise2(x / 11, z / 11)) + Math.max(0, this.iRough.noise2(x / 4, z / 4)) * 5 * m;
+        best = [Math.max(1, top - Math.floor(depth)), top, d];
+      }
+      return best;
+    }
+    generate(cx, cz) {
+      const blocks = new Uint8Array(16 * 16 * H), meta = new Uint8Array(16 * 16 * H), biomes = new Uint8Array(256);
+      const out = { cx, cz, blocks, meta, biomes, entities: [], tiles: [], ticks: [] };
+      const x0 = cx * 16, z0 = cz * 16;
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
+        biomes[z * 16 + x] = this.biomeAt(x0 + x, z0 + z);
+        const col = this.column(x0 + x, z0 + z);
+        if (!col) continue;
+        for (let y = col[0]; y <= col[1]; y++) blocks[IDX(x, y, z)] = B.STARSTONE;
+      }
+      if (Math.abs(cx) <= 9 && Math.abs(cz) <= 9) { this.spires(out); this.starWell(out); }
+      return out;
+    }
+    // ten obsidian spires in a ring, tallest and widest at random; the two
+    // shortest keep their crystals in iron cages
+    spireList() {
+      if (this._spires) return this._spires;
+      const rng = new Random(seedHash(this.seed, 31, 4441));
+      const order = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+      for (let i = 9; i > 0; i--) { const j = rng.nextInt(i + 1); const t = order[i]; order[i] = order[j]; order[j] = t; }
+      const out = [];
+      for (let k = 0; k < 10; k++) {
+        const a = Math.PI * 2 * k / 10 + 0.2, idx = order[k];
+        out.push({ x: Math.round(Math.cos(a) * ISLES.SPIRE_R), z: Math.round(Math.sin(a) * ISLES.SPIRE_R), r: 2 + Math.floor(idx / 3), h: 76 + idx * 3, caged: idx <= 1 });
+      }
+      return (this._spires = out);
+    }
+    spires(out) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16;
+      const set = (x, y, z, id, m) => { if (x < X0 || x >= X0 + 16 || z < Z0 || z >= Z0 + 16 || y < 1 || y >= H - 1) return; const i = IDX(x - X0, y, z - Z0); blocks[i] = id; meta[i] = m || 0; };
+      for (const s of this.spireList()) {
+        if (s.x + s.r + 2 < X0 || s.x - s.r - 2 > X0 + 15 || s.z + s.r + 2 < Z0 || s.z - s.r - 2 > Z0 + 15) continue;
+        for (let x = s.x - s.r; x <= s.x + s.r; x++) for (let z = s.z - s.r; z <= s.z + s.r; z++) {
+          if ((x - s.x) * (x - s.x) + (z - s.z) * (z - s.z) > s.r * s.r + 1) continue;
+          const col = this.column(x, z);
+          for (let y = col ? col[0] + 3 : 40; y < s.h; y++) set(x, y, z, B.OBSIDIAN);
+        }
+        set(s.x, s.h, s.z, B.BEDROCK);
+        if (s.caged) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+          if (Math.abs(dx) === 2 || Math.abs(dz) === 2) for (let y = s.h; y <= s.h + 3; y++) set(s.x + dx, y, s.z + dz, B.IRON_BARS);
+          set(s.x + dx, s.h + 4, s.z + dz, B.IRON_BARS);
+        }
+        if (s.x >= X0 && s.x < X0 + 16 && s.z >= Z0 && s.z < Z0 + 16) out.entities.push({ type: 'star_crystal', x: s.x + 0.5, y: s.h + 1, z: s.z + 0.5 });
+      }
+    }
+    // the Star Well: a ring of bedrock round a dry basin and a torch-lit pillar
+    wellTop() { const c = this.column(0, 0); return c ? c[1] : 60; }
+    starWell(out) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16;
+      if (X0 > 6 || X0 + 15 < -6 || Z0 > 6 || Z0 + 15 < -6) return;
+      const set = (x, y, z, id, m) => { if (x < X0 || x >= X0 + 16 || z < Z0 || z >= Z0 + 16 || y < 1 || y >= H - 1) return; const i = IDX(x - X0, y, z - Z0); blocks[i] = id; meta[i] = m || 0; };
+      const y0 = this.wellTop();
+      for (let x = -6; x <= 6; x++) for (let z = -6; z <= 6; z++) {
+        const d2 = x * x + z * z;
+        if (d2 > 36) continue;
+        for (let y = y0 + 1; y <= y0 + 10; y++) set(x, y, z, 0);
+        if (d2 <= 12.5) { set(x, y0, z, B.BEDROCK); set(x, y0 - 1, z, B.STARSTONE); }
+        if (d2 > 6.5 && d2 <= 12.5) set(x, y0 + 1, z, B.BEDROCK);
+      }
+      for (let y = y0 + 1; y <= y0 + 4; y++) set(0, y, 0, B.BEDROCK);
+      set(1, y0 + 3, 0, B.TORCH, 1); set(-1, y0 + 3, 0, B.TORCH, 2); set(0, y0 + 3, 1, B.TORCH, 3); set(0, y0 + 3, -1, B.TORCH, 4);
+    }
+  }
+  function makeGenerator(seed, opts) {
+    const dim = opts && opts.dim;
+    return dim === 1 ? new UnderGenerator(seed, opts) : dim === 2 ? new IslesGenerator(seed, opts) : new Generator(seed, opts);
+  }
 
   // Writer that clips feature writes to one chunk.
   // mode: 0 = force, 1 = replace air/plants/leaves only (leaves), 2 = replace air & plants (boulders), 3 = log (replace air, leaves, plants)
@@ -2448,5 +2593,5 @@ function WorldGenFactory(Noise, TAB) {
     setIf(x, y, z, id, m, ifId) { if (this.get(x, y, z) === ifId) this.set(x, y, z, id, m, 0); }
   }
 
-  return { BIOMES, BI, Generator, UnderGenerator, makeGenerator, SEA, H, LAVA_SEA };
+  return { BIOMES, BI, Generator, UnderGenerator, IslesGenerator, makeGenerator, SEA, H, LAVA_SEA, ISLES };
 }

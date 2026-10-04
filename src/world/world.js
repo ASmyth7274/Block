@@ -9,10 +9,11 @@ const WG = WorldGenFactory(Noise, GEN_TAB);
 const BIOMES = WG.BIOMES;
 const BIOME_TINTS = BIOMES.map((b) => b ? { grass: hexToRgb(b.grass), foliage: hexToRgb(b.foliage), water: hexToRgb(b.water) } : null);
 
-// Dimensions share one save: the Underworld's chunk and entity records are
-// stored under keys offset by DIM_KEY (an exact double, so keys stay unique).
+// Dimensions share one save: the Underworld's and the Far Isles' chunk and
+// entity records are stored under keys offset by dim * DIM_KEY (exact doubles,
+// so keys stay unique).
 const DIM_KEY = 4294967296;
-const DIM_OVERWORLD = 0, DIM_UNDERWORLD = 1;
+const DIM_OVERWORLD = 0, DIM_UNDERWORLD = 1, DIM_ISLES = 2;
 function dimKeys(keys, dim) {
   const out = new Set(), lo = dim * DIM_KEY, hi = lo + DIM_KEY;
   for (const k of keys) if (k >= lo && k < hi) out.add(k - lo);
@@ -103,7 +104,7 @@ class World {
     this.info = info;
     this.seed = info.seed | 0;
     this.menu = !!opts.menu;       // title-screen panorama world (never saved)
-    this.dim = opts.dim || 0;       // 0 the overworld, 1 the Underworld
+    this.dim = opts.dim || 0;       // 0 the overworld, 1 the Underworld, 2 the Far Isles
     this.keyBase = this.dim * DIM_KEY;
     this.chunks = new Map();
     this.light = new LightEngine(this);
@@ -174,7 +175,7 @@ class World {
     return Math.max((l >> 4) - this.skyDarken(), l & 15);
   }
   skyDarken() {
-    if (this.dim) return 11;   // no sun reaches the Underworld
+    if (this.dim) return 11;   // no sun reaches the Underworld or the Far Isles
     // 0 at noon, 11 at midnight (rain/thunder darken further)
     const a = this.celestialAngle(1);
     let f = 1 - (Math.cos(a * TAU) * 2 + 0.5);

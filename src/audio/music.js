@@ -154,6 +154,8 @@ class MusicEngine {
     const g = this.game;
     if (!g.world || g.world.menu) return 'menu';
     const p = g.player, w = g.world;
+    if (this.forceMood) return this.forceMood;
+    if (w.dim === 2) return 'isles';
     if (w.dim) return 'underworld';
     if (p && p.creative) return Math.random() < 0.5 ? 'creative' : 'day';
     if (p && p.y < 52 && !w.canSeeSky(Math.floor(p.x), Math.floor(p.y + 1), Math.floor(p.z))) return 'underground';
@@ -163,13 +165,14 @@ class MusicEngine {
   compose(mood) {
     const R = Math.random, pick = (a) => a[Math.floor(R() * a.length)];
     const MODES = { ionian: [0, 2, 4, 5, 7, 9, 11], lydian: [0, 2, 4, 6, 7, 9, 11], mixolydian: [0, 2, 4, 5, 7, 9, 10], dorian: [0, 2, 3, 5, 7, 9, 10], aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10] };
-    const under = mood === 'underworld';
+    const under = mood === 'underworld', isles = mood === 'isles', wyrm = mood === 'wyrm', ending = mood === 'ending';
     const modeName = under ? pick(['phrygian', 'aeolian', 'phrygian']) : mood === 'night' ? pick(['dorian', 'aeolian', 'ionian', 'lydian']) : mood === 'underground' ? pick(['aeolian', 'dorian', 'aeolian'])
+      : isles ? pick(['lydian', 'dorian', 'lydian', 'ionian']) : wyrm ? pick(['aeolian', 'phrygian', 'aeolian']) : ending ? pick(['ionian', 'lydian'])
       : mood === 'menu' ? pick(['ionian', 'lydian', 'mixolydian', 'ionian']) : pick(['ionian', 'lydian', 'ionian', 'mixolydian', 'dorian']);
     const mode = MODES[modeName];
     const minor = modeName === 'dorian' || modeName === 'aeolian' || modeName === 'phrygian';
-    const tonic = under ? 43 + Math.floor(R() * 6) : 50 + Math.floor(R() * 8);
-    const bpm = under ? 44 + R() * 10 : mood === 'underground' ? 52 + R() * 10 : mood === 'night' ? 58 + R() * 12 : mood === 'menu' ? 66 + R() * 14 : 62 + R() * 16;
+    const tonic = under ? 43 + Math.floor(R() * 6) : isles ? 55 + Math.floor(R() * 6) : wyrm ? 45 + Math.floor(R() * 5) : 50 + Math.floor(R() * 8);
+    const bpm = under ? 44 + R() * 10 : isles ? 46 + R() * 10 : wyrm ? 84 + R() * 12 : ending ? 58 + R() * 6 : mood === 'underground' ? 52 + R() * 10 : mood === 'night' ? 58 + R() * 12 : mood === 'menu' ? 66 + R() * 14 : 62 + R() * 16;
     const beat = 60 / bpm;
     const meter = R() < 0.25 ? 3 : 4;
     const bar = beat * meter;
@@ -181,14 +184,15 @@ class MusicEngine {
     const ev = [];
     const add = (t, m, v, d) => { if (m >= 28 && m <= 96) ev.push({ t: t + (R() - 0.5) * 0.025, m, v: clamp(v, 0.05, 1), d }); };
     let t = 0.4;
-    const phrases = (mood === 'underground' || under) ? 3 + Math.floor(R() * 2) : 4 + Math.floor(R() * 3);
+    const phrases = (mood === 'underground' || under) ? 3 + Math.floor(R() * 2) : ending ? 6 : wyrm ? 5 : 4 + Math.floor(R() * 3);
     const progA = pick(progs), progB = R() < 0.6 ? pick(progs) : progA;
     const accomp = ['roll', 'arp8', 'arp4', 'sparse', 'pedal'];
     let motif = null;
     for (let ph = 0; ph < phrases; ph++) {
       const prog = ph % 2 === 1 ? progB : progA;
-      const style = under ? pick(['sparse', 'pedal', 'pedal', 'roll']) : mood === 'underground' ? pick(['sparse', 'pedal', 'roll']) : pick(accomp);
-      const withMelody = ph > 0 && R() < (under ? 0.4 : mood === 'underground' ? 0.45 : 0.75);
+      const style = under ? pick(['sparse', 'pedal', 'pedal', 'roll']) : mood === 'underground' ? pick(['sparse', 'pedal', 'roll'])
+        : isles ? pick(['sparse', 'pedal', 'arp4', 'sparse']) : wyrm ? pick(['arp8', 'arp8', 'roll']) : ending ? pick(['roll', 'arp8', 'arp4']) : pick(accomp);
+      const withMelody = ph > 0 && R() < (under ? 0.4 : mood === 'underground' ? 0.45 : isles ? 0.5 : ending ? 0.9 : 0.75);
       if (withMelody && (!motif || R() < 0.4)) motif = this.makeMotif(meter, R);
       const accV = mood === 'menu' ? 0.42 : 0.34;
       for (let b = 0; b < prog.length; b++) {
@@ -197,7 +201,8 @@ class MusicEngine {
         const ch = chordOf(d, ext);
         const bass = ch[0] - 12 * (ch[0] > 52 ? 2 : 1);
         if (R() < 0.85) add(t, bass, accV + 0.1, bar * 1.2);
-        if (under && R() < 0.35) add(t + beat * 0.02, bass - 12, accV * 0.8, bar * 1.6);   // a low toll
+        if ((under || wyrm) && R() < (wyrm ? 0.6 : 0.35)) add(t + beat * 0.02, bass - 12, accV * 0.8, bar * 1.6);   // a low toll
+        if (isles && R() < 0.5) add(t + beat * (1 + Math.floor(R() * meter)) + beat * 0.5, deg(d + 21 + pick([0, 2, 4])), 0.16 + R() * 0.06, beat * 3);   // starlight
         if (R() < 0.3) add(t + beat * (meter === 3 ? 2 : 2), bass + 7, accV * 0.7, bar * 0.6);
         const up = ch.map((m) => m + (m < 55 ? 12 : 0));
         switch (style) {
