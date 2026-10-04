@@ -161,28 +161,14 @@
     for (let y = 5; y < 11; y++) for (let x = 5; x < 11; x++) { const d = Math.hypot(x - 7.5, y - 7.5); img.set(x, y, d < 1.6 ? C('#e8fffd') : d < 2.8 ? C('#5ff7ee') : C('#1b8f8a')); }
     return img;
   })());
-  // the gate to the Sift: fine grains forever falling through grey light
-  function SiftAnim() {
-    const rng = new Noise.Random(9090);
-    const grains = Array.from({ length: 34 }, () => [rng.nextFloat() * 16, rng.nextFloat() * 16, 0.04 + rng.nextFloat() * 0.09, rng.nextFloat()]);
-    let t = 0;
-    this.step = function () { t++; };
-    this.render = function (img) {
-      for (let i = 0; i < 256; i++) {
-        const x = i & 15, y = i >> 4;
-        const w = Math.sin((x * 0.7 + y * 0.35 + t * 0.03)) * 0.5 + 0.5;
-        const v = 92 + w * 34 + ((x * 13 + y * 7) % 5) * 3;
-        img.d[i * 4] = v; img.d[i * 4 + 1] = v + 4; img.d[i * 4 + 2] = v + 12; img.d[i * 4 + 3] = 220;
-      }
-      for (const [gx, gy, sp, ph] of grains) {
-        const x = Math.floor(((gx + Math.sin(t * 0.02 + ph * 6) * 1.2) % 16 + 16) % 16), y = Math.floor(((gy + t * sp) % 16 + 16) % 16);
-        const i = (y * 16 + x) * 4, b = 200 + ph * 55;
-        img.d[i] = b; img.d[i + 1] = b; img.d[i + 2] = Math.min(255, b + 10); img.d[i + 3] = 255;
-      }
-    };
-  }
-  ANIM.sift_gate = new SiftAnim();
-  { const img = new Img(); ANIM.sift_gate.render(img); reg('sift_gate', img); }
+  // the gate to the Sift is drawn by a shader of its own (see SHADERS.gateFS): this is only
+  // what its dust looks like
+  reg('sift_gate', (() => {
+    const img = new Img(), rng = new Noise.Random(9090);
+    for (let i = 0; i < 256; i++) { const v = 40 + rng.nextFloat() * 50; img.d[i * 4] = v; img.d[i * 4 + 1] = v; img.d[i * 4 + 2] = v + 14; img.d[i * 4 + 3] = 255; }
+    for (let k = 0; k < 18; k++) { const i = Math.floor(rng.nextFloat() * 256) * 4; img.d[i] = img.d[i + 1] = 230; img.d[i + 2] = 240; }
+    return img;
+  })());
 
   // ---- items ----
   sprite('glowberry', [

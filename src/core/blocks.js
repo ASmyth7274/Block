@@ -775,6 +775,7 @@ defBlock(163, 'gate_keystone', {
 defBlock(164, 'sift_gate', {
   name: 'Sift Gate', render: R.MODEL, tex: 'sift_gate', opaque: false, solid: false, translucent: true, opacity: 0, light: 11,
   hardness: -1, resistance: 3600000, sound: 'glass', itemMetaMask: 0, drops: () => [], select: () => null,
+  // (drawn by the renderer's gate shader: a window onto the Sift, grains falling in its depths)
   model: (m) => [{ b: portalBox(m) }],
 });
 // infested bricks: something lives inside

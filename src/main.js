@@ -1101,6 +1101,15 @@ class Game {
           P.smoke(fx, fy + 0.05, fz, 1); P.flame(fx, fy, fz);
           break;
         }
+        case B.SIFT_GATE:
+          if (Math.random() < 0.35) {
+            const m = w.getMeta(x, y, z), off = (Math.random() < 0.5 ? -1 : 1) * (0.2 + Math.random() * 0.2);
+            const gold = Math.random() < 0.08, px = x + ((m & 1) ? 0.5 + off : Math.random()), pz = z + ((m & 1) ? Math.random() : 0.5 + off);
+            P.add({ x: px, y: y + Math.random(), z: pz, vx: (m & 1) ? off * 0.03 : 0, vy: -0.01 - Math.random() * 0.02, vz: (m & 1) ? 0 : off * 0.03, size: gold ? 0.06 : 0.035, life: 30 + Math.floor(Math.random() * 30),
+              layer: P.layer('particle_glint'), r: gold ? 1 : 0.85, g: gold ? 0.88 : 0.85, b: gold ? 0.55 : 0.92, collide: false, bright: true, fade: true });
+          }
+          if (Math.random() < 0.004) this.audio.play('sift_hum', 0.5, 0.85 + Math.random() * 0.3, x + 0.5, y + 0.5, z + 0.5);
+          break;
         case B.FIRE:
           if (Math.random() < 0.5) P.smoke(x + Math.random(), y + Math.random() * 0.5 + 0.5, z + Math.random(), 1, true);
           if (Math.random() < 0.04) this.audio.play('fire', 0.6, 0.7 + Math.random() * 0.3, x + 0.5, y + 0.5, z + 0.5);

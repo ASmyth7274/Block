@@ -588,6 +588,11 @@ const SOUND_DEFS = (() => {
       return s * sw + hp.p(noise()) * 0.25 * sw * (0.5 + 0.5 * Math.sin(t * 7));
     });
   };
+  // the Sift gate: grains pouring through grey light, and a low note beneath
+  S.sift_hum = () => {
+    const hp = new Biquad('hp', 3000, 0.7), bp = new Biquad('bp', 5000, 2);
+    return render(3, (t) => { const sw = Math.sin(Math.PI * t / 3); return (hp.p(noise()) * 0.5 * (0.7 + 0.3 * Math.sin(t * 11)) + bp.p(noise()) * 0.3 + Math.sin(2 * Math.PI * 82.4 * t) * 0.25 + Math.sin(2 * Math.PI * 123.5 * t) * 0.12) * sw; });
+  };
   // an echo fork, struck: a clear note that takes its time to die
   S.echo_fork = () => render(2.4, (t) => (Math.sin(2 * Math.PI * 880 * t) * 0.6 + Math.sin(2 * Math.PI * 883 * t) * 0.3 + Math.sin(2 * Math.PI * 5550 * t) * 0.15 * Math.exp(-t / 0.05)) * Math.exp(-t / 0.8) * (t < 0.003 ? t / 0.003 : 1));
   return S;

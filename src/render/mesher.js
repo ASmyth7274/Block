@@ -83,6 +83,7 @@ class Mesher {
     let any = false;
     for (let i = base, e = base + 4096; i < e; i++) if (cb[i] !== 0) { any = true; break; }
     for (const o of this.out) o.reset();
+    this.gates = null;
     if (!any) return null;
     this.fill(world, c, sy);
     this.c = c; this.sy = sy;
@@ -112,7 +113,9 @@ class Mesher {
         }
       }
     }
-    return [this.out[0].result(), this.out[1].result(), this.out[2].result()];
+    const res = [this.out[0].result(), this.out[1].result(), this.out[2].result()];
+    if (this.gates) res.gates = this.gates;
+    return res;
   }
 
   fill(world, c, sy) {
@@ -597,6 +600,8 @@ class Mesher {
 
   // ------------------------------------------------------------ box models
   model(pi, id, meta, x, y, z) {
+    // the Sift gate is drawn by its own shader; just note where it is
+    if (id === B.SIFT_GATE) { (this.gates || (this.gates = [])).push(x, this.sy * 16 + y, z, meta); return; }
     const boxes = this.boxesFor(pi, id, meta);
     if (!boxes) return;
     const pass = BT.pass[id] === 2 ? 2 : (BLOCKS[id].cutout ? 1 : 0);
@@ -616,7 +621,7 @@ class Mesher {
           case 4: onEdge = x0 === 0; break; case 5: onEdge = x1 === 16; break;
         }
         if (onEdge && !bx.inset && OPQ[ids[pi + POFF[f]]]) continue;
-        if (onEdge && !bx.inset && ids[pi + POFF[f]] === id && (id === B.GLASS_PANE || id === B.IRON_BARS)) continue;
+        if (onEdge && !bx.inset && ids[pi + POFF[f]] === id && (id === B.GLASS_PANE || id === B.IRON_BARS || id === B.PORTAL || id === B.SIFT_GATE)) continue;
         const layer = bx.tex ? (typeof bx.tex === 'string' ? atlas.layer(bx.tex) : atlas.layer(bx.tex[f])) : atlas.face(id, meta, f);
         const light = onEdge ? this.flatLight(pi, f) : this.flatLight(pi, f);
         const ins = bx.inset || 0;

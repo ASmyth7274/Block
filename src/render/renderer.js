@@ -22,6 +22,8 @@ class Renderer {
     this.progChunk = GLU.program(gl, SHADERS.chunkVS, SHADERS.chunkFS);
     this.progSky = GLU.program(gl, SHADERS.skyVS, SHADERS.skyFS);
     this.progEnt = GLU.program(gl, SHADERS.entVS, SHADERS.entFS);
+    this.progStars = GLU.program(gl, SHADERS.starVS, SHADERS.starFS);
+    this.progGate = GLU.program(gl, SHADERS.gateVS, SHADERS.gateFS);
     this.ibo = null; this.iboQuads = 0;
     this.vaos = new Set();
     this.ensureIndices(65536);
@@ -47,7 +49,10 @@ class Renderer {
     // dynamic batches
     this.batch = new DynBatch(gl, [[3, 'f'], [3, 'f'], [4, 'ub'], [2, 'f']], 65536);
     this.cloudBatch = new DynBatch(gl, [[3, 'f'], [3, 'f'], [4, 'ub'], [2, 'f']], 60000);
-    this.starBatch = new DynBatch(gl, [[3, 'f'], [3, 'f'], [4, 'ub'], [2, 'f']], 12000);
+    this.starBatch = new DynBatch(gl, [[3, 'f'], [3, 'f'], [4, 'ub'], [2, 'f']], 16000);
+    this.meteorBatch = new DynBatch(gl, [[3, 'f'], [3, 'f'], [4, 'ub'], [2, 'f']], 3000);
+    this.gateBatch = new DynBatch(gl, [[3, 'f'], [3, 'f'], [4, 'ub'], [2, 'f']], 12000);
+    this.meteors = []; this.meteorT = 0; this.auroraT = 0; this.nightK = 0; this.aurora = 0;
     this.buildStars();
     this.buildCloudMap();
     this.cloudKey = '';
@@ -262,6 +267,14 @@ class Renderer {
     this.celestial = a;
     this.dayFactor = day;
     this.rain = rain;
+    // how dark and clear the night is, and whether the northern lights are out: most nights
+    // in the cold country, now and then anywhere
+    const night = clamp(1 - (Math.cos(a * TAU) * 2 + 0.25), 0, 1);
+    this.nightK = night * night * (1 - rain);
+    const nightNo = Math.floor((world.dayTime + 12000) / 24000), h = ((Math.imul(nightNo ^ (world.seed | 0), 2654435761) >>> 0) % 1000) / 1000;
+    const want = b.temp < 0.3 ? (h < 0.7 ? 0.55 + h * 0.6 : 0.12) : (h < 0.15 ? 0.35 + h * 2 : 0);
+    this.auroraT += (want - this.auroraT) * 0.01;
+    this.aurora = this.auroraT * this.nightK;
   }
   sunriseColor(a) {
     const c = Math.cos(a * TAU);
@@ -309,27 +322,15 @@ class Renderer {
 
   // ------------------------------------------------------------ stars & clouds
   buildStars() {
-    const rng = new Noise.Random(10842);
+    const rng = new Noise.Random(10842), rng2 = new Noise.Random(20931);
     const b = this.starBatch;
     let n = 0;
-    const put = (x, y, z) => {
-      const o = n * 9;
-      b.f32[o] = x; b.f32[o + 1] = y; b.f32[o + 2] = z;
-      b.f32[o + 3] = 0; b.f32[o + 4] = 0; b.f32[o + 5] = -1;
-      b.u8[(o + 6) * 4] = 255; b.u8[(o + 6) * 4 + 1] = 255; b.u8[(o + 6) * 4 + 2] = 255; b.u8[(o + 6) * 4 + 3] = 255;
-      b.f32[o + 7] = -1; b.f32[o + 8] = 0;
-      n++;
-    };
-    for (let i = 0; i < 1500; i++) {
-      let x = rng.nextFloat() * 2 - 1, y = rng.nextFloat() * 2 - 1, z = rng.nextFloat() * 2 - 1;
-      const size = 0.15 + rng.nextFloat() * 0.1;
-      let l = x * x + y * y + z * z;
-      if (l >= 1 || l < 0.01) continue;
-      l = 1 / Math.sqrt(l); x *= l; y *= l; z *= l;
+    // a star: a little square facing the middle; twinkle (how much), rate, brightness, colour
+    const star = (x, y, z, size, rot, tw, rate, br, col) => {
       const cx = x * 100, cy = y * 100, cz = z * 100;
       const th = Math.atan2(x, z), sth = Math.sin(th), cth = Math.cos(th);
       const ph = Math.atan2(Math.sqrt(x * x + z * z), y), sph = Math.sin(ph), cph = Math.cos(ph);
-      const rot = rng.nextFloat() * Math.PI * 2, sr = Math.sin(rot), cr = Math.cos(rot);
+      const sr = Math.sin(rot), cr = Math.cos(rot), phase = Math.floor(rng2.nextFloat() * 255);
       const corners = [];
       for (let j = 0; j < 4; j++) {
         const a = ((j & 2) - 1) * size, bb = (((j + 1) & 2) - 1) * size;
@@ -337,8 +338,38 @@ class Renderer {
         const dy = d1 * sph, dd = -d1 * cph;
         corners.push([cx + dd * sth - d2 * cth, cy + dy, cz + d2 * sth + dd * cth]);
       }
-      put(...corners[0]); put(...corners[1]); put(...corners[2]);
-      put(...corners[0]); put(...corners[2]); put(...corners[3]);
+      for (const k of [0, 1, 2, 0, 2, 3]) {
+        if (n >= b.maxVerts) return;
+        const o = n * 9, p = corners[k];
+        b.f32[o] = p[0]; b.f32[o + 1] = p[1]; b.f32[o + 2] = p[2];
+        b.f32[o + 3] = tw; b.f32[o + 4] = rate; b.f32[o + 5] = br;
+        const c = (o + 6) * 4; b.u8[c] = col[0]; b.u8[c + 1] = col[1]; b.u8[c + 2] = col[2]; b.u8[c + 3] = phase;
+        b.f32[o + 7] = -1; b.f32[o + 8] = 0;
+        n++;
+      }
+    };
+    const COLS = [[255, 255, 255], [255, 255, 255], [255, 255, 255], [255, 255, 255], [255, 255, 255], [255, 255, 255], [200, 220, 255], [200, 220, 255], [255, 235, 195], [255, 190, 150]];
+    // the classic field, in the same places as ever
+    for (let i = 0; i < 1500; i++) {
+      let x = rng.nextFloat() * 2 - 1, y = rng.nextFloat() * 2 - 1, z = rng.nextFloat() * 2 - 1;
+      let size = 0.15 + rng.nextFloat() * 0.1;
+      let l = x * x + y * y + z * z;
+      if (l >= 1 || l < 0.01) continue;
+      l = 1 / Math.sqrt(l); x *= l; y *= l; z *= l;
+      const rot = rng.nextFloat() * Math.PI * 2;
+      const r = rng2.nextFloat(), bright = r < 0.04;
+      if (bright) size *= 1.5;
+      star(x, y, z, size, rot, rng2.nextFloat() < 0.75 ? 0.25 + rng2.nextFloat() * 0.45 : 0.05, rng2.nextFloat(), bright ? 1.25 : 0.75 + rng2.nextFloat() * 0.3, COLS[Math.floor(rng2.nextFloat() * COLS.length)]);
+    }
+    // the Milky Way: a crowd of faint little stars along its plane (match MW_N in the sky shader)
+    const N = [0.5009, 0.3506, 0.7913], E1 = [0.5734, -0.8193, 0];
+    const E2 = [N[1] * E1[2] - N[2] * E1[1], N[2] * E1[0] - N[0] * E1[2], N[0] * E1[1] - N[1] * E1[0]];
+    for (let i = 0; i < 1100; i++) {
+      const a = rng2.nextFloat() * TAU, g = (rng2.nextFloat() + rng2.nextFloat() + rng2.nextFloat() - 1.5) * 0.14;
+      const ca = Math.cos(a), sa = Math.sin(a);
+      let x = E1[0] * ca + E2[0] * sa + N[0] * g, y = E1[1] * ca + E2[1] * sa + N[1] * g, z = E1[2] * ca + E2[2] * sa + N[2] * g;
+      const l = 1 / Math.sqrt(x * x + y * y + z * z); x *= l; y *= l; z *= l;
+      star(x, y, z, 0.07 + rng2.nextFloat() * 0.06, rng2.nextFloat() * TAU, 0.2 + rng2.nextFloat() * 0.4, rng2.nextFloat(), 0.4 + rng2.nextFloat() * 0.35, COLS[Math.floor(rng2.nextFloat() * 8)]);
     }
     b.count = n;
     const gl = this.gl;
@@ -460,6 +491,11 @@ class Renderer {
       if (isles) gl.uniform3fv(ps.u.uVoid, [0.022, 0.014, 0.045]);
       else gl.uniform3fv(ps.u.uVoid, [lerp(fogColor[0], this.skyColor[0] * 0.2 + 0.04, vk), lerp(fogColor[1], this.skyColor[1] * 0.2 + 0.04, vk), lerp(fogColor[2], this.skyColor[2] * 0.6 + 0.1, vk)]);
       gl.uniform1f(ps.u.uIsles, isles ? 1 : 0);
+      const ca = Math.cos(this.celestial * TAU), sa = Math.sin(this.celestial * TAU);
+      gl.uniformMatrix3fv(ps.u.uCel, false, [ca, -sa, 0, sa, ca, 0, 0, 0, 1]);
+      gl.uniform1f(ps.u.uNight, isles || world.menu ? 0 : this.nightK);
+      gl.uniform1f(ps.u.uAurora, isles || world.menu ? 0 : this.aurora);
+      gl.uniform1f(ps.u.uTime, (world.time + partial) / 20);
       gl.disable(gl.CULL_FACE);
       gl.bindVertexArray(this.skyVAO);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -512,6 +548,7 @@ class Renderer {
     gl.uniform1f(pc.u.uAlphaTest, 0.5);
     drawPass(1, vis);
     gl.bindVertexArray(null);
+    this.drawGates(vis, cam, world, partial, fogColor, fogStart, fogEnd);
 
     // ---- entities, particles, block overlays ----
     if (hooks && hooks.drawWorldObjects) hooks.drawWorldObjects(this, partial);
@@ -567,29 +604,23 @@ class Renderer {
     Mat4.multiply(vp, this.skyVP, m);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    const time = (world.time + partial) / 20;
     if (world.dim === 2) {
-      // no sun, no moon: only the stars, turning slowly overhead
-      const pe = this.useEnt(vp, 2, -1, false);
-      gl.uniform4f(pe.u.uTint, 0.85, 0.82, 1, 1);
-      gl.bindVertexArray(this.starBatch.vao);
-      gl.drawArrays(gl.TRIANGLES, 0, this.starBatch.count);
-      gl.bindVertexArray(null);
-      gl.uniform4f(pe.u.uTint, 1, 1, 1, 1);
+      // no sun, no moon: only the stars, turning slowly overhead, and stars falling often
+      this.drawStars(vp, [0.85, 0.82, 1], time);
+      this.drawMeteors(world, time, 1, [0.85, 0.7, 1], 9);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.disable(gl.BLEND);
       return;
     }
-    // stars
+    // stars, twinkling; and now and then one falls (on some nights, a great many)
     let starB = 1 - (Math.cos(a * TAU) * 2 + 0.25);
     starB = clamp(starB, 0, 1);
     starB = starB * starB * 0.5 * rainF;
-    if (starB > 0) {
-      const pe = this.useEnt(vp, 2, -1, false);
-      gl.uniform4f(pe.u.uTint, starB, starB, starB, 1);
-      gl.bindVertexArray(this.starBatch.vao);
-      gl.drawArrays(gl.TRIANGLES, 0, this.starBatch.count);
-      gl.bindVertexArray(null);
-      gl.uniform4f(pe.u.uTint, 1, 1, 1, 1);
+    if (starB > 0) this.drawStars(vp, [starB, starB, starB], time);
+    if (!world.menu) {
+      const nightNo = Math.floor((world.dayTime + 12000) / 24000), shower = ((Math.imul(nightNo + 7, 2246822519) ^ (world.seed | 0)) >>> 0) % 9 === 0;
+      this.drawMeteors(world, time, starB * 2, [1, 0.97, 0.9], shower ? 2.5 : 24);
     }
     // sun & moon
     const b = this.batch;
@@ -613,6 +644,113 @@ class Renderer {
     b.flush();
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.disable(gl.BLEND);
+  }
+
+  // the Sift gates in view, each block a double-sided sheet through its middle
+  drawGates(vis, cam, world, partial, fogColor, fogStart, fogEnd) {
+    const b = this.gateBatch;
+    b.reset();
+    const put = (x, y, z, axis) => {
+      if (b.n >= b.maxVerts) return;
+      const o = b.n * 9;
+      b.f32[o] = x; b.f32[o + 1] = y; b.f32[o + 2] = z; b.f32[o + 3] = axis; b.f32[o + 4] = 0; b.f32[o + 5] = 0;
+      b.u8[(o + 6) * 4 + 3] = 255; b.f32[o + 7] = 0; b.f32[o + 8] = 0; b.n++;
+    };
+    for (const [c, , ox, oz] of vis) {
+      for (const s of c.render.sect) {
+        if (!s || !s.gates) continue;
+        const g = s.gates;
+        for (let i = 0; i < g.length; i += 4) {
+          const x = ox + g[i], y = g[i + 1] - cam.y, z = oz + g[i + 2], ax = g[i + 3] & 1;
+          if (!ax) { put(x, y, z + 0.5, 0); put(x + 1, y, z + 0.5, 0); put(x + 1, y + 1, z + 0.5, 0); put(x, y, z + 0.5, 0); put(x + 1, y + 1, z + 0.5, 0); put(x, y + 1, z + 0.5, 0); }
+          else { put(x + 0.5, y, z, 1); put(x + 0.5, y, z + 1, 1); put(x + 0.5, y + 1, z + 1, 1); put(x + 0.5, y, z, 1); put(x + 0.5, y + 1, z + 1, 1); put(x + 0.5, y + 1, z, 1); }
+        }
+      }
+    }
+    if (!b.n) return;
+    const gl = this.gl, pg = this.progGate;
+    gl.useProgram(pg.p);
+    gl.uniformMatrix4fv(pg.u.uVP, false, this.vp);
+    gl.uniform3f(pg.u.uCam, cam.x, cam.y, cam.z);
+    gl.uniform1f(pg.u.uTime, (world.time + partial) / 20);
+    gl.uniform3fv(pg.u.uFogColor, fogColor);
+    gl.uniform2f(pg.u.uFog, fogStart, fogEnd);
+    gl.disable(gl.CULL_FACE);
+    b.flush();
+    gl.enable(gl.CULL_FACE);
+  }
+  drawStars(vp, tint, time) {
+    const gl = this.gl, ps = this.progStars;
+    gl.useProgram(ps.p);
+    gl.uniformMatrix4fv(ps.u.uVP, false, vp);
+    gl.uniform1f(ps.u.uTime, time);
+    gl.uniform3fv(ps.u.uTint, tint);
+    gl.bindVertexArray(this.starBatch.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, this.starBatch.count);
+    gl.bindVertexArray(null);
+  }
+  // shooting stars: a bright head racing along a great circle, its tail fading behind it.
+  // `every` is the average number of seconds between them at full dark.
+  drawMeteors(world, time, bright, col, every) {
+    const dt = clamp(time - (this.meteorT || time), 0, 0.25);
+    this.meteorT = time;
+    const ms = this.meteors;
+    if (bright > 0.05 && dt > 0 && ms.length < 6 && Math.random() < dt / every * bright) {
+      const az = Math.random() * TAU, el = (20 + Math.random() * 50) * DEG;
+      const s = [Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)];
+      // a direction of travel along the sky, mostly downward
+      let m = [Math.random() - 0.5, -0.35 - Math.random() * 0.6, Math.random() - 0.5];
+      const k = m[0] * s[0] + m[1] * s[1] + m[2] * s[2];
+      m = [m[0] - s[0] * k, m[1] - s[1] * k, m[2] - s[2] * k];
+      const ml = Math.hypot(m[0], m[1], m[2]) || 1;
+      ms.push({ s, m: [m[0] / ml, m[1] / ml, m[2] / ml], t: 0, life: 0.45 + Math.random() * 0.7, speed: (22 + Math.random() * 22) * DEG, len: (6 + Math.random() * 10) * DEG, w: 0.3 + Math.random() * 0.2 });
+    }
+    if (!ms.length) return;
+    const b = this.meteorBatch;
+    b.reset();
+    const put = (p, br) => {
+      if (b.n >= b.maxVerts) return;
+      const o = b.n * 9;
+      b.f32[o] = p[0]; b.f32[o + 1] = p[1]; b.f32[o + 2] = p[2];
+      b.f32[o + 3] = 0; b.f32[o + 4] = 0; b.f32[o + 5] = br;
+      const c = (o + 6) * 4; b.u8[c] = col[0] * 255; b.u8[c + 1] = col[1] * 255; b.u8[c + 2] = col[2] * 255; b.u8[c + 3] = 0;
+      b.f32[o + 7] = -1; b.f32[o + 8] = 0; b.n++;
+    };
+    for (let i = ms.length - 1; i >= 0; i--) {
+      const M = ms[i];
+      M.t += dt;
+      if (M.t >= M.life) { ms.splice(i, 1); continue; }
+      const fade = Math.sin(Math.PI * M.t / M.life) * Math.min(1, bright), head = M.speed * M.t;
+      const SEG = 10, pts = [];
+      for (let j = 0; j <= SEG; j++) {
+        const th = Math.max(0, head - M.len * (j / SEG)), c = Math.cos(th), s = Math.sin(th);
+        const p = [M.s[0] * c + M.m[0] * s, M.s[1] * c + M.m[1] * s, M.s[2] * c + M.m[2] * s];
+        const tg = [-M.s[0] * s + M.m[0] * c, -M.s[1] * s + M.m[1] * c, -M.s[2] * s + M.m[2] * c];
+        const wv = [p[1] * tg[2] - p[2] * tg[1], p[2] * tg[0] - p[0] * tg[2], p[0] * tg[1] - p[1] * tg[0]];
+        const wd = M.w * (1 - j / SEG * 0.85);
+        pts.push([p[0] * 100 + wv[0] * wd, p[1] * 100 + wv[1] * wd, p[2] * 100 + wv[2] * wd], [p[0] * 100 - wv[0] * wd, p[1] * 100 - wv[1] * wd, p[2] * 100 - wv[2] * wd]);
+      }
+      for (let j = 0; j < SEG; j++) {
+        const b0 = 1.6 * fade * Math.pow(1 - j / SEG, 1.6), b1 = 1.6 * fade * Math.pow(1 - (j + 1) / SEG, 1.6);
+        const a0 = pts[j * 2], a1 = pts[j * 2 + 1], c0 = pts[j * 2 + 2], c1 = pts[j * 2 + 3];
+        put(a0, b0); put(a1, b0); put(c1, b1); put(a0, b0); put(c1, b1); put(c0, b1);
+      }
+      // and a bright square at its head
+      const hp = pts[0], hq = pts[1], hc = [(hp[0] + hq[0]) / 2, (hp[1] + hq[1]) / 2, (hp[2] + hq[2]) / 2];
+      const wv = [(hp[0] - hq[0]) / 2, (hp[1] - hq[1]) / 2, (hp[2] - hq[2]) / 2], tl = Math.hypot(wv[0], wv[1], wv[2]) || 1;
+      const up = [hc[1] * wv[2] - hc[2] * wv[1], hc[2] * wv[0] - hc[0] * wv[2], hc[0] * wv[1] - hc[1] * wv[0]], ul = Math.hypot(up[0], up[1], up[2]) || 1;
+      const s2 = 1.35, ux = up.map((v) => v / ul * tl * s2), wx = wv.map((v) => v * s2);
+      const q = (sx, sy) => [hc[0] + wx[0] * sx + ux[0] * sy, hc[1] + wx[1] * sx + ux[1] * sy, hc[2] + wx[2] * sx + ux[2] * sy];
+      const hb = 2 * fade;
+      put(q(-1, -1), hb); put(q(1, -1), hb); put(q(1, 1), hb); put(q(-1, -1), hb); put(q(1, 1), hb); put(q(-1, 1), hb);
+    }
+    const gl = this.gl, ps = this.progStars;
+    gl.useProgram(ps.p);
+    gl.uniformMatrix4fv(ps.u.uVP, false, this.skyVP);
+    gl.uniform1f(ps.u.uTime, time);
+    gl.uniform3fv(ps.u.uTint, [1, 1, 1]);
+    gl.disable(gl.CULL_FACE);
+    b.flush();
   }
 
   drawClouds(world, cam, partial, fogColor) {
