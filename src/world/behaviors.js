@@ -61,6 +61,8 @@ const Behaviors = (() => {
         if (meta & 8) return w.getBlock(x, y - 1, z) === id;
         return isSolidTop(w, x, y - 1, z) && w.getBlock(x, y + 1, z) === id;
       case B.ROPE: { const a = w.getBlock(x, y + 1, z); return a === B.ROPE || BT.solid[a]; }
+      case B.SIGN: return BT.solid[below];
+      case B.WALL_SIGN: { const d = HFACE_DIR[meta & 3]; return BT.solid[w.getBlock(x - d[0], y, z - d[1])]; }
       case B.FIRE: return BT.solid[below] || neighbourFlammable(w, x, y, z);
       case B.VINE: return true;
     }
@@ -221,6 +223,34 @@ const Behaviors = (() => {
       if (!isSolidTop(w, x, y - 1, z) || !isSolidTop(w, hx, y - 1, hz)) return false;
       w.setBlock(x, y, z, B.BED, f, 4); w.setBlock(hx, y, hz, B.BED, f | 4, 4);
       game.audio.playBlock('wood', 'place', x + 0.5, y + 0.5, z + 0.5);
+      if (!player.creative) player.inventory.decrementHeld(1);
+      return true;
+    }
+    if (def.places === 'sign') {
+      if (hit.face === 0) return false;
+      let x = tx, y = ty, z = tz, face = hit.face;
+      if (BT.replaceable[target] && target !== B.WATER && target !== B.LAVA) { x = hit.x; y = hit.y; z = hit.z; face = 1; }
+      if (!BT.replaceable[w.getBlock(x, y, z)] || BT.fluid[w.getBlock(x, y, z)] || y >= CH_H) return false;
+      const wood = stack.dmg & 7;
+      let id, meta;
+      if (face === 1) {
+        if (!BT.solid[w.getBlock(x, y - 1, z)]) return false;
+        id = B.SIGN; meta = (Math.floor(16 - player.yaw / (Math.PI / 8) + 0.5) & 15) | (wood << 4);
+      } else {
+        id = B.WALL_SIGN; meta = [0, 0, 0, 1, 2, 3][face] | (wood << 2);
+        if (!canStay(w, x, y, z, id, meta)) return false;
+      }
+      w.setBlock(x, y, z, id, meta);
+      game.audio.playBlock('wood', 'place', x + 0.5, y + 0.5, z + 0.5);
+      if (!player.creative) player.inventory.decrementHeld(1);
+      const te = w.getTile(x, y, z);
+      if (te && game.openSignEditor) game.openSignEditor(te);
+      return true;
+    }
+    if (stack.id === I.painting) {
+      const e = Painting.place(game, hit);
+      if (!e) return false;
+      game.audio.playBlock('wood', 'place', e.cx, e.cy, e.cz);
       if (!player.creative) player.inventory.decrementHeld(1);
       return true;
     }

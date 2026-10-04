@@ -363,7 +363,7 @@ class Game {
   }
 
   // ------------------------------------------------------------ entity persistence
-  persistable(e) { return e.type === 'item' || e.type === 'xp' || (e.category && e.category !== 'special' && (e.persistent || e.category === 'creature')); }
+  persistable(e) { return e.type === 'item' || e.type === 'xp' || e.type === 'boat' || e.type === 'painting' || (e.category && e.category !== 'special' && (e.persistent || e.category === 'creature')); }
   onChunkEntities(c, m, fromSave) {
     const w = this.world, key = c.key;
     if (this.entityKeys.has(key)) {
@@ -413,6 +413,8 @@ class Game {
   onChunkLoaded(c) {
     if (this.world && this.world.menu) return;
     for (const te of c.tiles.values()) if (te.type === 'chest' && te.buried) this.treasures.set(te.x + ',' + te.y + ',' + te.z, { x: te.x, y: te.y, z: te.z });
+    const marks = this.world.info.treasureMarks;
+    if (marks) for (const m of marks) if (!m.placed && (m.x >> 4) === c.cx && (m.z >> 4) === c.cz) this.tryBuryTreasure(m);
   }
   onTileRemoved(te, x, y, z) {
     this.treasures.delete(x + ',' + y + ',' + z);
@@ -589,6 +591,7 @@ class Game {
     this.hud.tick();
     this.renderer.atlas.tickAnimations();
     DynamicItems.update(this);
+    this.tickWaterways();
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
     const h = p.inventory.held();
@@ -673,25 +676,27 @@ class Game {
       try { e.tick(this); } catch (err) { console.error('entity tick', e.type, err); e.removed = true; }
       if (e.checkDespawn && !e.removed) e.checkDespawn(this);
     }
-    // gentle pushing between creatures (and the player)
+    // gentle pushing between creatures, boats (and the player)
     const p = this.player;
-    const living = list.filter((e) => !e.removed && e.category && !e.dead && !e.noClip && e.type !== 'wisp' && e.type !== 'stranger');
+    const living = list.filter((e) => !e.removed && (e.category || e.type === 'boat') && !e.dead && !e.noClip && e.type !== 'wisp' && e.type !== 'stranger');
+    w.solids = living.filter((e) => e.solid);
     if (p && !p.dead) living.push(p);
     for (let i = 0; i < living.length; i++) {
       const a = living[i];
       for (let j = i + 1; j < living.length; j++) {
         const b = living[j];
+        if (a.riding === b || b.riding === a || (a.riding && a.riding === b.riding)) continue;
         let dx = b.x - a.x, dz = b.z - a.z;
         const r = (a.w + b.w) / 2;
         if (Math.abs(dx) >= r || Math.abs(dz) >= r) continue;
-        if (a.y + a.h < b.y || b.y + b.h < a.y) continue;
+        if (a.y + a.h <= b.y + 0.01 || b.y + b.h <= a.y + 0.01) continue;
         let d = Math.max(Math.abs(dx), Math.abs(dz));
         if (d < 0.01) { dx = Math.random() - 0.5; dz = Math.random() - 0.5; d = 0.5; }
         const l = Math.sqrt(dx * dx + dz * dz) || 1;
         let f = 1 / d; if (f > 1) f = 1;
         const kx = dx / l * f * 0.05, kz = dz / l * f * 0.05;
-        if (a !== p || !p.creative) { a.vx -= kx; a.vz -= kz; }
-        if (b !== p || !p.creative) { b.vx += kx; b.vz += kz; }
+        if ((a !== p || !p.creative) && !a.riding) { a.vx -= kx; a.vz -= kz; }
+        if ((b !== p || !p.creative) && !b.riding) { b.vx += kx; b.vz += kz; }
       }
     }
     if (list.some((e) => e.removed)) {
@@ -990,6 +995,7 @@ class Game {
   }
   onPlayerDeath(src) {
     const p = this.player, w = this.world;
+    if (p.riding) p.riding.dismount();
     this.deathMessage = this.deathText(src);
     this.hud.message(this.deathMessage);
     if (p.sleeping) this.wakeUp();
@@ -1037,6 +1043,7 @@ class Game {
     p.dead = false; p.deathTime = 0; p.health = p.maxHealth; p.hurtTime = 0; p.hurtResist = 0;
     p.food = 20; p.saturation = 5; p.exhaustion = 0; p.air = 300; p.fire = 0; p.effects = {};
     p.fallDistance = 0; p.vx = p.vy = p.vz = 0; p.sleeping = false; p.useItem = null;
+    if (p.riding) p.riding.dismount();
     let pos = null;
     if (p.spawnPoint) {
       const s = p.spawnPoint;
@@ -1118,6 +1125,8 @@ class Game {
   onChestOpened() {}
   onTreasureFound(te) {
     this.treasures.delete(te.x + ',' + te.y + ',' + te.z);
+    const marks = this.world.info.treasureMarks;
+    if (marks) this.world.info.treasureMarks = marks.filter((m) => !m.placed || Math.abs(m.x - te.x) > 2 || Math.abs(m.z - te.z) > 2);
     this.achieve('treasure');
     this.audio.play('discover', 0.8, 1.1);
     this.hud.showAction('§eYou found buried treasure!');
@@ -1268,6 +1277,113 @@ class Game {
     if (m) { m.guided = true; m.goal = t; m.persistent = false; }
     this.audio.play('wisp', 1, 1.2);
     return true;
+  }
+
+  // ------------------------------------------------------------ waterways: boats, fishing, bottles, signs
+  placeBoat(held) {
+    const p = this.player, w = this.world;
+    const eye = this.eyePos(1);
+    const [dx, dy, dz] = this.interaction.lookDir();
+    const h = raycastBlocks(w, eye[0], eye[1], eye[2], dx, dy, dz, this.interaction.reach(), { fluids: true, anyFluid: true });
+    if (!h) return false;
+    let y = h.y + 1;
+    if (BT.fluid[h.id]) { if (h.id !== B.WATER) return false; }
+    else if (h.id === B.SNOW_LAYER) y = h.y;
+    else if (h.face !== 1) return false;
+    const b = new Boat(w, h.x + 0.5, y, h.z + 0.5, held.dmg);
+    b.yaw = b.pyaw = Math.round(p.yaw / (Math.PI / 2)) * (Math.PI / 2);
+    const room = b.box.copy(); room.x0 += 0.1; room.y0 += 0.1; room.z0 += 0.1; room.x1 -= 0.1; room.y1 -= 0.1; room.z1 -= 0.1;
+    if (collectBoxes(w, room, []).length) return false;
+    this.spawnEntity(b);
+    this.audio.playBlock('wood', 'place', b.x, b.y, b.z);
+    if (!p.creative) p.inventory.decrementHeld(1);
+    return true;
+  }
+  openSignEditor(te) { if (this.player && !this.player.dead) this.openScreen(new SignEditScreen(this, te)); }
+  onFished(stack) {
+    const p = this.player, I = ITEM_IDS;
+    p.discovered.items[stack.id] = true;
+    p.stats.fishCaught = (p.stats.fishCaught || 0) + 1;
+    if ([I.fish, I.salmon, I.sunfish, I.pufferfish, I.glimmerfin].includes(stack.id)) this.achieve('fish');
+  }
+  readMessageBottle() {
+    const p = this.player, w = this.world, gen = w.localGen;
+    const good = { beach: 1, swamp: 1, desert: 1, plains: 1, meadow: 1, forest: 1, birch_forest: 1, jungle: 1, salt_flats: 1, stone_shore: 1, canyon: 1, autumn_forest: 1, moors: 1, taiga: 1, mushroom_island: 1 };
+    let spot = null;
+    for (let i = 0; i < 120 && !spot; i++) {
+      const a = Math.random() * TAU, r = 160 + Math.random() * 340;
+      const x = Math.floor(p.x + Math.sin(a) * r), z = Math.floor(p.z - Math.cos(a) * r);
+      const b = BIOMES[gen.biomeAt(x, z)];
+      if (!b || b.key === 'ocean' || b.key === 'deep_ocean' || b.key === 'river') continue;
+      if (i < 80 && !good[b.key]) continue;
+      spot = { x, z, b };
+    }
+    p.swing();
+    if (!p.creative) p.inventory.decrementHeld(1);
+    this.audio.play('chime', 0.6, 0.9);
+    if (!spot) { this.hud.showAction('§7The note inside is too faded to read.'); return; }
+    const marks = w.info.treasureMarks || (w.info.treasureMarks = []);
+    const mark = { x: spot.x, z: spot.z, seed: (Math.random() * 2147483647) | 0, placed: false };
+    marks.push(mark);
+    this.tryBuryTreasure(mark);
+    const d = Math.round(Math.hypot(spot.x - p.x, spot.z - p.z));
+    const who = ['Captain Ashby', 'Old Marrow', 'a lost sailor', 'Wren the Bold', 'the Salt Widow', 'one-eyed Pell'][Math.floor(Math.random() * 6)];
+    this.hud.message('§eThe note reads:§r "My treasure lies buried in the ' + spot.b.name + ', about ' + d + ' blocks ' + compassWord(spot.x - p.x, spot.z - p.z) + ' of here. Dig where the X is." - ' + who);
+    this.hud.showAction('§eAn X has been marked on your Explorer\'s Map');
+    this.achieve('bottle');
+  }
+  tryBuryTreasure(mark) {
+    const w = this.world;
+    if (mark.placed || !w.isLoaded(mark.x, mark.z)) return false;
+    const DIG = new Set([B.SAND, B.GRASS, B.DIRT, B.GRAVEL, B.PODZOL, B.MYCELIUM, B.ASH, B.SALT, B.TERRACOTTA, B.CLAY, B.PEAT, B.SNOW, B.STONE, B.SANDSTONE]);
+    let best = null;
+    for (let r = 0; r <= 8 && !best; r++) for (let dx = -r; dx <= r && !best; dx++) for (let dz = -r; dz <= r && !best; dz++) {
+      if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+      const x = mark.x + dx, z = mark.z + dz;
+      if (!w.isLoaded(x, z)) continue;
+      const y = w.topSolidY(x, z);
+      if (y < 8 || BT.fluid[w.getBlock(x, y + 1, z)] || !DIG.has(w.getBlock(x, y, z))) continue;
+      best = { x, y, z };
+    }
+    if (!best) {
+      const y = w.topSolidY(mark.x, mark.z);
+      if (y < 8) return false;
+      best = { x: mark.x, y, z: mark.z };
+    }
+    const cy = best.y - 3;
+    const rng = new Noise.Random(mark.seed >>> 0);
+    w.setBlock(best.x, cy, best.z, B.CHEST, rng.nextInt(4));
+    const te = w.getTile(best.x, cy, best.z);
+    if (te) {
+      te.load({ items: w.localGen.loot(rng, 'treasure') });
+      te.buried = true;
+      this.treasures.set(best.x + ',' + cy + ',' + best.z, { x: best.x, y: cy, z: best.z });
+    }
+    mark.placed = true; mark.x = best.x; mark.y = cy; mark.z = best.z;
+    return true;
+  }
+  tickWaterways() {
+    const p = this.player, w = this.world;
+    // the rod's icon shows the cast line
+    const held = p.inventory.held();
+    const cast = !!(p.fishHook && !p.fishHook.removed && held && held.id === ITEM_IDS.fishing_rod);
+    if (cast !== FISHING.cast) {
+      FISHING.cast = cast;
+      const icons = this.gui.icons, pre = ITEM_IDS.fishing_rod + ':';
+      for (const k of [...icons.cache.keys()]) if (k.startsWith(pre)) icons.cache.delete(k);
+    }
+    // climb back into the boat you saved the game in
+    const m = p.pendingMount;
+    if (m) {
+      const b = w.entities.find((e) => e.type === 'boat' && !e.removed && !e.rider && Math.abs(e.x - m.x) < 1.5 && Math.abs(e.z - m.z) < 1.5 && Math.abs(e.y - m.y) < 2);
+      if (b) { b.mount(p); p.pendingMount = null; }
+      else if (--m.t <= 0) p.pendingMount = null;
+    }
+    if (p.riding) {
+      const v = p.riding, d = Math.hypot(v.x - v.px, v.z - v.pz);
+      p.stats.sailed = (p.stats.sailed || 0) + d;
+      if (p.stats.sailed >= 500) this.achieve('sail');
+    }
   }
 
   // ------------------------------------------------------------ rendering

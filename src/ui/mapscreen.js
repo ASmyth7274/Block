@@ -84,6 +84,13 @@ class MapScreen extends Screen {
     if (w0 && w0.spawn) mark(w0.spawn.x + 0.5, w0.spawn.z + 0.5, (sx, sy) => { ctx.fillStyle = '#202020'; ctx.fillRect(sx - 3, sy - 1, 7, 3); ctx.fillRect(sx - 1, sy - 3, 3, 7); ctx.fillStyle = '#f0e8d0'; ctx.fillRect(sx - 2, sy, 5, 1); ctx.fillRect(sx, sy - 2, 1, 5); });
     const sp = p && p.spawnPoint && !Array.isArray(p.spawnPoint) && !p.spawnPoint.forced ? p.spawnPoint : null;
     if (sp) mark(sp.x + 0.5, sp.z + 0.5, (sx, sy) => { ctx.fillStyle = '#202020'; ctx.fillRect(sx - 3, sy - 2, 7, 5); ctx.fillStyle = '#c02020'; ctx.fillRect(sx - 2, sy - 1, 5, 3); ctx.fillStyle = '#ffffff'; ctx.fillRect(sx - 2, sy - 1, 2, 1); });
+    // treasure from messages in bottles: a red X
+    const marks = w0 && w0.info && w0.info.treasureMarks;
+    if (marks) for (const t of marks) mark(t.x + 0.5, t.z + 0.5, (sx, sy) => {
+      for (let k = -3; k <= 3; k++) { ctx.fillStyle = '#3a0a0a'; ctx.fillRect(sx + k - 1, sy + k - 1, 3, 3); ctx.fillRect(sx + k - 1, sy - k - 1, 3, 3); }
+      ctx.fillStyle = '#d02020';
+      for (let k = -3; k <= 3; k++) { ctx.fillRect(sx + k, sy + k, 1, 1); ctx.fillRect(sx + k, sy - k, 1, 1); }
+    });
     if (p) mark(p.x, p.z, (sx, sy) => {
       // arrow pointing where the player looks
       const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);

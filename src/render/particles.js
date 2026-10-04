@@ -95,6 +95,14 @@ class Particles {
     for (let i = 0; i < n; i++) this.add({ x: x + (Math.random() - 0.5) * 0.8, y, z: z + (Math.random() - 0.5) * 0.8, vx: (Math.random() - 0.5) * 0.15, vy: 0.1 + Math.random() * 0.2, vz: (Math.random() - 0.5) * 0.15, size: 0.06, life: 10 + Math.floor(Math.random() * 10), gravity: 0.04, layer: L, r: 0.55, g: 0.65, b: 1, lit: true });
     this.bubble(x, y - 0.5, z, 6);
   }
+  // flat white flecks drifting on the water surface (boat wakes, approaching fish)
+  wake(x, y, z, vx, vz) {
+    this.add({ x, y: y + 0.02, z, vx, vy: 0, vz, size: 0.05, life: 8 + Math.floor(Math.random() * 8), layer: this.layer('particle_drip'), r: 0.9, g: 0.95, b: 1, drag: 0.92, collide: false, lit: true, fade: true });
+  }
+  fishSplash(x, y, z, n) {
+    const L = this.layer('particle_drip');
+    for (let i = 0; i < n; i++) this.add({ x: x + (Math.random() - 0.5) * 0.2, y: y + 0.05, z: z + (Math.random() - 0.5) * 0.2, vx: (Math.random() - 0.5) * 0.08, vy: 0.08 + Math.random() * 0.08, vz: (Math.random() - 0.5) * 0.08, size: 0.05, life: 8 + Math.floor(Math.random() * 6), gravity: 0.04, layer: L, r: 0.55, g: 0.65, b: 1, lit: true });
+  }
   bubble(x, y, z, n) {
     const L = this.layer('particle_bubble');
     for (let i = 0; i < (n || 1); i++) this.add({ x: x + (Math.random() - 0.5) * 0.5, y, z: z + (Math.random() - 0.5) * 0.5, vx: (Math.random() - 0.5) * 0.02, vy: 0.04 + Math.random() * 0.02, vz: (Math.random() - 0.5) * 0.02, size: 0.05, life: 20 + Math.floor(Math.random() * 20), layer: L, drag: 0.85, gravity: -0.002, collide: false, water: true });

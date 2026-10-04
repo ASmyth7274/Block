@@ -510,6 +510,26 @@ defBlock(112, 'leaf_litter', {
   drops: (m, rng, tool) => tool && tool.kind === 'shears' ? [[B.LEAF_LITTER, 1, 0]] : [],
 });
 
+// signs: the board, post and text are drawn by the entity renderer (like the classic sign renderer)
+// standing sign meta: rotation (0-15) | wood << 4; wall sign meta: facing (N,S,W,E) | wood << 2
+function wallSignBox(m) {
+  const t = 2 / 16, y0 = 4.5 / 16, y1 = 12.5 / 16;
+  switch (m & 3) {
+    case 0: return [0, y0, 1 - t, 1, y1, 1];
+    case 1: return [0, y0, 0, 1, y1, t];
+    case 2: return [1 - t, y0, 0, 1, y1, 1];
+    default: return [0, y0, 0, t, y1, 1];
+  }
+}
+defBlock(113, 'sign', {
+  name: 'Sign', render: R.NONE, tex: (m) => 'planks_' + (WOOD[(m >> 4) & 7] || 'oak'), opaque: false, solid: false, opacity: 0, hardness: 1, tool: 'axe', sound: 'wood',
+  tileEntity: 'sign', select: () => box16(4, 0, 4, 12, 16, 12), drops: (m) => [[ITEM_IDS.sign, 1, (m >> 4) & 7]], itemSprite: 'sign_oak',
+});
+defBlock(114, 'wall_sign', {
+  name: 'Sign', render: R.NONE, tex: (m) => 'planks_' + (WOOD[(m >> 2) & 7] || 'oak'), opaque: false, solid: false, opacity: 0, hardness: 1, tool: 'axe', sound: 'wood',
+  tileEntity: 'sign', select: (m) => wallSignBox(m), drops: (m) => [[ITEM_IDS.sign, 1, (m >> 2) & 7]], itemSprite: 'sign_oak',
+});
+
 // -------------------------------------------------------------------------
 // Derived lookup tables for fast access in hot loops
 // -------------------------------------------------------------------------

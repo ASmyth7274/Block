@@ -482,13 +482,14 @@ const CREATIVE_TABS = (() => {
     ...all(B.SAPLING), ...all(B.LEAVES), blk(B.COBWEB), ...all(B.TALL_GRASS), blk(B.DEAD_BUSH), ...all(B.FLOWER), blk(B.MUSHROOM_BROWN), blk(B.MUSHROOM_RED), blk(B.GLOWSHROOM), blk(B.LUMITE_CRYSTAL),
     blk(B.TORCH), blk(B.CHEST), blk(B.CRAFTING_TABLE), blk(B.FURNACE), blk(B.LADDER), blk(B.ROPE), blk(B.SNOW_LAYER), blk(B.CACTUS), blk(B.PUMPKIN), blk(B.JACK_O_LANTERN), blk(B.MELON), blk(B.VINE),
     blk(B.LILY_PAD), blk(B.CATTAIL), blk(B.BRAMBLE), blk(B.LEAF_LITTER), ...all(B.FENCE), blk(B.FENCE_GATE), blk(B.TRAPDOOR), blk(B.GLASS_PANE), ...all(B.CARPET), blk(B.LUMITE_LAMP), blk(B.MOB_SPAWNER),
-    [I.door_wood, 0], [I.door_iron, 0], [I.bed, 0]] });
+    [I.door_wood, 0], [I.door_iron, 0], [I.bed, 0], ...WOOD.map((w, i) => [I.sign, i]), [I.painting, 0]] });
   T.push({ name: 'Tools', icon: [I.iron_axe, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ['shovel', 'pickaxe', 'axe', 'hoe'].map((k) => [I[m + '_' + k], 0])),
-    ...items(['flint_and_steel', 'shears', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'compass', 'clock', 'map', 'prospector_rod', 'wayfinder', 'journal'])] });
+    ...items(['flint_and_steel', 'shears', 'fishing_rod', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'compass', 'clock', 'map', 'prospector_rod', 'wayfinder', 'journal', 'message_bottle']),
+    ...WOOD.map((w, i) => [I.boat, i])] });
   T.push({ name: 'Combat', icon: [I.gold_sword, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].map((m) => [I[m + '_sword'], 0]), [I.bow, 0], [I.arrow, 0],
     ...['leather', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ARMOR_SLOTS.map((s) => [I[m + '_' + s], 0])), [I.snowball, 0], [I.egg, 0]] });
   T.push({ name: 'Foodstuffs', icon: [I.apple, 0], list: items(['apple', 'golden_apple', 'bread', 'porkchop', 'cooked_porkchop', 'beef', 'steak', 'chicken', 'cooked_chicken', 'mutton', 'cooked_mutton', 'venison', 'cooked_venison', 'jerky',
-    'fish', 'cooked_fish', 'carrot', 'potato', 'baked_potato', 'poison_potato', 'cookie', 'melon_slice', 'mushroom_stew', 'glow_berries', 'pumpkin_pie', 'berry_pie', 'berries', 'rotten_flesh', 'spider_eye']) });
+    'fish', 'cooked_fish', 'salmon', 'cooked_salmon', 'sunfish', 'pufferfish', 'glimmerfin', 'carrot', 'potato', 'baked_potato', 'poison_potato', 'cookie', 'melon_slice', 'mushroom_stew', 'glow_berries', 'pumpkin_pie', 'berry_pie', 'berries', 'rotten_flesh', 'spider_eye']) });
   T.push({ name: 'Materials', icon: [I.stick, 0], list: [...items(['coal']), [I.coal, 1], ...items(['diamond', 'iron_ingot', 'gold_ingot', 'gold_nugget', 'cobalt_ingot', 'starmetal_ingot', 'jade', 'ember_dust', 'sulfur', 'lumite_shard', 'salt',
     'stick', 'bowl', 'string', 'cattail_fiber', 'feather', 'flint', 'gunpowder', 'leather', 'bone', 'clay_ball', 'brick', 'paper', 'book', 'slimeball', 'wheat', 'seeds', 'sugar', 'sugar_cane', 'wisp_essence']),
     ...[...Array(16).keys()].map((d) => [I.dye, d])] });

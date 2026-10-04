@@ -372,6 +372,55 @@
     '................', '..oooooooooooo..', '..oppppppppppo..', '..opggpppbbppo..', '..opgggpbbbbpo..', '..oppggpbbbppo..',
     '..opppgrrppppo..', '..oppppprpgppo..', '..opbbppprggpo..', '..opbbbpprrgpo..', '..oppbbppppxpo..', '..opppppggppxo..',
     '..oppppggggppo..', '..oooooooooooo..', '................', '................'], { o: '#6a4a24', p: '#e8dcb4', g: '#7aa84a', b: '#5a86c8', r: '#c82020', x: '#2a2a2a' });
+  // ---------------- waterways ----------------
+  const ROD = [
+    '................', '............ooo.', '...........ojjos', '..........ojjo.s', '.........ojjo..s', '........ojjo...s',
+    '.......ojjo....s', '......ojjo.....s', '.....oHHo......s', '....oHHo.......s', '...oHHo........s', '..oHHo.........s',
+    '.oHHo.........ks', '.ooo..........k.', '.............k..', '................'];
+  art('fishing_rod', ROD, { o: '#2e2010', j: '#896c3d', H: '#5e4320', s: '#d8d8d8', k: '#5a5a5a' });
+  art('fishing_rod_cast', ROD.map((r) => r.replace(/[sk]/g, '.')), { o: '#2e2010', j: '#896c3d', H: '#5e4320' });
+  art('salmon', FISH, { o: '#5a1e1a', b: '#c8604a', w: '#f4b0a0', k: '#000000' });
+  art('cooked_salmon', FISH, { o: '#3a1a0a', b: '#d88a5a', w: '#f4d0b0', k: '#2a1a0a' });
+  art('glimmerfin', FISH, { o: '#0a3a40', b: '#2fb8b0', w: '#d8fffa', k: '#002424' });
+  art('sunfish', [
+    '................', '................', '................', '................', '.....ooooo......', '...ooBwBBwoo..oo',
+    '..oBBwBBBwBBooBo', '.oBkBwBBBwBBBBBo', '.oBBBwBBBwBBBBBo', '..oBBwBBBwBBooBo', '...ooBwBBwoo..oo', '.....ooooo......',
+    '................', '................', '................', '................'], { o: '#3a1400', B: '#f07818', w: '#ffffff', k: '#000000' });
+  art('pufferfish', [
+    '................', '................', '.....o..o..o....', '......oyyyyo....', '..o.oyyyyyyyo.o.', '...oyyyyyyyyyo..',
+    '..oykyyyyyyyyo.o', '.oyyyyyyyyyyyooo', '..oyyddyyyyyyo.o', '...oydddddyyo...', '..o.odddddyo.o..', '......oooooo....',
+    '.....o..o..o....', '................', '................', '................'], { o: '#4a3a08', y: '#e8c838', d: '#f4ecc8', k: '#000000' });
+  art('message_bottle', [
+    '................', '............oo..', '...........occo.', '..........occo..', '.........oggo...', '........ogwgo...',
+    '.......ogwppo...', '......ogwpppo...', '.....ogwpppgo...', '....ogwpppgo....', '...ogwpppgo.....', '..ogwpppgo......',
+    '..oggppggo......', '...oggggo.......', '....oooo........', '................'], { o: '#2a4a40', g: '#8ad0b8', w: '#e8fff8', p: '#f0e0b0', c: '#9a6a3a' });
+  const BOAT = [
+    '................', '................', '................', '................', '................', '.o............o.',
+    '.oo..........oo.', '.obo........obo.', '.obboooooooobbo.', '.obbddddddddbbo.', '..obbbbbbbbbbo..', '..oaaaaaaaaaao..',
+    '...oaaaaaaaao...', '....oooooooo....', '................', '................'];
+  const SIGN = [
+    '................', '..oooooooooooo..', '..obbbbbbbbbbo..', '..obkkkbkkkbbo..', '..obbbbbbbbbbo..', '..obkkbkkkkbbo..',
+    '..obbbbbbbbbbo..', '..oaaaaaaaaaao..', '..oooooooooooo..', '......oaao......', '......oaao......', '......oaao......',
+    '......oaao......', '......oaao......', '......oooo......', '................'];
+  const WOODCOL = {
+    oak: ['#3a2a14', '#7a6038', '#a88a57', '#5e4a2a'], spruce: ['#22160a', '#523a20', '#785832', '#3f2c18'],
+    birch: ['#5a5030', '#b3a36a', '#d0c084', '#8a7c4c'], jungle: ['#3a2414', '#80573a', '#a67452', '#5e3e28'],
+    maple: ['#3e2014', '#94573d', '#bc7451', '#6e3e2a'], redwood: ['#2e100a', '#6e2c1f', '#9a4230', '#4e1c12'],
+  };
+  for (const w of WOOD) {
+    const c = WOODCOL[w];
+    art('boat_' + w, BOAT, { o: c[0], a: c[1], b: c[2], d: c[3] });
+    art('sign_' + w, SIGN, { o: c[0], a: c[1], b: c[2], k: c[3] });
+  }
+  art('painting', [
+    '................', '.oooooooooooooo.', '.offffffffffffo.', '.ofsssssssyysfo.', '.ofsssssssyysfo.', '.ofssssssssssfo.',
+    '.ofsssggsssssfo.', '.ofssggggsssgfo.', '.ofsggGgggggGfo.', '.ofgggGGgggGGfo.', '.ofGGGGGGGGGGfo.', '.ofwwwwwwwwwwfo.',
+    '.offffffffffffo.', '.oooooooooooooo.', '................', '................'], { o: '#3a2410', f: '#9a6a34', s: '#8ac0f0', y: '#fff080', g: '#6aa84a', G: '#3f7a2e', w: '#4a7ad0' });
+  // the fishing float, drawn as a camera-facing sprite
+  sprite('fishing_bobber', [
+    '................', '................', '................', '.......oo.......', '......orro......', '.....orrrro.....',
+    '.....owwwwo.....', '......owwo......', '.......oo.......', '........k.......', '........k.......', '.......k.k......',
+    '........k.......', '................', '................', '................'], { o: [40, 20, 20], r: [210, 40, 30], w: [240, 240, 240], k: [90, 90, 90] });
   // soft round glow (wisps)
   (() => {
     const g = new TexGen.Img();

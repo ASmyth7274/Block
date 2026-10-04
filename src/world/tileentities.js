@@ -1,6 +1,6 @@
 'use strict';
 // ---------------------------------------------------------------------------
-// Tile entities: chests, furnaces, monster spawners
+// Tile entities: chests, furnaces, monster spawners, signs
 // ---------------------------------------------------------------------------
 class TileEntity {
   constructor(type, x, y, z) { this.type = type; this.x = x; this.y = y; this.z = z; }
@@ -42,8 +42,15 @@ class SpawnerTE extends TileEntity {
   load(d) { if (d.mob) this.mob = d.mob; this.delay = d.delay || 20; }
 }
 
+class SignTE extends TileEntity {
+  constructor(x, y, z) { super('sign', x, y, z); this.lines = ['', '', '', '']; }
+  save() { return Object.assign(super.save(), { lines: this.lines.slice() }); }
+  load(d) { if (Array.isArray(d.lines)) for (let i = 0; i < 4; i++) this.lines[i] = String(d.lines[i] || '').slice(0, 15); }
+}
+
 function makeTileEntity(type, x, y, z) {
   switch (type) {
+    case 'sign': return new SignTE(x, y, z);
     case 'chest': return new ChestTE(x, y, z);
     case 'furnace': return new FurnaceTE(x, y, z);
     case 'spawner': return new SpawnerTE(x, y, z);

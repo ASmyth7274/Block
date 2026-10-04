@@ -64,6 +64,12 @@ const Recipes = (() => {
   shapeless([I.flint_and_steel], [I.iron_ingot, I.flint]);
   shaped([I.bow], [' #S', '# S', ' #S'], { '#': I.stick, S: I.string });
   shaped([I.arrow, 4], ['F', '#', 'E'], { F: I.flint, '#': I.stick, E: I.feather });
+  shaped([I.fishing_rod], ['  #', ' #S', '# S'], { '#': I.stick, S: I.string });
+  for (let t = 0; t < 6; t++) {
+    shaped([I.boat, 1, t], ['P P', 'PPP'], { P: [B.PLANKS, t] });
+    shaped([I.sign, 3, t], ['PPP', 'PPP', ' # '], { P: [B.PLANKS, t], '#': I.stick });
+  }
+  shaped([I.painting], ['###', '#W#', '###'], { '#': I.stick, W: B.WOOL });
   shaped([I.compass], [' I ', 'IEI', ' I '], { I: I.iron_ingot, E: I.ember_dust });
   shaped([I.clock], [' G ', 'GEG', ' G '], { G: I.gold_ingot, E: I.ember_dust });
 
@@ -177,6 +183,7 @@ const Recipes = (() => {
   smelt(I.chicken, [I.cooked_chicken], 0.35);
   smelt(I.mutton, [I.cooked_mutton], 0.35);
   smelt(I.fish, [I.cooked_fish], 0.35);
+  smelt(I.salmon, [I.cooked_salmon], 0.35);
   smelt(I.venison, [I.cooked_venison], 0.35);
   smelt(I.potato, [I.baked_potato], 0.35);
   smelt([B.STONE_BRICKS, 0], [B.STONE_BRICKS, 1, 2], 0.1);

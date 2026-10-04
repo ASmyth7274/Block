@@ -19,6 +19,7 @@ class EntityRenderer {
     this.handProj = Mat4.create();
     this.deferred = [];
     this.glows = [];
+    this.lines = [];
   }
   // additive camera-facing glow sprite
   glow(rx, ry, rz, size, col) { this.glows.push([rx, ry, rz, size, col]); }
@@ -174,6 +175,7 @@ class EntityRenderer {
   }
   render(cam, partial) {
     const g = this.game, w = g.world, gl = this.r.gl;
+    this.frameNo = (this.frameNo || 0) + 1;
     this.r.batch.reset(); this.skinBatch.reset();
     const all = w.entities;
     const p = g.player;
@@ -190,11 +192,21 @@ class EntityRenderer {
       this.drawEntity(p, x - cam.x, y - cam.y, z - cam.z, partial);
       if (p.fire > 0 && !p.inWater && !p.creative) this.drawFire(p, x - cam.x, y - cam.y, z - cam.z);
     }
+    this.drawSigns(cam);
     gl.disable(gl.CULL_FACE);
     this.r.useEnt(this.r.vp, 1, 0.1, true);
     this.skinBatch.flush();
     this.r.useEnt(this.r.vp, 0, 0.1, true);
     this.r.batch.flush();
+    // fishing lines
+    if (this.lines.length) {
+      const b = this.r.batch;
+      b.reset();
+      for (const ln of this.lines) this.lineQuads(b, this.linePoints(ln));
+      this.lines.length = 0;
+      this.r.useEnt(this.r.vp, 2, -1, true);
+      b.flush();
+    }
     // translucent creatures
     if (this.deferred.length) {
       this.skinBatch.reset();
@@ -238,6 +250,9 @@ class EntityRenderer {
       case 'arrow': return this.drawArrow(e, rx, ry, rz, partial);
       case 'thrown': return this.drawThrown(e, rx, ry, rz, partial);
       case 'lightning': return this.drawLightning(e, rx, ry, rz);
+      case 'boat': return this.drawBoat(e, rx, ry, rz, partial);
+      case 'fishhook': return this.drawHook(e, rx, ry, rz, partial);
+      case 'painting': return this.drawPainting(e, rx, ry, rz);
       case 'wisp': {
         const t = e.age + partial, pulse = 1 + Math.sin(t * 0.25) * 0.12;
         this.glow(rx, ry + 0.2, rz, 0.55 * pulse, [110, 255, 230, 150]);
@@ -350,6 +365,169 @@ class EntityRenderer {
       this.quadOut(b, [[x - w, y, z], [x + w, y, z], [nx + w, y - 4, nz], [nx - w, y - 4, nz]], [[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], layer, col, -1, 0);
       this.quadOut(b, [[x, y, z - w], [x, y, z + w], [nx, y - 4, nz + w], [nx, y - 4, nz - w]], [[0.4, 0.4], [0.6, 0.4], [0.6, 0.6], [0.4, 0.6]], layer, col, -1, 0);
       x = nx; z = nz;
+    }
+  }
+
+  // ---------------------------------------------------------------- boats, floats, paintings & signs
+  // an axis-aligned box (in m's units) with a tiled block texture on every face
+  texBox(b, m, bx, layer, sky, blk, uvScale, tint, skip) {
+    const [x0, y0, z0, x1, y1, z1] = bx, k = uvScale || 1 / 16, t = tint || [255, 255, 255];
+    const faces = [
+      [[[x0, y0, z1], [x0, y0, z0], [x1, y0, z0], [x1, y0, z1]], [0, -1, 0], 0, 2],
+      [[[x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]], [0, 1, 0], 0, 2],
+      [[[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], [0, 0, -1], 0, 1],
+      [[[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], [0, 0, 1], 0, 1],
+      [[[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], [-1, 0, 0], 2, 1],
+      [[[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], [1, 0, 0], 2, 1],
+    ];
+    const nn = [0, 0, 0];
+    faces.forEach(([vs, n, ua, va], fi) => {
+      if (skip && skip.includes(fi)) return;
+      M3.applyDir(m, n[0], n[1], n[2], nn);
+      const nl = Math.hypot(nn[0], nn[1], nn[2]) || 1;
+      const sh = this.shadeFor([nn[0] / nl, nn[1] / nl, nn[2] / nl]);
+      const c = [t[0] * sh, t[1] * sh, t[2] * sh, 255];
+      const uv = vs.map((v) => [v[ua] * k, (va === 1 ? -v[1] : v[2]) * k]);
+      this.quadOut(b, vs.map((v) => M3.apply(m, v[0], v[1], v[2], [0, 0, 0])), uv, layer, c, sky, blk);
+    });
+  }
+  drawBoat(e, rx, ry, rz, partial) {
+    const [sky, blk] = this.lightAt(e.x, e.y + 0.5, e.z);
+    let m = M3.mul(M3.trans(rx, ry, rz), M3.ry(e.lerpYaw(partial)));
+    const ht = e.hitTime - partial, dmg = Math.max(0, e.damage - partial);
+    if (ht > 0) m = M3.mul(m, M3.rz(Math.sin(ht) * ht * dmg / 10 * e.hitDir * DEG));
+    m = M3.mul(m, M3.scale(1 / 16, 1 / 16, 1 / 16));
+    const layer = this.r.atlas.layer('planks_' + (WOOD[e.wood] || 'oak'));
+    const b = this.r.batch;
+    this.texBox(b, m, [-8, -3, -12, 8, 1, 12], layer, sky, blk);
+    this.texBox(b, m, [-10, 1, -10, -8, 7, 10], layer, sky, blk);
+    this.texBox(b, m, [8, 1, -10, 10, 7, 10], layer, sky, blk);
+    this.texBox(b, m, [-10, 1, -12, 10, 7, -10], layer, sky, blk);
+    this.texBox(b, m, [-10, 1, 10, 10, 7, 12], layer, sky, blk);
+  }
+  // where the line leaves the rod
+  rodTip(p, partial) {
+    const g = this.game, cam = g.camera;
+    const [x, y, z] = p.lerpPos(partial);
+    if (p === g.player && !g.thirdPerson) {
+      const yaw = p.pyaw + wrapRadians(p.yaw - p.pyaw) * partial, pitch = p.ppitch + (p.pitch - p.ppitch) * partial;
+      const sp = p.pswing + (p.swingProgress - p.pswing) * partial, f8 = Math.sin(Math.sqrt(sp) * Math.PI);
+      const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch - f8 * 0.7), spp = Math.sin(pitch - f8 * 0.7);
+      const fwd = [-sy * cp, spp, -cy * cp], right = [cy, 0, -sy], up = [sy * spp, cp, cy * spp];
+      // match the tip of the rod drawn by the hand renderer (fixed 70 degree projection)
+      const t = Math.tan((cam.fov || 70) * DEG / 2) / Math.tan(35 * DEG);
+      const kr = 0.35 * 0.545 * t, ku = 0.35 * 0.048 * t;
+      return [cam.x + right[0] * kr + up[0] * ku + fwd[0] * 0.35, cam.y + right[1] * kr + up[1] * ku + fwd[1] * 0.35, cam.z + right[2] * kr + up[2] * ku + fwd[2] * 0.35];
+    }
+    const by = p.pbodyYaw + wrapRadians(p.bodyYaw - p.pbodyYaw) * partial;
+    const fx = -Math.sin(by), fz = -Math.cos(by), rx = Math.cos(by), rz = -Math.sin(by);
+    return [x + rx * 0.35 + fx * 0.8, y + (p.eyeHeight || 1.62) - 0.45 - (p.sneaking ? 0.19 : 0), z + rz * 0.35 + fz * 0.8];
+  }
+  drawHook(e, rx, ry, rz, partial) {
+    const cam = this.game.camera, b = this.r.batch;
+    const [sky, blk] = this.lightAt(e.x, e.y + 0.3, e.z);
+    const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+    const R = [cy, 0, -sy], U = [sy * sp, cp, cy * sp], s = 0.375, oy = ry + 0.1;
+    const pt = (a, c) => [rx + (R[0] * a + U[0] * c) * s, oy + (R[1] * a + U[1] * c) * s, rz + (R[2] * a + U[2] * c) * s];
+    this.quadOut(b, [pt(-1, -1), pt(1, -1), pt(1, 1), pt(-1, 1)], [[0, 1], [1, 1], [1, 0], [0, 0]], this.r.atlas.layer('fishing_bobber'), [255, 255, 255, 255], sky, blk);
+    const p = e.angler;
+    if (!p || p.dead) return;
+    this.lines.push({ a: [rx, ry + 0.25, rz], angler: p, partial });
+  }
+  // the line sags from the rod tip to the float (built after the angler is drawn, so the tip is current)
+  linePoints(ln) {
+    const cam = this.game.camera, p = ln.angler;
+    const tip = (p._rodTipFrame === this.frameNo && (p !== this.game.player || this.game.thirdPerson)) ? p._rodTip : this.rodTip(p, ln.partial);
+    const a = ln.a, d = [tip[0] - cam.x - a[0], tip[1] - cam.y - a[1], tip[2] - cam.z - a[2]];
+    const pts = [];
+    for (let i = 0; i <= 16; i++) { const t = i / 16; pts.push([a[0] + d[0] * t, a[1] + d[1] * (t * t + t) * 0.5, a[2] + d[2] * t]); }
+    return pts;
+  }
+  // thin camera-facing strips along a polyline (positions relative to the camera)
+  lineQuads(b, pts) {
+    const col = [0, 0, 0, 255];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i], p1 = pts[i + 1];
+      const mx = (p0[0] + p1[0]) / 2, my = (p0[1] + p1[1]) / 2, mz = (p0[2] + p1[2]) / 2;
+      const dx = p1[0] - p0[0], dy = p1[1] - p0[1], dz = p1[2] - p0[2];
+      let px = dy * mz - dz * my, py = dz * mx - dx * mz, pz = dx * my - dy * mx;
+      const pl = Math.hypot(px, py, pz) || 1, th = Math.max(0.0006, Math.hypot(mx, my, mz) * 1.6 / this.r.height);
+      px = px / pl * th; py = py / pl * th; pz = pz / pl * th;
+      this.quadOut(b, [[p0[0] - px, p0[1] - py, p0[2] - pz], [p1[0] - px, p1[1] - py, p1[2] - pz], [p1[0] + px, p1[1] + py, p1[2] + pz], [p0[0] + px, p0[1] + py, p0[2] + pz]], [[0, 0], [0, 0], [0, 0], [0, 0]], 0, col, -1, 0);
+    }
+  }
+  drawPainting(e, rx, ry, rz) {
+    const a = e.artDef, sb = this.skinBatch, AW = Skins.AW, AH = Skins.AH;
+    const n = HFACE_DIR[e.facing], s = HFACE_DIR[PAINT_CCW[e.facing]];
+    const shade = [0.8, 0.8, 0.6, 0.6][e.facing];
+    const cx = rx, cyy = ry + a.h / 2, cz = rz;
+    const fd = 0.03125;
+    const P = (along, up, out) => [cx + s[0] * along + n[0] * out, cyy + up, cz + s[1] * along + n[1] * out];
+    const wx = e.cx, wy = e.cy, wz = e.cz;
+    for (let i = 0; i < a.w; i++) for (let j = 0; j < a.h; j++) {
+      const al = i - a.w / 2, up = j - a.h / 2;
+      const [sky, blk] = this.lightAt(wx + s[0] * (al + 0.5) + n[0] * 0.5, wy + up + 0.5, wz + s[1] * (al + 0.5) + n[1] * 0.5);
+      const u0 = (a.u + i * 16) / AW, u1 = (a.u + i * 16 + 16) / AW, v0 = (a.v + (a.h - 1 - j) * 16) / AH, v1 = v0 + 16 / AH;
+      const c = [255 * shade, 255 * shade, 255 * shade, 255];
+      this.quadOut(sb, [P(al, up, fd), P(al + 1, up, fd), P(al + 1, up + 1, fd), P(al, up + 1, fd)], [[u0, v1], [u1, v1], [u1, v0], [u0, v0]], -1, c, sky, blk);
+      // edges of the canvas
+      const bu = Paintings.back.u / AW, bv = Paintings.back.v / AH, e1 = 1 / AW, e2 = 16 / AW;
+      const ec = [180 * shade, 180 * shade, 180 * shade, 255];
+      if (j === a.h - 1) this.quadOut(sb, [P(al, up + 1, fd), P(al + 1, up + 1, fd), P(al + 1, up + 1, -fd), P(al, up + 1, -fd)], [[bu, bv], [bu + e2, bv], [bu + e2, bv + e1], [bu, bv + e1]], -1, ec, sky, blk);
+      if (j === 0) this.quadOut(sb, [P(al, up, -fd), P(al + 1, up, -fd), P(al + 1, up, fd), P(al, up, fd)], [[bu, bv], [bu + e2, bv], [bu + e2, bv + e1], [bu, bv + e1]], -1, ec, sky, blk);
+      if (i === 0) this.quadOut(sb, [P(al, up, -fd), P(al, up, fd), P(al, up + 1, fd), P(al, up + 1, -fd)], [[bu, bv], [bu + e1, bv], [bu + e1, bv + e2], [bu, bv + e2]], -1, ec, sky, blk);
+      if (i === a.w - 1) this.quadOut(sb, [P(al + 1, up, fd), P(al + 1, up, -fd), P(al + 1, up + 1, -fd), P(al + 1, up + 1, fd)], [[bu, bv], [bu + e1, bv], [bu + e1, bv + e2], [bu, bv + e2]], -1, ec, sky, blk);
+    }
+  }
+  drawSigns(cam) {
+    const w = this.game.world, R = 64;
+    for (const c of w.chunks.values()) {
+      if (!c.tiles.size) continue;
+      const dx = c.cx * 16 + 8 - cam.x, dz = c.cz * 16 + 8 - cam.z;
+      if (dx * dx + dz * dz > (R + 12) * (R + 12)) continue;
+      for (const te of c.tiles.values()) {
+        if (te.type !== 'sign') continue;
+        const ex = te.x + 0.5 - cam.x, ey = te.y + 0.5 - cam.y, ez = te.z + 0.5 - cam.z;
+        if (ex * ex + ey * ey + ez * ez > R * R) continue;
+        this.drawSign(te, cam);
+      }
+    }
+  }
+  drawSign(te, cam) {
+    const w = this.game.world;
+    const id = w.getBlock(te.x, te.y, te.z), meta = w.getMeta(te.x, te.y, te.z);
+    if (id !== B.SIGN && id !== B.WALL_SIGN) return;
+    const standing = id === B.SIGN;
+    const wood = standing ? (meta >> 4) & 7 : (meta >> 2) & 7;
+    const rot = standing ? (meta & 15) * 22.5 * DEG : [Math.PI, 0, Math.PI / 2, -Math.PI / 2][meta & 3];
+    let m = M3.mul(M3.trans(te.x + 0.5 - cam.x, te.y - cam.y, te.z + 0.5 - cam.z), M3.ry(-rot));
+    if (!standing) m = M3.mul(m, M3.trans(0, -0.3125, -0.4375));
+    const [sky, blk] = this.lightAt(te.x + 0.5, te.y + 0.5, te.z + 0.5);
+    const layer = this.r.atlas.layer('planks_' + (WOOD[wood] || 'oak'));
+    const k = 1 / 24, mb = M3.mul(m, M3.scale(k, k, k));
+    this.texBox(this.r.batch, mb, [-12, 14, -1, 12, 26, 1], layer, sky, blk, 1 / 24);
+    if (standing) this.texBox(this.r.batch, mb, [-1, 0, -1, 1, 14, 1], this.r.atlas.layer('log_' + (WOOD[wood] || 'oak')), sky, blk, 1 / 24);
+    // the text: four centred lines of the pixel font
+    const sb = this.skinBatch, AW = Skins.AW, AH = Skins.AH, G = Paintings.glyphs;
+    const editing = this.game.screen && this.game.screen.signTE === te ? this.game.screen : null;
+    const blink = editing && Math.floor(performance.now() / 300) % 2 === 0;
+    const col = [0, 0, 0, 255];
+    for (let j = 0; j < 4; j++) {
+      let str = (te.lines[j] || '').replace(/§./g, '');
+      if (editing && editing.line === j) str = '> ' + str + (blink ? '_' : ' ') + ' <';
+      if (!str) continue;
+      let x = -Paintings.textWidth(str) / 2;
+      const yTop = j * 10 - 20;
+      for (const ch of str) {
+        const g = G[ch] || G['?'];
+        if (ch !== ' ') {
+          const x0 = x / 96, x1 = (x + g.w) / 96, yt = 0.8333 - yTop / 96, yb = 0.8333 - (yTop + 8) / 96, zf = 0.0467;
+          const q = [[x0, yb, zf], [x1, yb, zf], [x1, yt, zf], [x0, yt, zf]].map((v) => M3.apply(m, v[0], v[1], v[2], [0, 0, 0]));
+          const u0 = g.u / AW, u1 = (g.u + g.w) / AW, v0 = g.v / AH, v1 = (g.v + 8) / AH;
+          this.quadOut(sb, q, [[u0, v1], [u1, v1], [u1, v0], [u0, v0]], -1, col, sky, blk);
+        }
+        x += g.w + 1;
+      }
     }
   }
 
@@ -472,6 +650,21 @@ class EntityRenderer {
         m = M3.mul(m, M3.scale(0.6, 0.6, 0.6));
         m = M3.mul(m, M3.trans(-0.5, -0.5, 0));
       }
+      if (!isBlock && ITEMS[held.id] && ITEMS[held.id].rotateAround) {
+        // rods are held out in front, tip raised (the sprite's diagonal points forward and up)
+        m = M3.mul(base, M3.trans(MODELS.biped.rarm.pivot[0], MODELS.biped.rarm.pivot[1], MODELS.biped.rarm.pivot[2]));
+        if (ra[2]) m = M3.mul(m, M3.rz(ra[2]));
+        if (ra[1]) m = M3.mul(m, M3.ry(ra[1]));
+        if (ra[0]) m = M3.mul(m, M3.rx(ra[0]));
+        m = M3.mul(m, M3.trans(1, -10, -1));
+        m = M3.mul(m, M3.scale(16, 16, 16));
+        const sn = Math.sin(25 * DEG), co = Math.cos(25 * DEG), r2 = Math.SQRT1_2;
+        m = M3.mul(m, [0, 0, 1, (sn - co) * r2, (sn + co) * r2, 0, (-co - sn) * r2, (sn - co) * r2, 0, 0, 0, 0]);
+        m = M3.mul(m, M3.scale(0.9, 0.9, 0.9));
+        m = M3.mul(m, M3.trans(-0.15, -0.15, 0));
+        const cam = this.game.camera, tip = M3.apply(m, 0.9, 0.9, 0, [0, 0, 0]);
+        e._rodTip = [tip[0] + cam.x, tip[1] + cam.y, tip[2] + cam.z]; e._rodTipFrame = this.frameNo;
+      }
       this.drawItem(held, m, lsky, lblk, 255);
     }
   }
@@ -564,7 +757,8 @@ class EntityRenderer {
         a = firstPersonBase(M3.mul(m, M3.trans(f, f1, f2)), sp);
       }
       if (!isBlock) {
-        // flat items are held mirrored, tip pointing in toward the view
+        // flat items are held mirrored, tip pointing in toward the view (rods are turned round to point at the crosshair)
+        if (def && def.rotateAround) a = M3.mul(a, M3.ry(Math.PI));
         a = M3.mul(a, M3.trans(0, -0.3, 0));
         a = M3.mul(a, M3.scale(1.5, 1.5, 1.5));
         a = M3.mul(a, M3.ry(50 * DEG));

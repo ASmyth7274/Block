@@ -1387,6 +1387,8 @@ function entityFromData(world, d) {
   let e = null;
   if (d.type === 'item') { const s = ItemStack.fromJSON(d.stack); if (!s) return null; e = new ItemEntity(world, d.x, d.y, d.z, s); }
   else if (d.type === 'xp') e = new XPOrb(world, d.x, d.y, d.z, d.value || 1);
+  else if (d.type === 'boat') e = new Boat(world, d.x, d.y, d.z, d.wood || 0);
+  else if (d.type === 'painting') e = new Painting(world, d.bx | 0, d.by | 0, d.bz | 0, d.facing || 0, d.art);
   else if (MOB_CLASSES[d.type]) e = new MOB_CLASSES[d.type](world);
   if (!e) return null;
   e.load(d);

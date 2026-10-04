@@ -136,6 +136,7 @@ class Entity {
         if (b.y0 + 0.4 <= y + 1 && b.y1 - 0.4 >= top - 0.4) water = true;
       } else if (id === B.LAVA) lava = true;
     }
+    if (this.riding && this.riding.type === 'boat') water = false;
     if (water && !this.inWater) { this.fallDistance = 0; if (this.onSplash) this.onSplash(); }
     this.inWater = water;
     this.inLava = lava;
@@ -176,6 +177,17 @@ class Entity {
     if (dy < 0) query.y0 += dy; else query.y1 += dy;
     if (dz < 0) query.z0 += dz; else query.z1 += dz;
     const boxes = collectBoxes(w, query, []);
+    // boats are platforms you can stand on (and ride up and down with)
+    if (w.solids && w.solids.length) {
+      for (const s of w.solids) {
+        if (s === this || s === this.riding || s.removed || s.rider === this) continue;
+        const sb = s.box;
+        if (box.x1 <= sb.x0 || box.x0 >= sb.x1 || box.z1 <= sb.z0 || box.z0 >= sb.z1) continue;
+        if (box.y0 < sb.y1 - 0.15 || box.y0 > sb.y1 + Math.max(0, -dy) + 0.01) continue;
+        if (box.y0 < sb.y1) box.offset(0, sb.y1 - box.y0, 0);
+        boxes.push(new AABB(sb.x0, sb.y1 - 0.01, sb.z0, sb.x1, sb.y1, sb.z1));
+      }
+    }
     for (const b of boxes) dy = box.clipY(b, dy);
     box.offset(0, dy, 0);
     const grounded = this.onGround || (oy !== dy && oy < 0);
@@ -405,29 +417,34 @@ class Living extends Entity {
     if (this.hurtResist > 0) this.hurtResist--;
     if (this.revengeTimer > 0 && --this.revengeTimer === 0) this.attackedBy = null;
     if (this.dead) { this.deathTime++; this.vx *= 0.5; this.vz *= 0.5; }
-    // jumping / swimming
-    if (this.jumpTicks > 0) this.jumpTicks--;
-    if (this.jumping && !this.dead) {
-      if (this.inWater || this.inLava) this.vy += 0.04;
-      else if (this.onGround && this.jumpTicks === 0) { this.jump(); this.jumpTicks = 10; }
-    } else this.jumpTicks = 0;
-    let strafe = this.strafe, forward = this.forward;
-    if (this.dead) { strafe = 0; forward = 0; }
-    if (Math.abs(this.vx) < 0.003) this.vx = 0;
-    if (Math.abs(this.vy) < 0.003) this.vy = 0;
-    if (Math.abs(this.vz) < 0.003) this.vz = 0;
-    this.travel(strafe, forward);
-    this.pushOutOfBlocks();
+    if (this.riding) {
+      // carried by a vehicle: it sets our position
+      this.vx = this.vy = this.vz = 0; this.fallDistance = 0; this.jumpTicks = 0;
+    } else {
+      // jumping / swimming
+      if (this.jumpTicks > 0) this.jumpTicks--;
+      if (this.jumping && !this.dead) {
+        if (this.inWater || this.inLava) this.vy += 0.04;
+        else if (this.onGround && this.jumpTicks === 0) { this.jump(); this.jumpTicks = 10; }
+      } else this.jumpTicks = 0;
+      let strafe = this.strafe, forward = this.forward;
+      if (this.dead) { strafe = 0; forward = 0; }
+      if (Math.abs(this.vx) < 0.003) this.vx = 0;
+      if (Math.abs(this.vy) < 0.003) this.vy = 0;
+      if (Math.abs(this.vz) < 0.003) this.vz = 0;
+      this.travel(strafe, forward);
+      this.pushOutOfBlocks();
+    }
     // limb animation
     this.prevLimbAmount = this.limbAmount;
     const dx = this.x - this.px, dz = this.z - this.pz;
-    let dist = Math.sqrt(dx * dx + dz * dz) * 4;
+    let dist = this.riding ? 0 : Math.sqrt(dx * dx + dz * dz) * 4;
     if (dist > 1) dist = 1;
     this.limbAmount += (dist - this.limbAmount) * 0.4;
     this.limbSwing += this.limbAmount;
     // body follows movement direction
     this.pbodyYaw = this.bodyYaw; this.pheadYaw = this.headYaw;
-    if (dx * dx + dz * dz > 0.0025) {
+    if (dx * dx + dz * dz > 0.0025 && !this.riding) {
       const target = Math.atan2(-dx, -dz);
       this.bodyYaw += wrapRadians(target - this.bodyYaw) * 0.3;
     }

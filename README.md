@@ -32,7 +32,8 @@ WebGL 2 is required (any browser from the last few years).
 | Inventory | E |
 | Drop item (stack) | Q (Ctrl+Q) |
 | Swap offhand | F |
-| Explorer's Journal | J |
+| Explorer's Journal / Map | J / M |
+| Leave a boat | Shift |
 | Chat / commands | T, / |
 | Hide HUD / screenshot / debug / third person | F1 / F2 / F3 / F5 |
 | Fullscreen | F11 |
@@ -91,6 +92,14 @@ splash text and a slowly turning live panorama.
   creature and milestone you discover.
 - Structures: ruined towers, camps, hermit huts, desert wells, sunken ruins,
   dungeons with monster cages, quicksand pits and buried chests.
+- The Explorer's Map (every survival world starts with one): it fills in as
+  you travel, with your bed, the world spawn and treasure marked on it.
+- Waterways: boats in every wood (they splinter if you ram the shore at full
+  speed), classic fishing with a float, bite and wake — salmon in cold
+  rivers, sunfish in warm shallows, pufferfish at sea, glowing glimmerfin
+  after dark — and messages in bottles that put an X on your map where
+  treasure is buried.
+- Signs you can write on and 24 original paintings to hang on your walls.
 - Generative music: calm piano pieces composed on the fly, different by day,
   by night and underground.
 

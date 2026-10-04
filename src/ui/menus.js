@@ -491,7 +491,8 @@ class StatsScreen extends Screen {
     const min = Math.floor(st.playTime / 1200);
     const rows = [['Time played', Math.floor(min / 60) + 'h ' + (min % 60) + 'm'], ['Distance travelled', (st.distance / 1000).toFixed(2) + ' km'], ['Blocks mined', st.blocksMined], ['Items crafted', st.itemsCrafted],
       ['Jumps', st.jumps], ['Mobs killed', st.mobsKilled], ['Damage taken', Math.round(st.damageTaken)], ['Deaths', st.deaths],
-      ['Biomes discovered', Object.keys(p.discovered.biomes).length + ' / ' + BIOMES.filter(Boolean).length], ['Creatures seen', Object.keys(p.discovered.mobs).length]];
+      ['Biomes discovered', Object.keys(p.discovered.biomes).length + ' / ' + BIOMES.filter(Boolean).length], ['Creatures seen', Object.keys(p.discovered.mobs).length],
+      ['Fish caught', st.fishCaught || 0], ['Distance by boat', ((st.sailed || 0) / 1000).toFixed(2) + ' km']];
     let y = 40;
     for (const [a, b] of rows) { gui.text(a, this.W / 2 - 110, y, '#e0e0e0'); gui.textRight(String(b), this.W / 2 + 110, y, '#ffff80'); y += 12; }
   }
@@ -532,6 +533,7 @@ const HOW_TO_PLAY = [
   ['Mining & Smelting', 'Ores hide underground: coal, iron, gold, ember, lapis, diamonds - and new finds like cobalt deep in slate, sulfur near lava and jade in high places.', 'Smelt ores in a Furnace with fuel such as coal, charcoal, wood or peat. Better pickaxes mine harder materials: some ores need iron or diamond tools.'],
   ['Farming', 'Till grass or dirt with a hoe and plant seeds near water. Crops need light to grow. Bone meal speeds up growth.', 'Animals give food, leather and wool. Shear sheep for wool and use buckets to collect milk. Brambles in the forest give berries you can bake into pies.'],
   ['Exploration', 'The world is huge. Biomes have their own plants, creatures and treasures: look for camps, ruined towers, hermit huts, desert wells and sunken ruins.', 'Your Explorer\'s Map (M) fills in as you travel, and your Explorer\'s Journal (J) records every biome and creature you discover. Some secrets are rare - keep travelling!'],
+  ['Waterways', 'Craft a boat from five planks to cross lakes and seas: right-click to climb in, steer with W and the mouse, and press Shift to hop out. Do not ram the shore at full speed!', 'Cast a fishing rod into water and wait for the float to dip, then reel in. Different waters hold different fish, and now and then a bottle washes up with a note about buried treasure.'],
   ['Mysteries', 'On clear nights, watch the sky. Falling stars leave craters lined with starmetal - the strongest material of all, but you will need a diamond pickaxe.', 'Lights drift over swamps after dark. Some say they lead to buried treasure. On the moors, ancient runestones hum when touched with jade...'],
   ['Creative Mode', 'In Creative mode you can fly (double-tap Space), break blocks instantly and take any block from the creative inventory (E).', 'Worlds with cheats enabled accept commands: open chat with T and type /help.'],
   ['Saving & Sharing', 'Your worlds save automatically in your browser. Use Export on the world list (or in the pause menu) to download a .blocklands file.', 'Import it on any device - including your phone - to continue where you left off or share your world with friends.'],

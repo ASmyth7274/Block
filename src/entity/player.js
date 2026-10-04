@@ -31,6 +31,7 @@ class Player extends Living {
     this.discovered = { biomes: {}, mobs: {}, items: {}, structures: {} };
     this.achievements = {};
     this.lastBiome = -1;
+    this.riding = null; this.fishHook = null; this.pendingMount = null; this.prevSneakKey = false;
   }
   get creative() { return this.gameMode === 'creative'; }
   get survivalLike() { return this.gameMode === 'survival' || this.gameMode === 'hardcore'; }
@@ -56,17 +57,17 @@ class Player extends Living {
     // walking stats, view bobbing, footsteps
     const dx = this.x - ox, dz = this.z - oz, hd = Math.sqrt(dx * dx + dz * dz);
     this.distWalked += hd * 0.6;
-    let bt = (this.onGround && !this.dead && !this.flying) ? Math.min(0.1, hd) : 0;
+    let bt = (this.onGround && !this.dead && !this.flying && !this.riding) ? Math.min(0.1, hd) : 0;
     let pt = (this.onGround && !this.dead) ? 0 : Math.atan(-this.vy * 0.2) * 15;
     this.bob += (bt - this.bob) * 0.4;
     this.bobPitch += (pt - this.bobPitch) * 0.8;
-    if (this.onGround && !this.sneaking && hd > 0.001) {
+    if (this.onGround && !this.sneaking && hd > 0.001 && !this.riding) {
       this.stepDist += hd;
       if (this.stepDist > this.nextStep) { this.nextStep = this.stepDist + 1.3; this.game.onFootstep(this); }
     }
     if (this.inWater && hd > 0.01 && this.age % 12 === 0) this.game.audio.play('swim', 0.15, 1 + (Math.random() - 0.5) * 0.4);
     this.stats.distance += Math.sqrt(dx * dx + dz * dz + (this.y - oy) * (this.y - oy));
-    if (this.survivalLike) this.exhaust(this.sprinting ? 0.1 * hd : (this.inWater ? 0.015 * hd : 0.01 * hd));
+    if (this.survivalLike && !this.riding) this.exhaust(this.sprinting ? 0.1 * hd : (this.inWater ? 0.015 * hd : 0.01 * hd));
     this.updateStats();
     this.updateUse(input);
     // equip animation when the held item changes
@@ -92,8 +93,17 @@ class Player extends Living {
     if (k('forward')) fwd += 1; if (k('back')) fwd -= 1;
     if (k('right')) str += 1; if (k('left')) str -= 1;
     if (g.touch && g.touch.active) { fwd = g.touch.forward; str = g.touch.strafe; }
-    const wantSneak = k('sneak') || (g.touch && g.touch.sneak);
+    let wantSneak = k('sneak') || (g.touch && g.touch.sneak);
     const jumpKey = k('jump') || (g.touch && g.touch.jump);
+    if (this.riding) {
+      // sneak hops out of a boat
+      if (wantSneak && !this.prevSneakKey) { this.prevSneakKey = true; this.riding.dismount(); if (g.touch) g.touch.sneak = false; }
+      this.prevSneakKey = wantSneak;
+      this.forward = fwd * 0.98; this.strafe = str * 0.98;
+      this.jumping = false; this.sprinting = false; this.sneaking = false; this.flying = false;
+      return;
+    }
+    this.prevSneakKey = wantSneak;
     // creative flight toggle (double-tap jump)
     if (jumpKey && !this.prevJumpKey) {
       if (this.creative) {
@@ -272,10 +282,10 @@ class Player extends Living {
     const def = ITEMS[s.id];
     if (f) {
       this.addFood(f.hunger, f.sat);
-      if (f.hungerChance && Math.random() < f.hungerChance) this.effects.hunger = 600;
-      if (f.poisonChance && Math.random() < f.poisonChance) this.effects.poison = 100;
+      if (f.hungerChance && Math.random() < f.hungerChance) this.effects.hunger = f.hungerTicks || 600;
+      if (f.poisonChance && Math.random() < f.poisonChance) this.effects.poison = f.poisonTicks || 100;
       if (f.regen) this.effects.regen = 100;
-      if (f.nightVision) this.effects.nightVision = 3600;
+      if (f.nightVision) this.effects.nightVision = Math.max(this.effects.nightVision || 0, f.nightVision === 1 ? 3600 : f.nightVision);
       this.game.audio.play('burp', 0.5, 0.9 + Math.random() * 0.1);
       this.game.onAte(s);
     }
@@ -290,8 +300,9 @@ class Player extends Living {
   }
 
   save() {
+    const v = this.riding;
     return {
-      x: this.x, y: this.y, z: this.z, yaw: this.yaw, pitch: this.pitch, health: this.health, food: this.food, saturation: this.saturation,
+      x: this.x, y: v ? v.y + v.h + 0.01 : this.y, z: this.z, yaw: this.yaw, mount: v ? { x: v.x, y: v.y, z: v.z } : undefined, pitch: this.pitch, health: this.health, food: this.food, saturation: this.saturation,
       exhaustion: this.exhaustion, air: this.air, xpLevel: this.xpLevel, xp: this.xp, xpTotal: this.xpTotal, score: this.score,
       gameMode: this.gameMode, flying: this.flying, inventory: this.inventory.toJSON(), spawnPoint: this.spawnPoint, fire: this.fire,
       fallDistance: this.fallDistance, stats: this.stats, discovered: this.discovered, achievements: this.achievements, effects: this.effects,
@@ -314,5 +325,6 @@ class Player extends Living {
     if (d.discovered) this.discovered = Object.assign({ biomes: {}, mobs: {}, items: {}, structures: {} }, d.discovered);
     if (d.achievements) this.achievements = d.achievements;
     if (d.effects) this.effects = d.effects;
+    this.pendingMount = d.mount ? { x: d.mount.x, y: d.mount.y, z: d.mount.z, t: 200 } : null;
   }
 }

@@ -170,6 +170,18 @@ defItem('spawn_egg', {
 defItem('glow_berries', { name: 'Glowcap Stew', maxStack: 1, food: { hunger: 6, sat: 7.2, nightVision: 1 }, container: 'bowl', tex: 'glowcap_stew' });
 defItem('journal', { name: "Explorer's Journal", maxStack: 1 });
 defItem('map', { name: "Explorer's Map", maxStack: 1 });
+// ---- waterways: fishing, boats, signs and paintings ----
+const FISHING = { cast: false };
+defItem('fishing_rod', { name: 'Fishing Rod', maxDamage: 64, handheld: true, rotateAround: true, tex: () => FISHING.cast ? 'fishing_rod_cast' : 'fishing_rod' });
+defItem('salmon', { name: 'Raw Salmon', food: { hunger: 2, sat: 0.4 } });
+defItem('cooked_salmon', { name: 'Cooked Salmon', food: { hunger: 6, sat: 9.6 } });
+defItem('sunfish', { name: 'Sunfish', food: { hunger: 1, sat: 0.2 } });
+defItem('pufferfish', { name: 'Pufferfish', food: { hunger: 1, sat: 0.2, poisonChance: 1, poisonTicks: 300, hungerChance: 1, hungerTicks: 300 } });
+defItem('glimmerfin', { name: 'Glimmerfin', food: { hunger: 2, sat: 0.4, nightVision: 900 } });
+defItem('message_bottle', { name: 'Message in a Bottle', maxStack: 1, rare: true });
+defItem('boat', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Boat', tex: (d) => 'boat_' + (WOOD[d] || 'oak'), maxStack: 1, variants: [0, 1, 2, 3, 4, 5] });
+defItem('sign', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Sign', tex: (d) => 'sign_' + (WOOD[d] || 'oak'), maxStack: 16, variants: [0, 1, 2, 3, 4, 5], fuel: 200, places: 'sign' });
+defItem('painting', { name: 'Painting' });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -243,6 +255,8 @@ function pickBlockItem(id, meta) {
     case B.WATER: return [ITEM_IDS.water_bucket, 0];
     case B.LAVA: return [ITEM_IDS.lava_bucket, 0];
     case B.FIRE: return null;
+    case B.SIGN: return [ITEM_IDS.sign, (meta >> 4) & 7];
+    case B.WALL_SIGN: return [ITEM_IDS.sign, (meta >> 2) & 7];
   }
   return [id, blockItemDamage(id, meta)];
 }

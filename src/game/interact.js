@@ -31,7 +31,7 @@ class Interaction {
     let ent = null, et = hit ? hit.t : reach;
     const er = Math.min(this.entityReach(), et);
     for (const e of w.entities) {
-      if (e.removed || e.dead || !e.hurt || e === p) continue;
+      if (e.removed || e.dead || !e.hurt || e === p || e === p.riding) continue;
       if (Math.abs(e.x - eye[0]) > 8 || Math.abs(e.z - eye[2]) > 8) continue;
       e.updateBox();
       const b = e.box.copy(); b.x0 -= 0.1; b.y0 -= 0.1; b.z0 -= 0.1; b.x1 += 0.1; b.y1 += 0.1; b.z1 += 0.1;
@@ -52,7 +52,7 @@ class Interaction {
   }
   release(button) {
     if (button === 0) { this.left = false; this.stopMining(); }
-    else if (button === 2) { this.right = false; }
+    else if (button === 2) { this.right = false; this.noRepeat = false; }
   }
   tick() {
     const g = this.game, p = g.player;
@@ -61,7 +61,7 @@ class Interaction {
     if (this.useDelay > 0) this.useDelay--;
     if (this.left) this.attackOrMine(false);
     else this.stopMining();
-    if (this.right && this.useDelay === 0 && !p.useItem) { this.use(); this.useDelay = 4; }
+    if (this.right && this.useDelay === 0 && !p.useItem && !this.noRepeat) { this.use(); this.useDelay = 4; }
   }
 
   // ---------------------------------------------------------------- mining
@@ -234,6 +234,22 @@ class Interaction {
       p.swing();
       return;
     }
+    if (held.id === I.fishing_rod) {
+      this.noRepeat = true;
+      if (p.fishHook && !p.fishHook.removed) {
+        const d = p.fishHook.retract(g);
+        if (d && !p.creative) p.inventory.damageHeld(p, d);
+      } else {
+        g.audio.play('bow', 0.5, 0.4 / (Math.random() * 0.4 + 0.8));
+        const h = new FishHook(w, p);
+        p.fishHook = h;
+        g.spawnEntity(h);
+      }
+      p.swing();
+      return;
+    }
+    if (held.id === I.boat) { this.noRepeat = true; if (g.placeBoat(held)) p.swing(); return; }
+    if (held.id === I.message_bottle) { this.noRepeat = true; g.readMessageBottle(); return; }
     if (held.id === I.prospector_rod) { g.useProspectorRod(); return; }
     if (held.id === I.wayfinder) { g.useWayfinder(); return; }
     if (held.id === I.journal) { g.openJournal(); return; }
@@ -245,7 +261,9 @@ class Interaction {
   pickBlock() {
     const g = this.game, p = g.player;
     let pk = null;
-    if (this.entity && p.creative) {
+    if (this.entity && this.entity.type === 'boat') pk = [ITEM_IDS.boat, this.entity.wood];
+    else if (this.entity && this.entity.type === 'painting') pk = [ITEM_IDS.painting, 0];
+    else if (this.entity && p.creative) {
       const mt = MOB_TYPES.findIndex((m) => m && m.key === this.entity.type);
       if (mt >= 0) pk = [ITEM_IDS.spawn_egg, mt];
     } else if (this.hit) pk = pickBlockItem(this.hit.id, this.hit.meta);

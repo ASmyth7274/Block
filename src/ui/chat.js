@@ -95,6 +95,7 @@ const Commands = (() => {
     const p = g.player;
     const x = coord(a[0], p.x), y = coord(a[1], p.y), z = coord(a[2], p.z);
     if ([x, y, z].some(isNaN)) return err(g, 'Usage: /tp <x> <y> <z>');
+    if (p.riding) p.riding.dismount();
     p.setPos(x, y, z); p.vx = p.vy = p.vz = 0; p.fallDistance = 0;
     ok(g, 'Teleported to ' + x.toFixed(1) + ', ' + y.toFixed(1) + ', ' + z.toFixed(1));
   });

@@ -29,6 +29,9 @@ const MILESTONES = [
   { id: 'harvest', name: 'Green Thumb', desc: 'Harvest fully grown wheat', icon: () => [ITEM_IDS.wheat, 0] },
   { id: 'breed', name: 'Rancher', desc: 'Breed two animals', icon: () => [ITEM_IDS.wheat, 0] },
   { id: 'tnt', name: 'Kaboom', desc: 'Craft TNT', icon: () => [B.TNT, 0] },
+  { id: 'fish', name: 'Gone Fishing', desc: 'Catch a fish', icon: () => [ITEM_IDS.fish, 0] },
+  { id: 'sail', name: 'Set Sail', desc: 'Row a boat 500 blocks', icon: () => [ITEM_IDS.boat, 0] },
+  { id: 'bottle', name: 'Message Received', desc: 'Read a message in a bottle', icon: () => [ITEM_IDS.message_bottle, 0] },
 ];
 const BIOME_DESCRIPTIONS = {
   ocean: 'Endless water. Sunken ruins rest on the sea floor.', deep_ocean: 'The water grows dark and cold.', plains: 'Rolling grass, wildflowers and the occasional lonely oak.',
