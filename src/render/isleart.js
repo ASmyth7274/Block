@@ -74,6 +74,12 @@
     for (let x = 0; x < 16; x++) { const y = 9 + Math.round(Math.sin(x * 0.8) * 1.5); img.set(x, y, C('#e0a040')); if (x % 3 === 0) img.set(x, y - 1, C('#7a4a20')); }
     return img;
   })());
+  // nearly ready: the shell crazed with light
+  reg('wyrm_egg_cracked', (() => {
+    const img = T.wyrm_egg.copy(), L = C('#ffe6a0'), D = C('#e0a040');
+    for (const [x, y] of [[3, 2], [4, 3], [4, 4], [5, 5], [6, 5], [7, 6], [11, 3], [10, 4], [10, 5], [9, 6], [12, 11], [13, 12], [2, 12], [3, 13]]) img.set(x, y, (x + y) % 2 ? L : D);
+    return img;
+  })());
   reg('wyrm_egg_top', (() => {
     const img = new Img(), rng = new Noise.Random(5151);
     for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) img.set(x, y, mix(C('#1a1434'), C('#2a2250'), rng.nextFloat() * 0.5));

@@ -87,14 +87,15 @@ class Starwyrm extends Mob {
   // each segment sits on the path the head has flown, one gap behind the last
   placeBody() {
     const t = this.trail, segs = this.segs, N = segs.length;
-    let n = 0, target = WYRM_NECK, acc = 0, ax = this.x, ay = this.y, az = this.z;
+    const gap = this.gapAt ? (i) => this.gapAt(i) : WYRM_GAP;
+    let n = 0, target = this.neckLen || WYRM_NECK, acc = 0, ax = this.x, ay = this.y, az = this.z;
     for (let k = 0; k < t.length && n < N; k++) {
       const bx = t[k][0], by = t[k][1], bz = t[k][2];
       const L = Math.hypot(bx - ax, by - ay, bz - az);
       while (n < N && L > 1e-6 && acc + L >= target) {
         const f = (target - acc) / L, s = segs[n];
         s.x = ax + (bx - ax) * f; s.y = ay + (by - ay) * f; s.z = az + (bz - az) * f;
-        n++; target += WYRM_GAP(n - 1);
+        n++; target += gap(n - 1);
       }
       acc += L; ax = bx; ay = by; az = bz;
     }
@@ -104,7 +105,7 @@ class Starwyrm extends Mob {
     while (n < N) {
       const s = segs[n], extra = target - acc;
       s.x = ax + lx * extra; s.y = ay + ly * extra; s.z = az + lz * extra;
-      n++; target += WYRM_GAP(n - 1);
+      n++; target += gap(n - 1);
     }
     // each faces the one before it
     for (let i = 0; i < N; i++) {
@@ -502,10 +503,11 @@ MOB_CLASSES.starwyrm = Starwyrm;
 // back the way it came and it will burn the Starwyrm instead.
 // ---------------------------------------------------------------------------
 class Starbolt extends Entity {
-  constructor(world, shooter, x, y, z, dx, dy, dz) {
+  constructor(world, shooter, x, y, z, dx, dy, dz, small) {
     super(world);
     this.type = 'starbolt';
-    this.w = this.h = 0.7;
+    this.small = !!small;
+    this.w = this.h = small ? 0.35 : 0.7;
     this.shooter = shooter;
     this.noGravity = true;
     this.setPos(x, y - this.h / 2, z);
@@ -533,6 +535,7 @@ class Starbolt extends Entity {
     const reflected = this.shooter && this.shooter.type === 'player';
     for (const e of w.entities.concat(game.player && !game.player.dead ? [game.player] : [])) {
       if (e === this || e.removed || !e.hurt || e.dead || e.type === 'starbolt' || e.type === 'star_crystal') continue;
+      if (this.small && (e === this.shooter || e.type === 'player' || e.type === 'wyrmling' || (e.type === 'wolf' && e.tamed))) continue;
       if (!reflected && (e === this.shooter || e.type === 'wyrm_part')) continue;
       if (reflected && e === this.shooter && this.age < 10) continue;
       const b = e.box.copy(); b.x0 -= 0.35; b.y0 -= 0.35; b.z0 -= 0.35; b.x1 += 0.35; b.y1 += 0.35; b.z1 += 0.35;
@@ -553,7 +556,8 @@ class Starbolt extends Entity {
     const w = this.world;
     this.removed = true;
     const cy = this.y + this.h / 2;
-    if (target) target.hurt(target.type === 'wyrm_part' ? 12 : 6, { type: target.type === 'wyrm_part' ? 'starbolt' : 'magic', entity: this.shooter || this, knockback: 0.3 });
+    if (target) target.hurt(this.small ? 5 : target.type === 'wyrm_part' ? 12 : 6, { type: target.type === 'wyrm_part' || this.small ? 'starbolt' : 'magic', entity: this.shooter || this, knockback: 0.3 });
+    if (this.small) { game.audio.play('mote_pop', 1, 1.3, this.x, cy, this.z); if (game.settings.particles !== 'minimal') for (let i = 0; i < 10; i++) game.particles.sparkle(this.x, cy, this.z, 0.85, 0.7, 1, 1, 0.6); return; }
     game.audio.play('wyrm_bolt_burst', 2.5, 0.9 + Math.random() * 0.2, this.x, cy, this.z);
     if (game.settings.particles !== 'minimal') for (let i = 0; i < 30; i++) game.particles.sparkle(this.x, cy, this.z, 0.85, 0.6, 1, 1, 1.6);
     // the burning cloud settles on the ground where it struck
@@ -565,9 +569,10 @@ class Starbolt extends Entity {
     const t = this.age + partial, cy = ry + this.h / 2;
     let m = M3.mul(M3.trans(rx, cy, rz), M3.ry(t * 0.3));
     m = M3.mul(m, M3.rx(t * 0.21));
-    er.texBox(er.r.batch, m, [-0.22, -0.22, -0.22, 0.22, 0.22, 0.22], er.r.atlas.layer('star_crystal_core'), -1, 0, 1 / 0.44);
-    er.glow(rx, cy, rz, 0.8 + Math.sin(t * 0.6) * 0.1, [190, 140, 255, 150]);
-    er.glow(rx, cy, rz, 0.35, [255, 245, 255, 220]);
+    const k = this.small ? 0.45 : 1;
+    er.texBox(er.r.batch, m, [-0.22 * k, -0.22 * k, -0.22 * k, 0.22 * k, 0.22 * k, 0.22 * k], er.r.atlas.layer('star_crystal_core'), -1, 0, 1 / (0.44 * k));
+    er.glow(rx, cy, rz, (0.8 + Math.sin(t * 0.6) * 0.1) * k, [190, 140, 255, 150]);
+    er.glow(rx, cy, rz, 0.35 * k, [255, 245, 255, 220]);
   }
   save() { return null; }
 }
@@ -699,3 +704,157 @@ StarCrystal.prototype.beam = function (er, rx, cy, rz, partial) {
     er.quadOut(b, v, [[0.4, -t], [0.6, -t], [0.6, len / 3 - t], [0.4, len / 3 - t]], L, [230, 200, 255, 255], -1, 0);
   }
 };
+
+// ---------------------------------------------------------------------------
+// A wyrmling: hatched from the Starwyrm's egg, a little serpent of starlight
+// that follows whoever warmed it, circling their shoulders, and spits sparks
+// at anything that hurts them (or that they strike at). Right-click to have it
+// wait where it is; feed it star fragments or starfruit when it is hurt.
+// ---------------------------------------------------------------------------
+MOB_TYPES.push({
+  key: 'wyrmling', name: 'Wyrmling', egg: ['#26245e', '#9ae8ff'], cat: 'creature',
+  lore: 'Hatched from the Starwyrm\'s egg once it has been warmed with three star fragments. It circles your shoulders wherever you go, spits sparks at anything that hurts you, and waits when asked. Star fragments and starfruit mend it.',
+});
+MOB_TYPES.forEach((m, i) => { if (m) { m.index = i; MOB_INDEX[m.key] = m; } });
+const WL_SEGS = 7;
+const WL_SIZE = (i) => 0.8 - 0.38 * (i / (WL_SEGS - 1));
+class Wyrmling extends Mob {
+  constructor(world) {
+    super(world, 'wyrmling');
+    this.maxHealth = this.health = 30;
+    this.w = 0.6; this.h = 0.6; this.eye = 0.3;
+    this.noGravity = true; this.persistent = true; this.swims = false;
+    this.sitting = false; this.home = null; this.spitCool = 0;
+    this.dir = [1, 0, 0]; this.speed = 0; this.speedTarget = 0; this.goal = null; this.orbitA = Math.random() * TAU;
+    this.trail = []; this.neckLen = 0.5;
+    this.segs = [];
+    for (let i = 0; i < WL_SEGS; i++) this.segs.push({ x: 0, y: 0, z: 0, px: 0, py: 0, pz: 0, yaw: 0, pitch: 0, pyaw: 0, ppitch: 0, hidden: false });
+    this.talkInterval = 400; this.xpValue = 0;
+  }
+  gapAt(i) { return 0.55 * WL_SIZE(i) + 0.06; }
+  setTarget(e) { this.target = e; }
+  // it flies where it means to, but walls are walls
+  travel() {
+    const g = this.goal, d = this.dir;
+    if (g) {
+      let tx = g[0] - this.x, ty = g[1] - (this.y + this.h / 2), tz = g[2] - this.z;
+      const tl = Math.hypot(tx, ty, tz);
+      if (tl > 0.05) {
+        tx /= tl; ty /= tl; tz /= tl;
+        d[0] += (tx - d[0]) * 0.18; d[1] += (ty - d[1]) * 0.18; d[2] += (tz - d[2]) * 0.18;
+        const l = Math.hypot(d[0], d[1], d[2]) || 1; d[0] /= l; d[1] /= l; d[2] /= l;
+      }
+      if (tl < 1.2) this.speedTarget = Math.min(this.speedTarget, tl * 0.12);
+    }
+    this.speed += clamp(this.speedTarget - this.speed, -0.04, 0.04);
+    this.vx = d[0] * this.speed; this.vy = d[1] * this.speed; this.vz = d[2] * this.speed;
+    this.move(this.vx, this.vy, this.vz);
+    if (this.collidedH) d[1] = Math.min(0.8, d[1] + 0.35);
+    this.fallDistance = 0;
+    this.yaw = this.bodyYaw = this.headYaw = Math.atan2(-d[0], -d[2]); this.pitch = Math.asin(clamp(d[1], -1, 1));
+  }
+  aiTick(game) {
+    const p = game.player, w = this.world;
+    if (this.spitCool > 0) this.spitCool--;
+    const t = this.target;
+    if (t && (t.dead || t.removed || t.type === 'player' || this.distSqTo(t) > 24 * 24)) this.target = null;
+    if (this.sitting) {
+      if (!this.home) this.home = [this.x, this.y + this.h / 2, this.z];
+      this.goal = [this.home[0] + Math.cos(this.age * 0.04) * 0.6, this.home[1] + Math.sin(this.age * 0.05) * 0.2, this.home[2] + Math.sin(this.age * 0.04) * 0.6];
+      this.speedTarget = 0.06;
+      return;
+    }
+    if (this.target) {
+      // round its quarry, out of reach, spitting sparks
+      const e = this.target;
+      this.orbitA += 0.06;
+      this.goal = [e.x + Math.cos(this.orbitA) * 3.5, e.y + e.h + 1.5, e.z + Math.sin(this.orbitA) * 3.5];
+      this.speedTarget = 0.4;
+      if (this.spitCool <= 0 && this.distSqTo(e) < 12 * 12 && this.canSee(e)) {
+        const mx = this.x + this.dir[0] * 0.5, my = this.y + this.h / 2, mz = this.z + this.dir[2] * 0.5;
+        game.spawnEntity(new Starbolt(w, this, mx, my, mz, e.x - mx, e.y + e.h * 0.6 - my, e.z - mz, true));
+        game.audio.play('wyrm_spit', 0.6, 1.7, mx, my, mz);
+        this.spitCool = 26;
+      }
+      return;
+    }
+    if (!p || p.dead) { this.speedTarget = 0.05; return; }
+    // home to its friend: round their shoulders, and never far behind
+    const d2 = this.distSqTo(p);
+    if (d2 > 28 * 28) { this.setPos(p.x, p.y + 2.2, p.z); this.trail = []; this.layOut(); return; }
+    this.orbitA += d2 < 25 ? 0.035 : 0.02;
+    this.goal = [p.x + Math.cos(this.orbitA) * 2.2, p.y + 2.2 + Math.sin(this.age * 0.05) * 0.3, p.z + Math.sin(this.orbitA) * 2.2];
+    this.speedTarget = d2 > 64 ? 0.55 : 0.2;
+  }
+  interact(player, held) {
+    const g = this.game;
+    if (held && (held.id === ITEM_IDS.star_fragment || held.id === ITEM_IDS.starfruit) && this.health < this.maxHealth) {
+      this.heal(8);
+      if (!player.creative) player.inventory.decrementHeld(1);
+      g.particles.hearts(this.x, this.y + this.h, this.z, 5);
+      g.audio.play('wyrmling_say', 0.8, 1.2, this.x, this.y, this.z);
+      return true;
+    }
+    this.sitting = !this.sitting; this.home = null; this.target = null;
+    g.hud.showAction(this.sitting ? '§dYour wyrmling waits.' : '§dYour wyrmling follows.');
+    g.audio.play('wyrmling_say', 0.8, this.sitting ? 0.9 : 1.2, this.x, this.y, this.z);
+    return true;
+  }
+  // a friend's blows pass through it; anything else, it remembers
+  hurt(amount, src) {
+    if (src && src.entity && (src.entity.type === 'player' || src.entity === this)) return false;
+    if (src && (src.type === 'fall' || src.type === 'suffocate')) return false;
+    return super.hurt(amount, src);
+  }
+  onRevenge(e) { if (e && e.type !== 'player' && e !== this && !e.dead) { this.target = e; this.sitting = false; } }
+  knockback(dx, dz, s) { super.knockback(dx, dz, s * 0.4); }
+  onDeath(src) { super.onDeath(src); this.game.hud.message('§dYour wyrmling has fallen.'); }
+  checkDespawn() {}
+  dropLoot() { this.drop(ITEM_IDS.star_fragment, 1); }
+  saySound() { return 'wyrmling_say'; }
+  hurtSound() { return 'wyrmling_hurt'; }
+  deathSound() { return 'wyrmling_hurt'; }
+  soundVolume() { return 0.6; }
+  tick(game) {
+    for (const s of this.segs) { s.px = s.x; s.py = s.y; s.pz = s.z; s.pyaw = s.yaw; s.ppitch = s.pitch; }
+    if (!this.trail.length) this.layOut();
+    super.tick(game);
+    if (this.removed) return;
+    this.recordTrail();
+    this.placeBody();
+    if (game.settings.particles !== 'minimal' && this.age % 8 === 0) { const s = this.segs[this.rnd(WL_SEGS)]; game.particles.sparkle(s.x, s.y, s.z, 0.75, 0.75, 1, 1, 0.3); }
+  }
+  render(er, rx, ry, rz, partial) {
+    const [hx, hy, hz] = this.lerpPos(partial), ox = hx - rx, oy = hy - ry, oz = hz - rz;
+    const col = er.entColor(this), t = this.age + partial, cy = this.h / 2;
+    const light = (x, y, z) => { const [s, b] = er.lightAt(x, y, z); return [Math.max(s, 0.3), b]; };
+    const dead = this.dead && this.deathTime > 0, roll = dead ? Math.min(1, this.deathTime / 10) * Math.PI / 2 : 0;
+    const yaw = this.pyaw + wrapRadians(this.yaw - this.pyaw) * partial, pitch = this.ppitch + (this.pitch - this.ppitch) * partial;
+    let m = M3.mul(M3.trans(rx, ry + cy, rz), M3.ry(yaw));
+    m = M3.mul(M3.mul(m, M3.rx(pitch)), M3.rz(roll));
+    m = M3.mul(m, M3.scale(0.85 / 16, 0.85 / 16, 0.85 / 16));
+    const [sky, blk] = light(hx, hy + cy, hz);
+    const pose = { jaw: [-(this.spitCool > 18 ? 0.6 : 0.08 + Math.max(0, Math.sin(t * 0.07)) * 0.1), 0, 0], barbelR: [Math.sin(t * 0.15) * 0.3, 0.1, 0], barbelL: [Math.sin(t * 0.15 + 1) * 0.3, -0.1, 0] };
+    er.drawModel(MODELS.wyrmHead, 'starwyrm_head', m, pose, col, sky, blk);
+    er.drawModel(MODELS.wyrmHead, 'starwyrm_eyes', m, pose, [255, 255, 255, 255], -1, 0, { only: ['skull'], inflate: 0.05 });
+    for (let i = 0; i < WL_SEGS; i++) {
+      const s = this.segs[i];
+      const x = s.px + (s.x - s.px) * partial, y = s.py + (s.y - s.py) * partial, z = s.pz + (s.z - s.pz) * partial;
+      const syaw = s.pyaw + wrapRadians(s.yaw - s.pyaw) * partial, spitch = s.ppitch + (s.pitch - s.ppitch) * partial;
+      const sc = WL_SIZE(i) / 16;
+      let sm = M3.mul(M3.trans(x - ox, y - oy + cy, z - oz), M3.ry(syaw));
+      sm = M3.mul(M3.mul(sm, M3.rx(spitch)), M3.rz(Math.sin(t * 0.18 - i * 0.7) * 0.15 + roll));
+      sm = M3.mul(sm, M3.scale(sc, sc, sc));
+      er.drawModel(MODELS.wyrmSeg, 'starwyrm_body', sm, {}, col, sky, blk);
+      er.drawModel(MODELS.wyrmSeg, 'starwyrm_glow', sm, {}, [255, 255, 255, 255], -1, 0, { only: ['body'], inflate: 0.04 });
+      if (i === 1) { const flap = Math.sin(t * 0.3) * 0.5; er.drawModel(MODELS.wyrmFins, 'starwyrm_body', sm, { finR: [0, 0, -0.2 + flap], finL: [0, 0, 0.2 - flap] }, col, sky, blk); }
+      if (i === WL_SEGS - 1) er.drawModel(MODELS.wyrmTail, 'starwyrm_body', sm, { fin: [0, Math.sin(t * 0.25) * 0.5, 0] }, col, sky, blk);
+    }
+    er.glow(rx, ry + cy, rz, 0.5, [150, 220, 255, 40]);
+  }
+  save() { const d = super.save(); d.sitting = this.sitting; if (this.home) d.home = this.home; return d; }
+  load(d) { super.load(d); this.sitting = !!d.sitting; this.home = d.home || null; this.persistent = true; if (d.health !== undefined) this.health = Math.min(d.health, this.maxHealth); }
+}
+// it shares the Starwyrm's way of laying its body along the path it has flown
+for (const k of ['layOut', 'recordTrail', 'placeBody']) Wyrmling.prototype[k] = Starwyrm.prototype[k];
+MOB_CLASSES.wyrmling = Wyrmling;

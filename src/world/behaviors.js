@@ -469,6 +469,18 @@ const Behaviors = (() => {
         dropStack(game, x + 0.5, y + 0.3, z + 0.5, new ItemStack(I.glowberry, 1, 0));
         game.audio.playBlock('grass', 'break', x + 0.5, y + 0.5, z + 0.5);
         return true;
+      // the wyrm's egg wants starlight: three star fragments, and it hatches
+      case B.WYRM_EGG: {
+        const held = player.inventory.held();
+        if ((m & 3) === 3) return true;
+        if (!held || held.id !== I.star_fragment) { game.hud.showAction((m & 3) ? '§dSomething stirs inside. It wants more starlight.' : '§7The egg is cold. It wants starlight.'); return true; }
+        if (!player.creative) player.inventory.decrementHeld(1);
+        w.setMeta(x, y, z, (m & ~3) | ((m & 3) + 1));
+        game.audio.play('crystal_hum', 1, 1 + (m & 3) * 0.2, x + 0.5, y + 0.5, z + 0.5);
+        if (game.settings.particles !== 'minimal') for (let i = 0; i < 16; i++) game.particles.sparkle(x + 0.5, y + 0.6, z + 0.5, 1, 0.9, 0.6, 1, 1);
+        if ((m & 3) + 1 === 3) { w.scheduleTick(x, y, z, 80, B.WYRM_EGG); game.hud.showAction('§dThe egg is cracking!'); }
+        return true;
+      }
       case B.STARVINE:
         if (!(m & 1)) return false;
         w.setMeta(x, y, z, m & ~1);
@@ -591,6 +603,19 @@ const Behaviors = (() => {
     if (BLOCKS[id].gravity) { fallCheck(w, x, y, z, id, m); return; }
     if (id === B.WATER || id === B.LAVA) { flow(w, x, y, z, id, m); return; }
     if (id === B.FIRE) { fireTick(w, x, y, z, m); return; }
+    if (id === B.WYRM_EGG) {
+      if ((m & 3) !== 3 || !w.game) return;
+      const g = w.game;
+      w.setBlock(x, y, z, 0, 0);
+      const e = g.spawnMob('wyrmling', x + 0.5, y + 0.3, z + 0.5);
+      if (e) { e.dir = [0, 1, 0]; e.goal = [x + 0.5, y + 3, z + 0.5]; }
+      g.audio.play('wyrm_burst', 1.5, 1.6, x + 0.5, y + 0.5, z + 0.5);
+      g.audio.play('wyrmling_say', 1, 1.3, x + 0.5, y + 0.5, z + 0.5);
+      if (g.settings.particles !== 'minimal') for (let i = 0; i < 50; i++) g.particles.sparkle(x + 0.5, y + 0.5, z + 0.5, 0.85, 0.85, 1, 1, 1.4);
+      g.hud.showAction('§dThe egg hatches!');
+      g.achieve('hatch');
+      return;
+    }
     if (BLOCKS[id].circuitTick) BLOCKS[id].circuitTick(w, x, y, z, m);
   }
   function fallCheck(w, x, y, z, id, m) {

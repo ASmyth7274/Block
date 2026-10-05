@@ -577,6 +577,12 @@ const SOUND_DEFS = (() => {
       return (s + lp.p(noise()) * 0.6) * sw;
     });
   };
+  // a wyrmling's voice: a small chirruping trill with bells in it
+  S.wyrmling_say = () => {
+    let ph = 0;
+    return render(0.9, (t) => { const f = 900 + Math.sin(t * 40) * 120 + t * 300; ph += 2 * Math.PI * f / DSP.SR; return Math.sin(ph) * env(t, 0.02, 0.35) * 0.6 + Math.sin(2 * Math.PI * 1760 * t) * env(t, 0.1, 0.3) * 0.2 * (t > 0.1 ? 1 : 0); });
+  };
+  S.wyrmling_hurt = () => { let ph = 0; return render(0.4, (t) => { const f = 1400 - t * 1500; ph += 2 * Math.PI * f / DSP.SR; return Math.sin(ph) * env(t, 0.005, 0.12); }); };
   // ----- the Drift Isles -----
   // an orrery sentinel: the dry tick of its clockwork as it turns
   S.orrery_tick = () => { const ck = []; for (let i = 0; i < 8; i++) ck.push([i * 0.11 + rnd() * 0.01, 2400 + (i % 2) * 700, 0.4, 0.004]); return render(1, (t) => ring(ck, t)); };

@@ -56,6 +56,7 @@ const MILESTONES = [
   { id: 'gateway', name: 'Over the Gulf', desc: 'Pass through a star gateway', icon: () => [B.STAR_GATEWAY, 0] },
   { id: 'observatory', name: 'Stargazer', desc: 'Find an old observatory on the Drift Isles', icon: () => [ITEM_IDS.orrery_gear, 0] },
   { id: 'glide', name: 'Wingspan', desc: 'Glide on a drift glider', icon: () => [ITEM_IDS.drift_glider, 0] },
+  { id: 'hatch', name: 'Hatchling', desc: 'Warm the wyrm egg with starlight until it hatches', icon: () => [B.WYRM_EGG, 0] },
   { id: 'city', name: 'Lost and Found', desc: 'Find a forgotten city deep in the Hush', icon: () => [B.DEEPSTONE_BRICKS, 2] },
   { id: 'gate', name: 'The Grey Door', desc: 'Wake a city gate with an Echo Heart', icon: () => [ITEM_IDS.echo_heart, 0] },
   { id: 'listener', name: 'Unheard Of', desc: 'Defeat the Listener', icon: () => [ITEM_IDS.hush_shard, 0] },

@@ -798,7 +798,7 @@ defBlock(170, 'star_gateway', {
 });
 // the wyrm's egg: warm to the touch, and something moves inside when the stars are out
 defBlock(171, 'wyrm_egg', {
-  name: 'Wyrm Egg', render: R.MODEL, tex: (m, f) => f === 1 ? 'wyrm_egg_top' : f === 0 ? 'wyrm_egg_top' : 'wyrm_egg', opaque: false, opacity: 0, light: 2,
+  name: 'Wyrm Egg', render: R.MODEL, tex: (m, f) => f <= 1 ? 'wyrm_egg_top' : (m & 3) >= 2 ? 'wyrm_egg_cracked' : 'wyrm_egg', opaque: false, opacity: 0, light: 2,
   hardness: 3, resistance: 1200, tool: 'pickaxe', sound: 'stone', itemMetaMask: 0,
   model: () => [{ b: [5, 0, 5, 11, 1, 11] }, { b: [3, 1, 3, 13, 3, 13] }, { b: [2, 3, 2, 14, 8, 14] }, { b: [3, 8, 3, 13, 11, 13] }, { b: [4, 11, 4, 12, 13, 12] }, { b: [6, 13, 6, 10, 15, 10] }],
   collide: () => [[2 / 16, 0, 2 / 16, 14 / 16, 15 / 16, 14 / 16]], select: () => [2 / 16, 0, 2 / 16, 14 / 16, 15 / 16, 14 / 16],

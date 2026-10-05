@@ -1640,8 +1640,8 @@ class Villager extends Mob {
 // tamed wolves defend their owner and join in when the owner attacks
 function rallyWolves(game, foe) {
   const p = game.player, w = game.world;
-  if (!p || !w || !foe || foe === p || foe.dead || !foe.hurt || !foe.category || foe.type === 'player' || foe.type === 'boomcap' || (foe.type === 'wolf' && foe.tamed)) return;
-  for (const e of w.entities) if (e.type === 'wolf' && e.tamed && !e.sitting && !e.dead && e !== foe && e.distSqTo(p) < 24 * 24) e.setTarget(foe);
+  if (!p || !w || !foe || foe === p || foe.dead || !foe.hurt || !foe.category || foe.type === 'player' || foe.type === 'boomcap' || (foe.type === 'wolf' && foe.tamed) || foe.type === 'wyrmling') return;
+  for (const e of w.entities) if (((e.type === 'wolf' && e.tamed) || e.type === 'wyrmling') && !e.sitting && !e.dead && e !== foe && e.distSqTo(p) < 24 * 24) e.setTarget(foe);
 }
 
 // ---------------------------------------------------------------------------

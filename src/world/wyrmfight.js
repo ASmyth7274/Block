@@ -64,7 +64,7 @@ const Wyrm = (() => {
     Isles.setWell(w, true);
     // the first time, it leaves its egg on the Well's pillar
     const y = wellY(w) + 5;
-    if (first && w.getBlock(0, y, 0) === 0) w.setBlock(0, y, 0, B.WYRM_EGG, 0);
+    if ((first || Math.random() < 0.25) && w.getBlock(0, y, 0) === 0) w.setBlock(0, y, 0, B.WYRM_EGG, 0);
     openGateway(game);
     game.achieve('wyrm');
     game.hud.showTitle('§dThe Starwyrm falls', 'The Star Well fills with light');
