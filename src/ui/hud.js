@@ -340,7 +340,7 @@ class Hud {
     const l = w.getLightRaw(bx, Math.floor(p.y + 0.5), bz);
     const left = [
       'Blocklands ' + GAME_VERSION + ' (' + this.fps + ' fps, ' + r.stats.meshed + ' chunk updates)',
-      'C: ' + r.stats.drawn + '/' + r.stats.chunks + ' chunks, ' + Math.round(r.stats.quads / 1000) + 'k quads',
+      'C: ' + r.stats.drawn + '/' + r.stats.chunks + ' chunks, ' + (r.stats.sections || 0) + ' sections, ' + Math.round(r.stats.quads / 1000) + 'k quads',
       'E: ' + w.entities.length + ', P: ' + g.particles.list.length,
       '',
       'XYZ: ' + p.x.toFixed(3) + ' / ' + p.y.toFixed(5) + ' / ' + p.z.toFixed(3),
@@ -357,7 +357,7 @@ class Hud {
     let y = 2;
     for (const s of left) { if (s) { ctx.fillStyle = 'rgba(80,80,80,0.56)'; ctx.fillRect(1, y - 1, gui.textWidth(s) + 2, 9); gui.text(s, 2, y, '#e0e0e0', false); } y += 9; }
     const mem = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) + 'MB' : '';
-    const right = ['JS: ' + (navigator.userAgent.match(/(Chrome|Firefox|Safari)\/[\d.]+/) || ['Browser'])[0], mem ? 'Mem: ' + mem : '', 'Display: ' + r.width + 'x' + r.height, 'GUI scale: ' + gui.scale, 'Render distance: ' + g.settings.renderDistance];
+    const right = ['JS: ' + (navigator.userAgent.match(/(Chrome|Firefox|Safari)\/[\d.]+/) || ['Browser'])[0], mem ? 'Mem: ' + mem : '', 'Display: ' + r.width + 'x' + r.height, 'GPU: ' + r.gpu.name + (r.gpu.api ? ' (' + r.gpu.api + ')' : ''), 'GUI scale: ' + gui.scale, 'Render distance: ' + g.settings.renderDistance, 'Shaders: ' + (g.settings.shaders || 'off')];
     y = 2;
     for (const s of right) { if (s) { const tw = gui.textWidth(s); ctx.fillStyle = 'rgba(80,80,80,0.56)'; ctx.fillRect(gui.w - tw - 3, y - 1, tw + 2, 9); gui.text(s, gui.w - tw - 2, y, '#e0e0e0', false); } y += 9; }
     void partial;

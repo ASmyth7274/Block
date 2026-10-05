@@ -7,6 +7,58 @@ for (let i = 0; i < 16; i++) { const f = 1 - i / 15; BRIGHTNESS[i] = (1 - f) / (
 // the Underworld never goes fully black: a dull glow hangs in the air
 const BRIGHTNESS_UNDER = BRIGHTNESS.map((v) => v * 0.87 + 0.13);
 
+// which graphics chip the browser has given us, and roughly how much it can take:
+// tier 0 software (no acceleration at all!), 1 modest, 2 good (most integrated chips, phones),
+// 3 strong (dedicated cards, Apple silicon Macs)
+function detectGPU(gl) {
+  let vendor = '', raw = '';
+  try {
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    if (ext) { vendor = String(gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) || ''); raw = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || ''); }
+  } catch (e) { /* hidden by the browser */ }
+  if (!raw) { try { vendor = String(gl.getParameter(gl.VENDOR) || ''); raw = String(gl.getParameter(gl.RENDERER) || ''); } catch (e) { /* ignore */ } }
+  // (Firefox gives a generalised name: "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0), or similar")
+  raw = raw.replace(/,\s*or similar$/i, '');
+  // "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Laptop GPU (0x00002860) Direct3D11 vs_5_0 ps_5_0, D3D11)": the card, and the API beneath it
+  let name = raw, api = '';
+  const m = /^ANGLE \((.*?),\s*(.*?)(?:,\s*([^,]*))?\)$/.exec(raw);
+  if (m) {
+    name = m[2]; api = (m[3] || '').trim();
+    if (/Metal Renderer:/i.test(name)) { api = 'Metal'; name = name.replace(/^.*Metal Renderer:\s*/i, ''); }
+    if (!api && /Direct3D11/i.test(name)) api = 'D3D11';
+    name = name.replace(/\s*\(0x[0-9a-f]+\)/ig, '').replace(/\s*Direct3D.*$/i, '').replace(/,?\s*Unspecified Version$/i, '').trim();
+  }
+  // (lower case, without the trademark signs: "Intel(R) Iris(R) Xe Graphics" is "intel iris xe graphics")
+  const s = raw.toLowerCase().replace(/\((r|tm)\)/g, '');
+  const software = /swiftshader|llvmpipe|softpipe|software|basic render/.test(s);
+  const apple = /apple/.test(s) || /apple/i.test(vendor);
+  if (apple && !api) api = 'Metal';
+  if (/^d3d11/i.test(api)) api = 'Direct3D 11'; else if (/^d3d9/i.test(api)) api = 'Direct3D 9';
+  const dedicated = /nvidia|geforce|rtx|gtx|quadro|radeon rx|radeon pro|\brx ?\d{3,4}|\barc a\d/.test(s);
+  const integrated = !dedicated && /intel|iris|uhd|hd graphics|radeon graphics|vega \d|mali|adreno|powervr|videocore/.test(s);
+  let tier = 2;
+  if (software) tier = 0;
+  else if (dedicated) tier = 3;
+  else if (apple) tier = IS_MOBILE ? 2 : 3;
+  else if (integrated) tier = /iris xe|arc|780m|760m|680m|890m|880m|adreno\s+(6[4-9]\d|[78]\d\d)|mali-g7[1-9]|immortalis/.test(s) ? 2 : 1;
+  return { vendor, raw, name: name || 'Unknown graphics', api, software, apple, dedicated, integrated, tier };
+}
+// what each tier of hardware can comfortably run
+const DEVICE_PRESETS = [
+  { renderDistance: 4, renderScale: 0.5, shaders: 'off', clouds: 'fast', particles: 'decreased', graphics: 'fast' },
+  { renderDistance: 6, renderScale: 0.75, shaders: 'off', clouds: 'fast', particles: 'decreased', graphics: 'fancy' },
+  { renderDistance: 10, renderScale: 1, shaders: 'waving', clouds: 'fancy', particles: 'all', graphics: 'fancy' },
+  { renderDistance: 16, renderScale: 1, shaders: 'full', clouds: 'fancy', particles: 'all', graphics: 'fancy' },
+];
+function devicePreset(gpu) {
+  const p = Object.assign({}, DEVICE_PRESETS[gpu.tier]);
+  // phones: a shorter view (memory), and only as many pixels as the GPU can fill at a steady frame rate
+  if (IS_MOBILE) { p.renderDistance = Math.min(p.renderDistance, gpu.tier >= 2 ? 8 : 5); if (p.shaders === 'full') p.shaders = 'waving'; }
+  return p;
+}
+
+const NB8 = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+
 class Renderer {
   constructor(game, canvas) {
     this.game = game;
@@ -14,17 +66,25 @@ class Renderer {
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: true, stencil: false, powerPreference: 'high-performance', premultipliedAlpha: false });
     if (!gl) throw new Error('WebGL2 is not available');
     this.gl = gl;
+    this.gpu = detectGPU(gl);
     const s = game.settings;
     this.atlas = new TextureAtlas(gl, { mipmaps: s.mipmaps });
     this.mesher = new Mesher(this.atlas);
     this.mesher.fancy = s.graphics !== 'fast';
     this.mesher.smooth = s.smoothLighting;
+    // meshing on worker threads, where the browser allows
+    this.pool = new MeshPool(this);
     this.progChunk = GLU.program(gl, SHADERS.chunkVS, SHADERS.chunkFS);
     this.progSky = GLU.program(gl, SHADERS.skyVS, SHADERS.skyFS);
     this.progEnt = GLU.program(gl, SHADERS.entVS, SHADERS.entFS);
     this.progStars = GLU.program(gl, SHADERS.starVS, SHADERS.starFS);
     this.progGate = GLU.program(gl, SHADERS.gateVS, SHADERS.gateFS);
+    // shaders: a depth-only pass for the sun's shadow map, and a table of which textures sway
+    this.progShadow = GLU.program(gl, SHADERS.chunkVS, SHADERS.shadowFS);
+    this.flagTex = this.buildLayerFlags();
+    this.shadow = null; this.ensureShadow(1);
     this.ibo = null; this.iboQuads = 0;
+    this.visEpoch = 0;
     this.vaos = new Set();
     this.ensureIndices(65536);
     // full-screen triangle for the sky
@@ -99,6 +159,75 @@ class Renderer {
     const gl = this.gl;
     for (const p of r.passes) if (p) { gl.deleteBuffer(p.vbo); gl.deleteVertexArray(p.vao); this.vaos.delete(p.vao); }
     c.render = null;
+    this.visEpoch++;
+  }
+  // which faces of a 16-block section open onto each other through non-solid blocks: out[off + a] is a
+  // bitmask of the faces reachable from face a (0 down, 1 up, 2 north, 3 south, 4 west, 5 east)
+  sectionVis(c, sy, out, off) {
+    const blocks = c.blocks, OPQ = BT.opaque, base = sy << 12;
+    let solid = 0;
+    for (let i = base, e = base + 4096; i < e; i++) if (OPQ[blocks[i]]) solid++;
+    // too few solid blocks to wall anything off (a full wall takes 256)
+    if (solid < 256) { out.fill(63, off, off + 6); return; }
+    out.fill(0, off, off + 6);
+    if (solid === 4096) return;
+    const seen = this.visSeen || (this.visSeen = new Uint8Array(4096)), stack = this.visStack || (this.visStack = new Int32Array(4096));
+    seen.fill(0);
+    for (let j0 = 0; j0 < 4096; j0++) {
+      const x0 = j0 & 15, z0 = (j0 >> 4) & 15, y0 = j0 >> 8;
+      if (x0 !== 0 && x0 !== 15 && y0 !== 0 && y0 !== 15 && z0 !== 0 && z0 !== 15) continue;
+      if (seen[j0] || OPQ[blocks[base + j0]]) continue;
+      let faces = 0, sp = 0;
+      seen[j0] = 1; stack[sp++] = j0;
+      while (sp) {
+        const j = stack[--sp], x = j & 15, z = (j >> 4) & 15, y = j >> 8;
+        if (y === 0) faces |= 1; else if (y === 15) faces |= 2;
+        if (z === 0) faces |= 4; else if (z === 15) faces |= 8;
+        if (x === 0) faces |= 16; else if (x === 15) faces |= 32;
+        if (x > 0 && !seen[j - 1] && !OPQ[blocks[base + j - 1]]) { seen[j - 1] = 1; stack[sp++] = j - 1; }
+        if (x < 15 && !seen[j + 1] && !OPQ[blocks[base + j + 1]]) { seen[j + 1] = 1; stack[sp++] = j + 1; }
+        if (z > 0 && !seen[j - 16] && !OPQ[blocks[base + j - 16]]) { seen[j - 16] = 1; stack[sp++] = j - 16; }
+        if (z < 15 && !seen[j + 16] && !OPQ[blocks[base + j + 16]]) { seen[j + 16] = 1; stack[sp++] = j + 16; }
+        if (y > 0 && !seen[j - 256] && !OPQ[blocks[base + j - 256]]) { seen[j - 256] = 1; stack[sp++] = j - 256; }
+        if (y < 15 && !seen[j + 256] && !OPQ[blocks[base + j + 256]]) { seen[j + 256] = 1; stack[sp++] = j + 256; }
+      }
+      for (let a = 0; a < 6; a++) if (faces & (1 << a)) out[off + a] |= faces;
+    }
+  }
+  // the sections that could be seen from the camera's: a flood from section to section through open
+  // faces, never doubling back towards the camera (the classic cave culling). Recomputed when the camera
+  // crosses into another section, and now and then while new chunks are being meshed
+  sectionVisibility(world, cam, rd) {
+    const S = CH_SECTIONS, N = 2 * rd + 1, total = N * N * S;
+    const csx = Math.floor(cam.x) >> 4, csz = Math.floor(cam.z) >> 4, csy = Math.floor(cam.y) >> 4;
+    const camKey = csx + ',' + csy + ',' + csz + ',' + rd + ',' + world.dim;
+    this.frameNo = (this.frameNo || 0) + 1;
+    if (this.visSet && this.visSet.length === total && this.visCam === camKey && (this.visDone === this.visEpoch || this.frameNo - this.visFrame < 4)) return this.visSet;
+    this.visCam = camKey; this.visDone = this.visEpoch; this.visFrame = this.frameNo;
+    if (!this.visSet || this.visSet.length !== total) { this.visSet = new Uint8Array(total); this.visQ = new Int32Array(total); this.visDirs = new Uint8Array(total); this.visFrom = new Int8Array(total); }
+    const set = this.visSet, q = this.visQ, dirs = this.visDirs, from = this.visFrom;
+    this.visOX = csx - rd; this.visOZ = csz - rd;
+    // above the sky or under the world: everything in reach
+    if (csy < 0 || csy >= S) { set.fill(1); return set; }
+    set.fill(0);
+    let head = 0, tail = 0;
+    const i0 = (rd * N + rd) * S + csy;
+    set[i0] = 1; dirs[i0] = 0; from[i0] = -1; q[tail++] = i0;
+    while (head < tail) {
+      const i = q[head++], sy = i % S, cell = (i - sy) / S, gx = cell % N, gz = (cell - gx) / N;
+      const c = world.getChunk(this.visOX + gx, this.visOZ + gz), vis = c && c.render ? c.render.vis : null;
+      const f0 = from[i], dm = dirs[i];
+      for (let f = 0; f < 6; f++) {
+        if (dm & (1 << (f ^ 1))) continue;
+        if (f0 >= 0 && vis && !(vis[sy * 6 + f0] & (1 << f))) continue;
+        const d = FACE_DIR[f], nx = gx + d[0], ny = sy + d[1], nz = gz + d[2];
+        if (ny < 0 || ny >= S || nx < 0 || nx >= N || nz < 0 || nz >= N) continue;
+        const j = (nz * N + nx) * S + ny;
+        if (set[j]) continue;
+        set[j] = 1; dirs[j] = dm | (1 << f); from[j] = f ^ 1; q[tail++] = j;
+      }
+    }
+    return set;
   }
   computeTints(world, c) {
     const t = new Uint8Array(256 * 9);
@@ -128,6 +257,7 @@ class Renderer {
     return true;
   }
   updateMeshes(world, budgetMs) {
+    if (this.pool && this.pool.ready) { const n = this.pool.update(world, budgetMs); this.stats.meshed = n; return n; }
     const t0 = performance.now();
     const pcx = Math.floor(this.camX) >> 4, pcz = Math.floor(this.camZ) >> 4;
     const rd = this.game.settings.renderDistance;
@@ -149,14 +279,33 @@ class Renderer {
     this.stats.meshed = n;
     return n;
   }
-  meshChunk(world, c) {
+  prepareChunk(world, c) {
     if (!c.tints) this.computeTints(world, c);
-    if (!c.render) c.render = { sect: new Array(CH_SECTIONS).fill(null), passes: [null, null, null], minY: 0, maxY: 0 };
+    if (!c.render) c.render = { sect: new Array(CH_SECTIONS).fill(null), passes: [null, null, null], minY: 0, maxY: 0, vis: new Uint8Array(CH_SECTIONS * 6).fill(63) };
+    if (!c.meshGen) c.meshGen = new Uint32Array(CH_SECTIONS);
+  }
+  // sections built on a worker are in: work out the chunk's extent and upload what changed
+  finishChunk(c) {
+    const r = c.render;
+    if (!r) return;
+    let minY = CH_SECTIONS, maxY = -1;
+    for (let sy = 0; sy < CH_SECTIONS; sy++) if (r.sect[sy]) { if (sy < minY) minY = sy; if (sy > maxY) maxY = sy; }
+    r.minY = minY * 16; r.maxY = (maxY + 1) * 16;
+    r.sunLo = this.sunlitFloor(c);
+    const t = c.touched;
+    if (t) for (let p = 0; p < 3; p++) if (t[p]) { this.uploadPass(c, p); t[p] = false; }
+    this.visEpoch++;
+  }
+  meshChunk(world, c) {
+    this.prepareChunk(world, c);
     const r = c.render;
     const touched = [false, false, false];
+    this.visEpoch++;
     for (let sy = 0; sy < CH_SECTIONS; sy++) {
       if (!c.dirty[sy]) continue;
       c.dirty[sy] = 0;
+      c.meshGen[sy]++;
+      this.sectionVis(c, sy, r.vis, sy * 6);
       const old = r.sect[sy];
       const res = this.mesher.build(world, c, sy);
       r.sect[sy] = res;
@@ -166,6 +315,7 @@ class Renderer {
     let minY = CH_SECTIONS, maxY = -1;
     for (let sy = 0; sy < CH_SECTIONS; sy++) if (r.sect[sy]) { if (sy < minY) minY = sy; if (sy > maxY) maxY = sy; }
     r.minY = minY * 16; r.maxY = (maxY + 1) * 16;
+    r.sunLo = this.sunlitFloor(c);
     for (let p = 0; p < 3; p++) if (touched[p]) this.uploadPass(c, p);
   }
   uploadPass(c, p) {
@@ -176,9 +326,13 @@ class Renderer {
       if (r.passes[p]) { gl.deleteBuffer(r.passes[p].vbo); gl.deleteVertexArray(r.passes[p].vao); this.vaos.delete(r.passes[p].vao); r.passes[p] = null; }
       return;
     }
-    const data = new Uint32Array(total);
+    const data = new Uint32Array(total), sq = new Int32Array(CH_SECTIONS * 2);
     let o = 0;
-    for (let sy = 0; sy < CH_SECTIONS; sy++) { const s = r.sect[sy]; if (s && s[p]) { data.set(s[p], o); o += s[p].length; } }
+    for (let sy = 0; sy < CH_SECTIONS; sy++) {
+      const s = r.sect[sy];
+      sq[sy * 2] = o / 12;
+      if (s && s[p]) { data.set(s[p], o); o += s[p].length; sq[sy * 2 + 1] = s[p].length / 12; }
+    }
     const quads = total / 12;
     this.ensureIndices(quads);
     let ps = r.passes[p];
@@ -195,10 +349,11 @@ class Renderer {
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, ps.vbo);
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-    ps.quads = quads;
+    ps.quads = quads; ps.sq = sq;
   }
   setMeshOptions(fancy, smooth) {
     this.mesher.fancy = fancy; this.mesher.smooth = smooth;
+    if (this.pool) this.pool.setOptions(fancy, smooth);
     const w = this.game.world;
     if (w) for (const c of w.chunks.values()) c.markAllDirty();
   }
@@ -485,6 +640,25 @@ class Renderer {
     if (hooks && hooks.dark > 0 && inFluid !== 'lava') { const k = hooks.dark; fogStart *= 1 - k; fogEnd = fogEnd * (1 - k) + 13 * k; fogColor = [fogColor[0] * (1 - k), fogColor[1] * (1 - k), fogColor[2] * (1 - k)]; }
     if (this.rain > 0) { fogStart *= 1 - this.rain * 0.3; }
     this.fogStart = fogStart; this.fogEnd = fogEnd; this.curFog = fogColor;
+    // shaders: wind in the leaves; in full, the sun's shadows and the sky mirrored in water
+    const sm = settings.shaders || 'off';
+    const wave = sm !== 'off' ? 0.7 + this.rain * 1.3 : 0, time = ((world.time + partial) / 20) % 3600;
+    let shadowK = 0, lightDir = this.sunDir, sunK = 0;
+    if (sm === 'full' && !world.dim && !world.menu) {
+      const up = this.sunDir[1];
+      if (up > 0) { shadowK = 0.42 * clamp((up - 0.06) / 0.22, 0, 1); sunK = clamp(up * 4, 0, 1); }
+      else { lightDir = [-this.sunDir[0], -this.sunDir[1], -this.sunDir[2]]; shadowK = 0.2 * clamp((-up - 0.06) / 0.22, 0, 1); sunK = 0.25 * clamp(-up * 4, 0, 1); }
+      shadowK *= 1 - this.rain; sunK *= 1 - this.rain;
+    }
+    let sh = this.shadow;
+    if (shadowK > 0.001) {
+      // a big card gets a big, far-reaching shadow map; a phone a small one
+      const big = this.gpu.tier >= 3 && !IS_MOBILE;
+      sh = this.ensureShadow(IS_MOBILE ? 1024 : big ? 4096 : 2048);
+      this.shadowR = IS_MOBILE ? 40 : big ? 96 : 64;
+      if (sh.ok) { this.shadowMatrix(cam, lightDir, this.shadowR, 128, sh.size, sh.vp); this.drawShadowMap(world, cam, sh, wave, time); }
+      else shadowK = 0;
+    }
     gl.clearColor(fogColor[0], fogColor[1], fogColor[2], 1);
     gl.depthMask(true);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -539,10 +713,27 @@ class Renderer {
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.lightmap);
     gl.uniform1i(pc.u.uTex, 0); gl.uniform1i(pc.u.uLightmap, 1);
     gl.uniform1f(pc.u.uAlpha, 1);
+    const shaderUniforms = () => {
+      gl.uniform1f(pc.u.uWave, wave); gl.uniform1f(pc.u.uTime, time); gl.uniform3f(pc.u.uCamW, cam.x, cam.y, cam.z);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.flagTex);
+      gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, sh.tex);
+      gl.uniform1i(pc.u.uFlags, 2); gl.uniform1i(pc.u.uShadowMap, 3);
+      gl.uniform1f(pc.u.uShadowOn, shadowK > 0.001 ? 1 : 0); gl.uniform1f(pc.u.uShadowK, shadowK > 0.001 ? shadowK : 0);
+      gl.uniformMatrix4fv(pc.u.uShadowVP, false, sh.vp);
+      gl.uniform3fv(pc.u.uLightDir, lightDir); gl.uniform1f(pc.u.uShadowTexel, 1 / sh.size);
+      gl.uniform1f(pc.u.uFancyWater, sm === 'full' ? 1 : 0); gl.uniform1f(pc.u.uSunK, sunK);
+      const sk = this.skyColor, fc = fogColor;
+      gl.uniform3f(pc.u.uSkyRefl, (sk[0] + fc[0]) * 0.5, (sk[1] + fc[1]) * 0.5, (sk[2] + fc[2]) * 0.5);
+    };
+    shaderUniforms();
     const vis = [];
     const rdc = settings.renderDistance;
     const pcx = Math.floor(cam.x) >> 4, pcz = Math.floor(cam.z) >> 4;
     let quads = 0;
+    // only the sections that could be seen from here (caves stay hidden from the surface, and the
+    // surface from the caves), and only those in view
+    const seeable = this.sectionVisibility(world, cam, rdc), SN = 2 * rdc + 1;
+    let sections = 0;
     for (const c of world.chunks.values()) {
       const r = c.render;
       if (!r || r.maxY <= r.minY) continue;
@@ -550,18 +741,40 @@ class Renderer {
       if (dx * dx + dz * dz > (rdc + 0.5) * (rdc + 0.5)) continue;
       const ox = c.cx * 16 - cam.x, oz = c.cz * 16 - cam.z;
       if (!this.frustum.testBox(ox, r.minY - cam.y, oz, ox + 16, r.maxY - cam.y, oz + 16)) continue;
-      vis.push([c, dx * dx + dz * dz, ox, oz]);
+      const gx = c.cx - this.visOX, gz = c.cz - this.visOZ;
+      let mask = 0;
+      if (this.noCull) mask = 0xffff;
+      else if (gx >= 0 && gx < SN && gz >= 0 && gz < SN) {
+        const base = (gz * SN + gx) * CH_SECTIONS;
+        for (let sy = r.minY >> 4, e = r.maxY >> 4; sy < e; sy++) {
+          if (!seeable[base + sy]) continue;
+          const y0 = sy * 16 - cam.y;
+          if (this.frustum.testBox(ox, y0, oz, ox + 16, y0 + 16, oz + 16)) { mask |= 1 << sy; sections++; }
+        }
+      } else mask = 0xffff;
+      if (!mask) continue;
+      vis.push([c, dx * dx + dz * dz, ox, oz, mask]);
     }
+    this.stats.sections = sections;
     vis.sort((a, b) => a[1] - b[1]);
     this.stats.chunks = world.chunks.size; this.stats.drawn = vis.length;
     const drawPass = (p, list) => {
-      for (const [c, , ox, oz] of list) {
+      for (const [c, , ox, oz, mask] of list) {
         const ps = c.render.passes[p];
         if (!ps) continue;
         gl.uniform3f(pc.u.uOrigin, ox, -cam.y, oz);
         gl.bindVertexArray(ps.vao);
-        gl.drawElements(gl.TRIANGLES, ps.quads * 6, gl.UNSIGNED_INT, 0);
-        quads += ps.quads;
+        const sq = ps.sq;
+        if (!sq || mask === 0xffff) { gl.drawElements(gl.TRIANGLES, ps.quads * 6, gl.UNSIGNED_INT, 0); quads += ps.quads; continue; }
+        // runs of neighbouring visible sections go in one draw
+        let start = -1, count = 0;
+        for (let sy = 0; sy < CH_SECTIONS; sy++) {
+          const n = sq[sy * 2 + 1];
+          if (!n) continue;
+          if (mask & (1 << sy)) { if (start < 0) { start = sq[sy * 2]; count = 0; } count += n; }
+          else if (start >= 0) { gl.drawElements(gl.TRIANGLES, count * 6, gl.UNSIGNED_INT, start * 24); quads += count; start = -1; }
+        }
+        if (start >= 0) { gl.drawElements(gl.TRIANGLES, count * 6, gl.UNSIGNED_INT, start * 24); quads += count; }
       }
     };
     gl.uniform1f(pc.u.uAlphaTest, -1);
@@ -572,7 +785,9 @@ class Renderer {
     this.drawGates(vis, cam, world, partial, fogColor, fogStart, fogEnd);
 
     // ---- entities, particles, block overlays ----
+    this.entShadowK = shadowK > 0.001 ? shadowK : 0;
     if (hooks && hooks.drawWorldObjects) hooks.drawWorldObjects(this, partial);
+    this.entShadowK = 0;
 
     // ---- clouds ----
     if (settings.clouds !== 'off' && !world.menuNoClouds && !world.dim) this.drawClouds(world, cam, partial, fogColor);
@@ -585,6 +800,7 @@ class Renderer {
     gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(false);
     gl.uniform1f(pc.u.uAlphaTest, 0.01);
+    shaderUniforms();
     const back = vis.slice().reverse();
     drawPass(2, back);
     gl.bindVertexArray(null);
@@ -594,6 +810,115 @@ class Renderer {
 
     if (hooks && hooks.drawWeather) hooks.drawWeather(this, partial);
     if (hooks && hooks.drawHand) hooks.drawHand(this, partial);
+  }
+
+  // ------------------------------------------------------------ shaders
+  // which textures sway in the wind: 1 leaves and wall vines, 2 plants (their tops), 3 hanging vines
+  // (their tips), 4 water (its surface ripples)
+  buildLayerFlags() {
+    const gl = this.gl, data = new Uint8Array(1024);
+    const PLANTS = new Set(['tall_grass', 'fern', 'dead_bush', 'cattail', 'dune_grass', 'moonpetal', 'drift_grass', 'bramble', 'bramble_ripe']);
+    const HANGING = new Set(['glow_vine', 'glow_vine_berries', 'starvine', 'starvine_fruit']);
+    this.atlas.names.forEach((n, i) => {
+      if (i >= 1024) return;
+      if (/leaves/.test(n) || n === 'vine') data[i] = 1;
+      else if (/^(sapling_|flower_|wheat_|carrots_|potatoes_|bloodcap_|stem_)/.test(n) || PLANTS.has(n)) data[i] = 2;
+      else if (HANGING.has(n)) data[i] = 3;
+      else if (n === 'water_still' || n === 'water_flow') data[i] = 4;
+    });
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1024, 1, 0, gl.RED, gl.UNSIGNED_BYTE, data);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return t;
+  }
+  // the shadow map: a depth texture the terrain shader compares against (a tiny one while shadows are off)
+  ensureShadow(size) {
+    if (this.shadow && this.shadow.size === size) return this.shadow;
+    const gl = this.gl;
+    if (this.shadow) { gl.deleteTexture(this.shadow.tex); gl.deleteFramebuffer(this.shadow.fbo); }
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT24, size, size);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
+    const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, tex, 0);
+    gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE);
+    const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.shadow = { tex, fbo, size, ok, vp: new Float32Array(16) };
+    return this.shadow;
+  }
+  // the lowest point open to the sky in a chunk: anything well below it (and below its neighbours'
+  // lowest, so that cliff faces still count) is sealed in rock and casts no shadow on the open air
+  sunlitFloor(c) {
+    const hm = c.heightmap;
+    if (!hm) return 0;
+    let lo = CH_H;
+    for (let i = 0; i < 256; i++) if (hm[i] < lo) lo = hm[i];
+    return lo;
+  }
+  // the light's view of the world around the camera (camera-relative coordinates), snapped to whole
+  // shadow texels so that shadow edges hold still as you move
+  shadowMatrix(cam, L, R, D, size, out) {
+    let ax = [-L[1], L[0], 0];
+    const al = Math.hypot(ax[0], ax[1]) || 1; ax = [ax[0] / al, ax[1] / al, 0];
+    const ay = [L[1] * ax[2] - L[2] * ax[1], L[2] * ax[0] - L[0] * ax[2], L[0] * ax[1] - L[1] * ax[0]];
+    const texel = 2 * R / size;
+    const px = cam.x * ax[0] + cam.y * ax[1] + cam.z * ax[2], py = cam.x * ay[0] + cam.y * ay[1] + cam.z * ay[2];
+    const fx = px - Math.floor(px / texel) * texel, fy = py - Math.floor(py / texel) * texel;
+    out[0] = ax[0] / R; out[1] = ay[0] / R; out[2] = -L[0] / D; out[3] = 0;
+    out[4] = ax[1] / R; out[5] = ay[1] / R; out[6] = -L[1] / D; out[7] = 0;
+    out[8] = ax[2] / R; out[9] = ay[2] / R; out[10] = -L[2] / D; out[11] = 0;
+    out[12] = fx / R; out[13] = fy / R; out[14] = 0; out[15] = 1;
+    return out;
+  }
+  // terrain near the camera, drawn from the sun into the shadow map
+  drawShadowMap(world, cam, sh, wave, time) {
+    const gl = this.gl, ps = this.progShadow;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, sh.fbo);
+    gl.viewport(0, 0, sh.size, sh.size);
+    gl.depthMask(true);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
+    gl.disable(gl.CULL_FACE); gl.disable(gl.BLEND);
+    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1.2, 2.0);
+    gl.useProgram(ps.p);
+    gl.uniformMatrix4fv(ps.u.uVP, false, sh.vp);
+    gl.uniform1f(ps.u.uWave, wave); gl.uniform1f(ps.u.uTime, time); gl.uniform3f(ps.u.uCamW, cam.x, cam.y, cam.z);
+    gl.uniform1f(ps.u.uShadowOn, 0);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.atlas.tex);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.flagTex);
+    gl.uniform1i(ps.u.uTex, 0); gl.uniform1i(ps.u.uFlags, 2);
+    const pcx = Math.floor(cam.x) >> 4, pcz = Math.floor(cam.z) >> 4, rc = Math.ceil(this.shadowR / 16) + 1;
+    for (const p of [0, 1]) {
+      gl.uniform1f(ps.u.uAlphaTest, p === 1 ? 0.5 : -1);
+      for (const c of world.chunks.values()) {
+        const r = c.render;
+        if (!r || r.maxY <= r.minY || !r.passes[p]) continue;
+        const dx = c.cx - pcx, dz = c.cz - pcz;
+        if (dx * dx + dz * dz > rc * rc) continue;
+        gl.uniform3f(ps.u.uOrigin, c.cx * 16 - cam.x, -cam.y, c.cz * 16 - cam.z);
+        let lo = r.sunLo || 0;
+        for (let k = 0; k < 8 && lo > 0; k++) { const n = world.getChunk(c.cx + NB8[k][0], c.cz + NB8[k][1]); lo = n && n.render ? Math.min(lo, n.render.sunLo || 0) : 0; }
+        const pass = r.passes[p], sq = pass.sq, s0 = Math.max(0, (lo >> 4) - 1);
+        gl.bindVertexArray(pass.vao);
+        if (!sq || s0 <= 0) gl.drawElements(gl.TRIANGLES, pass.quads * 6, gl.UNSIGNED_INT, 0);
+        else { const start = sq[s0 * 2], n = pass.quads - start; if (n > 0) gl.drawElements(gl.TRIANGLES, n * 6, gl.UNSIGNED_INT, start * 24); }
+      }
+    }
+    gl.bindVertexArray(null);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    gl.enable(gl.CULL_FACE);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.width, this.height);
   }
 
   // Begin a batch draw with the entity program
@@ -612,6 +937,12 @@ class Renderer {
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.skinTex);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.lightmap);
     gl.uniform1i(pe.u.uTex, 0); gl.uniform1i(pe.u.uSkin, 1); gl.uniform1i(pe.u.uLightmap, 2);
+    // the sun's shadows, while the world's creatures and objects are drawn (never the hand or the GUI)
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.shadow.tex);
+    gl.uniform1i(pe.u.uShadowMap, 3);
+    const k = this.entShadowK || 0;
+    gl.uniform1f(pe.u.uShadowK, k);
+    if (k > 0) { gl.uniformMatrix4fv(pe.u.uShadowVP, false, this.shadow.vp); gl.uniform1f(pe.u.uShadowTexel, 1 / this.shadow.size); }
     return pe;
   }
 

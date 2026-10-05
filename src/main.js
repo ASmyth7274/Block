@@ -43,6 +43,13 @@ class Game {
       this.fatal('Blocklands needs WebGL 2, which this browser or device does not support.', String(e && e.message || e));
       return;
     }
+    // fit the settings to this device's graphics: the first time we see it, and again whenever the
+    // browser has since moved to a stronger or weaker chip (a laptop switched over to its dedicated card)
+    const gpu = this.renderer.gpu, st = this.settings;
+    if (st.tunedFor === undefined || (st.tunedTier !== undefined && st.tunedTier !== gpu.tier)) {
+      this.applyDevicePreset(true);
+      this.tuneNote = { text: 'Video settings tuned for ' + gpu.name, until: performance.now() + 9000 };
+    }
     this.gui = new GuiRenderer(this, this.guiCanvas);
     this.entityRenderer = new EntityRenderer(this, this.renderer);
     this.particles = new Particles(this);
@@ -102,17 +109,36 @@ class Game {
     const cw = Math.max(1, window.innerWidth), ch = Math.max(1, window.innerHeight);
     const pw = Math.round(cw * dpr), ph = Math.round(ch * dpr);
     let rs = this.settings.renderScale || 1;
-    const maxPx = IS_MOBILE ? 1.8e6 : 5e6;
+    // as many pixels as the graphics chip can fill: up to 4K on a dedicated card, near-native on a recent phone
+    const tier = this.renderer.gpu.tier;
+    const maxPx = IS_MOBILE ? (tier >= 2 ? 2.6e6 : 1.6e6) : [1.2e6, 2.5e6, 5e6, 9e6][tier];
     if (pw * ph * rs * rs > maxPx) rs = Math.sqrt(maxPx / (pw * ph));
     this.renderer.resize(Math.max(1, Math.round(pw * rs)), Math.max(1, Math.round(ph * rs)));
     this.gui.resize(pw, ph);
     if (this.screen) this.screen.layout();
   }
   saveSettings() { Settings.save(this.settings); if (this.audio) this.audio.setVolumes(this.settings); }
+  // settings to suit the graphics chip: in full when asked; on their own (a new device, or a change of
+  // chip), only raising what a strong machine can take and reining in what a weak one cannot
+  applyDevicePreset(gentle) {
+    const gpu = this.renderer.gpu, p = devicePreset(gpu), s = this.settings;
+    if (!gentle) Object.assign(s, p);
+    else if (gpu.tier >= 2) {
+      const LV = { off: 0, waving: 1, full: 2 };
+      s.renderDistance = Math.max(s.renderDistance, p.renderDistance);
+      s.renderScale = Math.max(s.renderScale || 1, p.renderScale);
+      if ((LV[s.shaders] || 0) < LV[p.shaders]) s.shaders = p.shaders;
+    } else Object.assign(s, p, { renderDistance: Math.min(s.renderDistance, p.renderDistance) });
+    s.tunedFor = gpu.raw || gpu.name; s.tunedTier = gpu.tier;
+    Settings.save(s);
+    if (this.gui) { this.resize(); this.applyVideo(); }
+  }
   applyVideo() {
     const r = this.renderer;
+    if (!r) return;
     r.mesher.fancy = this.settings.graphics !== 'fast';
     r.mesher.smooth = this.settings.smoothLighting;
+    if (r.pool) r.pool.setOptions(r.mesher.fancy, r.mesher.smooth);
     if (this.world) for (const c of this.world.chunks.values()) c.markAllDirty();
   }
   updateTouch() { this.touch.update(); }
@@ -272,7 +298,7 @@ class Game {
     for (let dz = -R; dz <= R; dz++) for (let dx = -R; dx <= R; dx++) {
       need++;
       const c = w.getChunk(pcx + dx, pcz + dz);
-      if (c) { have++; if (!c.anyDirty || Math.abs(dx) === R || Math.abs(dz) === R) meshed++; }
+      if (c) { have++; if ((!c.anyDirty && !c.meshPending) || Math.abs(dx) === R || Math.abs(dz) === R) meshed++; }
     }
     L.screen.progress = (have + meshed) / (need * 2);
     L.screen.sub = have < need ? 'Building terrain' : 'Preparing spawn area';

@@ -50,6 +50,32 @@ holding food or a bow). Tap a hotbar slot to select it, hold it to drop the
 item, and use the `…` button for the inventory. Menus work by tapping; in
 inventories, a short tap picks up a stack and a long press picks up half.
 
+### Graphics and performance
+
+The game draws with WebGL 2, which runs on your graphics chip: Metal on iPhone,
+iPad and Mac, Direct3D on Windows. The first time it starts on a device it
+looks at which chip it has been given and tunes itself to it — a dedicated card
+such as an NVIDIA RTX gets a long view and the full shaders, a phone a
+shorter view that keeps the frame rate up. *Options › Video Settings* shows the
+chip in use (so does the F3 screen) and has an **Optimise for This Device**
+button to apply the tuning again.
+
+- **Laptops with two graphics chips:** browsers usually start on the built-in
+  one. If Video Settings shows Intel or AMD Radeon graphics rather than your
+  NVIDIA card, open *Windows Settings › System › Display › Graphics*, add your
+  browser, choose *High performance*, and restart the browser (or pick the
+  browser under *NVIDIA Control Panel › Manage 3D settings › Program settings*
+  and choose the high-performance NVIDIA processor).
+- **If the title screen says graphics acceleration is off,** turn on *Use
+  graphics acceleration when available* (Chrome, Edge) or *Use hardware
+  acceleration* (Firefox) in the browser's settings.
+- **Shaders** (Video Settings): *Waving* sways leaves, plants and water; *Full*
+  adds the sun's shadows, the sky mirrored in water and a glint of the sun.
+
+Terrain is meshed on worker threads, and only the parts of the world that can
+actually be seen from where you stand (not the caves under your feet, nor the
+surface from deep underground) are drawn.
+
 ## Saving, export and import
 
 Worlds save automatically in the browser (IndexedDB) every 30 seconds and when

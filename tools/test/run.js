@@ -9,6 +9,9 @@ const fs = require('fs');
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--allow-file-access-from-files', '--autoplay-policy=no-user-gesture-required'] });
   const mobile = process.env.MOBILE === '1';
   const context = await browser.newContext(mobile ? { viewport: { width: +w, height: +h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: +w, height: +h } });
+  // tests keep the stock settings: the headless browser draws in software, which would otherwise
+  // tune every test down to the lowest preset (TUNE=1 to see that happen)
+  if (process.env.TUNE !== '1') await context.addInitScript(() => { try { if (!localStorage.getItem('blocklands.settings')) localStorage.setItem('blocklands.settings', JSON.stringify({ tunedFor: 'headless test' })); } catch (e) { /* no storage */ } });
   const page = await context.newPage();
   const cdp = await context.newCDPSession(page);
   const errors = [];
@@ -21,7 +24,7 @@ const fs = require('fs');
     page,
     log: (...a) => console.log('[' + ((Date.now() - t0) / 1000).toFixed(1) + 's]', ...a),
     wait: (ms) => page.waitForTimeout(ms),
-    shot: async (name) => { const p = path.join(outDir, name + '.png'); await page.screenshot({ path: p }); console.log('[shot]', p); },
+    shot: async (name) => { const p = path.join(outDir, name + '.png'); await page.screenshot({ path: p, timeout: 120000 }); console.log('[shot]', p); },
     eval: (fn, arg) => page.evaluate(fn, arg),
     touch: async (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map(([x, y], i) => ({ x, y, id: i })) }),
     until: async (fn, timeout = 60000, step = 250) => { const end = Date.now() + timeout; while (Date.now() < end) { if (await page.evaluate(fn)) return true; await page.waitForTimeout(step); } return false; },

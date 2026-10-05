@@ -9557,33 +9557,104 @@ precision highp float; precision highp int;
 layout(location=0) in uvec3 a;
 uniform mat4 uVP;
 uniform vec3 uOrigin;
+// shaders: wind for waving leaves, plants and water; a shadow map's projection
+uniform float uWave; uniform float uTime; uniform vec3 uCamW;
+uniform highp sampler2D uFlags;
+uniform mat4 uShadowVP; uniform float uShadowOn;
 out vec3 vUV; out vec4 vCol; out vec2 vLight; out float vDist;
+out vec3 vPos; out vec3 vSP; flat out int vFlag;
 void main() {
   vec3 p = (vec3(float(a.x & 511u), float((a.x >> 18) & 16383u), float((a.x >> 9) & 511u)) - 32.0) * 0.0625 + uOrigin;
   // shade codes 252-254 mark decals (wire on the ground): nudged toward the camera so they never z-fight
   uint shb = (a.z >> 24) & 255u;
   float sh = float(shb) / 255.0;
   if (shb >= 252u && shb <= 254u) { p *= 0.9985; sh = shb == 254u ? 1.0 : (shb == 253u ? 0.8 : 0.6); }
-  gl_Position = uVP * vec4(p, 1.0);
   vUV = vec3(float(a.y & 31u) * 0.0625, float((a.y >> 5) & 31u) * 0.0625, float((a.y >> 10) & 1023u));
+  int fl = 0;
+  if (uWave > 0.0) {
+    // 1 leaves and wall vines sway all over; 2 plants sway at the top; 3 hanging vines at the bottom; 4 water ripples
+    fl = int(texelFetch(uFlags, ivec2(int(vUV.z), 0), 0).r * 255.0 + 0.5);
+    if (fl != 0) {
+      vec3 w = p + uCamW;
+      float t = uTime, k = uWave;
+      if (fl == 1) {
+        p.x += (sin(t * 1.9 + w.x * 0.7 + w.y * 0.45) * 0.6 + sin(t * 3.3 + w.z * 0.9 + w.y) * 0.4) * 0.03 * k;
+        p.z += (cos(t * 1.6 + w.z * 0.6 + w.y * 0.35) * 0.6 + cos(t * 2.9 + w.x * 0.8) * 0.4) * 0.03 * k;
+        p.y += sin(t * 2.3 + w.x * 0.5 + w.z * 0.5) * 0.012 * k;
+      } else if ((fl == 2 && vUV.y < 0.5) || (fl == 3 && vUV.y > 0.5)) {
+        p.x += (sin(t * 2.1 + w.x * 0.8 + w.z * 0.6) * 0.7 + sin(t * 3.7 + w.z * 1.1) * 0.3) * 0.075 * k;
+        p.z += (cos(t * 1.7 + w.z * 0.7 + w.x * 0.4) * 0.7 + cos(t * 3.1 + w.x) * 0.3) * 0.075 * k;
+      } else if (fl == 4) {
+        float fy = fract(w.y);
+        if (fy > 0.02 && fy < 0.98) p.y += (sin(t * 1.4 + w.x * 1.1 + w.z * 0.6) * 0.6 + sin(t * 2.2 - w.x * 0.5 + w.z * 1.3) * 0.4) * 0.03 * (0.6 + 0.4 * k) - 0.035;
+      }
+    }
+  }
+  vFlag = fl;
+  gl_Position = uVP * vec4(p, 1.0);
+  vPos = p;
+  vSP = uShadowOn > 0.0 ? (uShadowVP * vec4(p, 1.0)).xyz * 0.5 + 0.5 : vec3(0.0);
   vLight = vec2(float((a.y >> 20) & 63u), float((a.y >> 26) & 63u)) / 60.0;
   vCol = vec4(vec3(float(a.z & 255u), float((a.z >> 8) & 255u), float((a.z >> 16) & 255u)) / 255.0, sh);
   vDist = length(p.xz);
 }`,
   chunkFS: `#version 300 es
-precision highp float; precision highp sampler2DArray;
-uniform sampler2DArray uTex; uniform sampler2D uLightmap;
+precision highp float; precision highp sampler2DArray; precision highp sampler2DShadow;
+uniform sampler2DArray uTex; uniform sampler2D uLightmap; uniform sampler2DShadow uShadowMap;
 uniform vec3 uFogColor; uniform vec2 uFog; uniform float uAlphaTest; uniform float uAlpha;
-in vec3 vUV; in vec4 vCol; in vec2 vLight; in float vDist;
+// shaders: how dark the shade is, where the light comes from, the sky to mirror in water
+uniform float uShadowK; uniform vec3 uLightDir; uniform float uShadowTexel; uniform vec3 uSkyRefl; uniform float uSunK; uniform float uFancyWater;
+in vec3 vUV; in vec4 vCol; in vec2 vLight; in float vDist; in vec3 vPos; in vec3 vSP; flat in int vFlag;
 out vec4 o;
+// how much of the sun (or moon) reaches this spot: 0 in shade, 1 in full light
+float sunlit(vec3 n) {
+  float ndl = vFlag >= 1 && vFlag <= 3 ? 1.0 : dot(n, uLightDir);
+  if (ndl <= 0.02) return 0.0;
+  vec3 sp = vSP;
+  if (sp.x <= 0.0 || sp.x >= 1.0 || sp.y <= 0.0 || sp.y >= 1.0 || sp.z >= 1.0) return 1.0;
+  float bias = (vFlag >= 1 && vFlag <= 3 ? 0.0012 : 0.0004) + 0.0016 * (1.0 - ndl);
+  float z = sp.z - bias, d = uShadowTexel * 0.5;
+  float s = texture(uShadowMap, vec3(sp.xy + vec2(-d, -d), z)) + texture(uShadowMap, vec3(sp.xy + vec2(d, -d), z))
+          + texture(uShadowMap, vec3(sp.xy + vec2(-d, d), z)) + texture(uShadowMap, vec3(sp.xy + vec2(d, d), z));
+  vec2 e = abs(sp.xy - 0.5) * 2.0;
+  return mix(s * 0.25, 1.0, smoothstep(0.75, 1.0, max(e.x, e.y)));
+}
 void main() {
   vec4 t = texture(uTex, vUV);
   if (t.a < uAlphaTest) discard;
   vec3 lm = texture(uLightmap, vec2(vLight.y * 0.9375 + 0.03125, vLight.x * 0.9375 + 0.03125)).rgb;
   vec3 c = t.rgb * vCol.rgb * vCol.a * lm;
+  float alpha = (uAlphaTest > 0.0 && uAlpha >= 1.0) ? 1.0 : t.a * uAlpha;
+  bool water = uFancyWater > 0.0 && vFlag == 4;
+  if (uShadowK > 0.0 || water) {
+    vec3 n = normalize(cross(dFdx(vPos), dFdy(vPos)));
+    if (dot(n, vPos) > 0.0) n = -n;
+    if (uShadowK > 0.0) {
+      // only daylight is shaded: a torch-lit wall stays bright in the shade
+      float day = clamp((vLight.x - vLight.y) * 1.25, 0.0, 1.0);
+      c *= 1.0 - uShadowK * day * (1.0 - sunlit(n));
+    }
+    if (water) {
+      // the sky mirrored in the water at a glancing angle, and a glint of the sun
+      vec3 v = normalize(vPos);
+      float fr = pow(1.0 - clamp(dot(n, -v), 0.0, 1.0), 4.0) * vLight.x;
+      c = mix(c, uSkyRefl, fr * 0.6);
+      alpha = mix(alpha, 1.0, fr * 0.45);
+      float sp = pow(max(dot(reflect(v, n), uLightDir), 0.0), 120.0) * uSunK * vLight.x;
+      c += vec3(1.0, 0.94, 0.78) * sp;
+      alpha = max(alpha, min(1.0, sp));
+    }
+  }
   float fog = clamp((vDist - uFog.x) / (uFog.y - uFog.x), 0.0, 1.0);
-  o = vec4(mix(c, uFogColor, fog), (uAlphaTest > 0.0 && uAlpha >= 1.0) ? 1.0 : t.a * uAlpha);
+  o = vec4(mix(c, uFogColor, fog), alpha);
 }`,
+  // the shadow map: depth only, cut-outs (leaves) cut out
+  shadowFS: `#version 300 es
+precision highp float; precision highp sampler2DArray;
+uniform sampler2DArray uTex; uniform float uAlphaTest;
+in vec3 vUV;
+out vec4 o;
+void main() { if (uAlphaTest > 0.0 && texture(uTex, vUV).a < uAlphaTest) discard; o = vec4(1.0); }`,
   // full screen sky
   skyVS: `#version 300 es
 layout(location=0) in vec2 aPos;
@@ -9761,14 +9832,15 @@ void main() { o = vec4(vCol * uTint, 1.0); }`,
   entVS: `#version 300 es
 precision highp float;
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aUV; layout(location=2) in vec4 aCol; layout(location=3) in vec2 aLight;
-uniform mat4 uVP;
-out vec3 vUV; out vec4 vCol; out vec2 vLight; out float vDist;
-void main() { gl_Position = uVP * vec4(aPos, 1.0); vUV = aUV; vCol = aCol; vLight = aLight; vDist = length(aPos.xz); }`,
+uniform mat4 uVP; uniform mat4 uShadowVP;
+out vec3 vUV; out vec4 vCol; out vec2 vLight; out float vDist; out vec3 vSP;
+void main() { gl_Position = uVP * vec4(aPos, 1.0); vUV = aUV; vCol = aCol; vLight = aLight; vDist = length(aPos.xz); vSP = (uShadowVP * vec4(aPos, 1.0)).xyz * 0.5 + 0.5; }`,
   entFS: `#version 300 es
-precision highp float; precision highp sampler2DArray;
-uniform sampler2DArray uTex; uniform sampler2D uSkin; uniform sampler2D uLightmap;
+precision highp float; precision highp sampler2DArray; precision highp sampler2DShadow;
+uniform sampler2DArray uTex; uniform sampler2D uSkin; uniform sampler2D uLightmap; uniform sampler2DShadow uShadowMap;
 uniform int uMode; uniform vec3 uFogColor; uniform vec2 uFog; uniform float uAlphaTest; uniform vec4 uOverlay; uniform vec4 uTint;
-in vec3 vUV; in vec4 vCol; in vec2 vLight; in float vDist;
+uniform float uShadowK; uniform float uShadowTexel;
+in vec3 vUV; in vec4 vCol; in vec2 vLight; in float vDist; in vec3 vSP;
 out vec4 o;
 void main() {
   vec4 t;
@@ -9779,6 +9851,15 @@ void main() {
   vec3 lm = vLight.x < 0.0 ? vec3(1.0) : texture(uLightmap, vec2(vLight.y * 0.9375 + 0.03125, vLight.x * 0.9375 + 0.03125)).rgb;
   vec3 c = t.rgb * vCol.rgb * lm * uTint.rgb;
   if (uMode == 1 && vUV.z > 0.0) c = mix(c, vec3(1.0), vUV.z);
+  // shaders: creatures and things standing in the shade of the terrain are shaded too
+  if (uShadowK > 0.0 && vLight.x >= 0.0 && vSP.x > 0.0 && vSP.x < 1.0 && vSP.y > 0.0 && vSP.y < 1.0 && vSP.z < 1.0) {
+    float d = uShadowTexel * 0.5, z = vSP.z - 0.002;
+    float s = (texture(uShadowMap, vec3(vSP.xy + vec2(-d, -d), z)) + texture(uShadowMap, vec3(vSP.xy + vec2(d, -d), z))
+             + texture(uShadowMap, vec3(vSP.xy + vec2(-d, d), z)) + texture(uShadowMap, vec3(vSP.xy + vec2(d, d), z))) * 0.25;
+    vec2 e = abs(vSP.xy - 0.5) * 2.0;
+    s = mix(s, 1.0, smoothstep(0.75, 1.0, max(e.x, e.y)));
+    c *= 1.0 - uShadowK * clamp((vLight.x - vLight.y) * 1.25, 0.0, 1.0) * (1.0 - s);
+  }
   c = mix(c, uOverlay.rgb, uOverlay.a);
   float fog = clamp((vDist - uFog.x) / (uFog.y - uFog.x), 0.0, 1.0);
   o = vec4(mix(c, uFogColor, fog), t.a * vCol.a * uTint.a);
@@ -9998,15 +10079,22 @@ class Mesher {
 
   // Build all three passes for section sy of chunk c. Returns null if empty.
   build(world, c, sy) {
-    // quick empty check
-    const base = sy << 12;
-    const cb = c.blocks;
-    let any = false;
-    for (let i = base, e = base + 4096; i < e; i++) if (cb[i] !== 0) { any = true; break; }
     for (const o of this.out) o.reset();
     this.gates = null;
-    if (!any) return null;
+    if (!this.hasBlocks(c, sy)) return null;
     this.fill(world, c, sy);
+    return this.buildFilled(c, sy);
+  }
+  hasBlocks(c, sy) {
+    const cb = c.blocks;
+    for (let i = sy << 12, e = i + 4096; i < e; i++) if (cb[i] !== 0) return true;
+    return false;
+  }
+  // the meshing proper, from a section already copied into ids/metas/lts (on a worker thread, c is
+  // just { cx, cz, tints })
+  buildFilled(c, sy) {
+    for (const o of this.out) o.reset();
+    this.gates = null;
     this.c = c; this.sy = sy;
     const ids = this.ids, metas = this.metas;
     const R = BT.render;
@@ -10651,6 +10739,58 @@ for (let i = 0; i < 16; i++) { const f = 1 - i / 15; BRIGHTNESS[i] = (1 - f) / (
 // the Underworld never goes fully black: a dull glow hangs in the air
 const BRIGHTNESS_UNDER = BRIGHTNESS.map((v) => v * 0.87 + 0.13);
 
+// which graphics chip the browser has given us, and roughly how much it can take:
+// tier 0 software (no acceleration at all!), 1 modest, 2 good (most integrated chips, phones),
+// 3 strong (dedicated cards, Apple silicon Macs)
+function detectGPU(gl) {
+  let vendor = '', raw = '';
+  try {
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    if (ext) { vendor = String(gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) || ''); raw = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || ''); }
+  } catch (e) { /* hidden by the browser */ }
+  if (!raw) { try { vendor = String(gl.getParameter(gl.VENDOR) || ''); raw = String(gl.getParameter(gl.RENDERER) || ''); } catch (e) { /* ignore */ } }
+  // (Firefox gives a generalised name: "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0), or similar")
+  raw = raw.replace(/,\s*or similar$/i, '');
+  // "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Laptop GPU (0x00002860) Direct3D11 vs_5_0 ps_5_0, D3D11)": the card, and the API beneath it
+  let name = raw, api = '';
+  const m = /^ANGLE \((.*?),\s*(.*?)(?:,\s*([^,]*))?\)$/.exec(raw);
+  if (m) {
+    name = m[2]; api = (m[3] || '').trim();
+    if (/Metal Renderer:/i.test(name)) { api = 'Metal'; name = name.replace(/^.*Metal Renderer:\s*/i, ''); }
+    if (!api && /Direct3D11/i.test(name)) api = 'D3D11';
+    name = name.replace(/\s*\(0x[0-9a-f]+\)/ig, '').replace(/\s*Direct3D.*$/i, '').replace(/,?\s*Unspecified Version$/i, '').trim();
+  }
+  // (lower case, without the trademark signs: "Intel(R) Iris(R) Xe Graphics" is "intel iris xe graphics")
+  const s = raw.toLowerCase().replace(/\((r|tm)\)/g, '');
+  const software = /swiftshader|llvmpipe|softpipe|software|basic render/.test(s);
+  const apple = /apple/.test(s) || /apple/i.test(vendor);
+  if (apple && !api) api = 'Metal';
+  if (/^d3d11/i.test(api)) api = 'Direct3D 11'; else if (/^d3d9/i.test(api)) api = 'Direct3D 9';
+  const dedicated = /nvidia|geforce|rtx|gtx|quadro|radeon rx|radeon pro|\brx ?\d{3,4}|\barc a\d/.test(s);
+  const integrated = !dedicated && /intel|iris|uhd|hd graphics|radeon graphics|vega \d|mali|adreno|powervr|videocore/.test(s);
+  let tier = 2;
+  if (software) tier = 0;
+  else if (dedicated) tier = 3;
+  else if (apple) tier = IS_MOBILE ? 2 : 3;
+  else if (integrated) tier = /iris xe|arc|780m|760m|680m|890m|880m|adreno\s+(6[4-9]\d|[78]\d\d)|mali-g7[1-9]|immortalis/.test(s) ? 2 : 1;
+  return { vendor, raw, name: name || 'Unknown graphics', api, software, apple, dedicated, integrated, tier };
+}
+// what each tier of hardware can comfortably run
+const DEVICE_PRESETS = [
+  { renderDistance: 4, renderScale: 0.5, shaders: 'off', clouds: 'fast', particles: 'decreased', graphics: 'fast' },
+  { renderDistance: 6, renderScale: 0.75, shaders: 'off', clouds: 'fast', particles: 'decreased', graphics: 'fancy' },
+  { renderDistance: 10, renderScale: 1, shaders: 'waving', clouds: 'fancy', particles: 'all', graphics: 'fancy' },
+  { renderDistance: 16, renderScale: 1, shaders: 'full', clouds: 'fancy', particles: 'all', graphics: 'fancy' },
+];
+function devicePreset(gpu) {
+  const p = Object.assign({}, DEVICE_PRESETS[gpu.tier]);
+  // phones: a shorter view (memory), and only as many pixels as the GPU can fill at a steady frame rate
+  if (IS_MOBILE) { p.renderDistance = Math.min(p.renderDistance, gpu.tier >= 2 ? 8 : 5); if (p.shaders === 'full') p.shaders = 'waving'; }
+  return p;
+}
+
+const NB8 = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+
 class Renderer {
   constructor(game, canvas) {
     this.game = game;
@@ -10658,17 +10798,25 @@ class Renderer {
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: true, stencil: false, powerPreference: 'high-performance', premultipliedAlpha: false });
     if (!gl) throw new Error('WebGL2 is not available');
     this.gl = gl;
+    this.gpu = detectGPU(gl);
     const s = game.settings;
     this.atlas = new TextureAtlas(gl, { mipmaps: s.mipmaps });
     this.mesher = new Mesher(this.atlas);
     this.mesher.fancy = s.graphics !== 'fast';
     this.mesher.smooth = s.smoothLighting;
+    // meshing on worker threads, where the browser allows
+    this.pool = new MeshPool(this);
     this.progChunk = GLU.program(gl, SHADERS.chunkVS, SHADERS.chunkFS);
     this.progSky = GLU.program(gl, SHADERS.skyVS, SHADERS.skyFS);
     this.progEnt = GLU.program(gl, SHADERS.entVS, SHADERS.entFS);
     this.progStars = GLU.program(gl, SHADERS.starVS, SHADERS.starFS);
     this.progGate = GLU.program(gl, SHADERS.gateVS, SHADERS.gateFS);
+    // shaders: a depth-only pass for the sun's shadow map, and a table of which textures sway
+    this.progShadow = GLU.program(gl, SHADERS.chunkVS, SHADERS.shadowFS);
+    this.flagTex = this.buildLayerFlags();
+    this.shadow = null; this.ensureShadow(1);
     this.ibo = null; this.iboQuads = 0;
+    this.visEpoch = 0;
     this.vaos = new Set();
     this.ensureIndices(65536);
     // full-screen triangle for the sky
@@ -10743,6 +10891,75 @@ class Renderer {
     const gl = this.gl;
     for (const p of r.passes) if (p) { gl.deleteBuffer(p.vbo); gl.deleteVertexArray(p.vao); this.vaos.delete(p.vao); }
     c.render = null;
+    this.visEpoch++;
+  }
+  // which faces of a 16-block section open onto each other through non-solid blocks: out[off + a] is a
+  // bitmask of the faces reachable from face a (0 down, 1 up, 2 north, 3 south, 4 west, 5 east)
+  sectionVis(c, sy, out, off) {
+    const blocks = c.blocks, OPQ = BT.opaque, base = sy << 12;
+    let solid = 0;
+    for (let i = base, e = base + 4096; i < e; i++) if (OPQ[blocks[i]]) solid++;
+    // too few solid blocks to wall anything off (a full wall takes 256)
+    if (solid < 256) { out.fill(63, off, off + 6); return; }
+    out.fill(0, off, off + 6);
+    if (solid === 4096) return;
+    const seen = this.visSeen || (this.visSeen = new Uint8Array(4096)), stack = this.visStack || (this.visStack = new Int32Array(4096));
+    seen.fill(0);
+    for (let j0 = 0; j0 < 4096; j0++) {
+      const x0 = j0 & 15, z0 = (j0 >> 4) & 15, y0 = j0 >> 8;
+      if (x0 !== 0 && x0 !== 15 && y0 !== 0 && y0 !== 15 && z0 !== 0 && z0 !== 15) continue;
+      if (seen[j0] || OPQ[blocks[base + j0]]) continue;
+      let faces = 0, sp = 0;
+      seen[j0] = 1; stack[sp++] = j0;
+      while (sp) {
+        const j = stack[--sp], x = j & 15, z = (j >> 4) & 15, y = j >> 8;
+        if (y === 0) faces |= 1; else if (y === 15) faces |= 2;
+        if (z === 0) faces |= 4; else if (z === 15) faces |= 8;
+        if (x === 0) faces |= 16; else if (x === 15) faces |= 32;
+        if (x > 0 && !seen[j - 1] && !OPQ[blocks[base + j - 1]]) { seen[j - 1] = 1; stack[sp++] = j - 1; }
+        if (x < 15 && !seen[j + 1] && !OPQ[blocks[base + j + 1]]) { seen[j + 1] = 1; stack[sp++] = j + 1; }
+        if (z > 0 && !seen[j - 16] && !OPQ[blocks[base + j - 16]]) { seen[j - 16] = 1; stack[sp++] = j - 16; }
+        if (z < 15 && !seen[j + 16] && !OPQ[blocks[base + j + 16]]) { seen[j + 16] = 1; stack[sp++] = j + 16; }
+        if (y > 0 && !seen[j - 256] && !OPQ[blocks[base + j - 256]]) { seen[j - 256] = 1; stack[sp++] = j - 256; }
+        if (y < 15 && !seen[j + 256] && !OPQ[blocks[base + j + 256]]) { seen[j + 256] = 1; stack[sp++] = j + 256; }
+      }
+      for (let a = 0; a < 6; a++) if (faces & (1 << a)) out[off + a] |= faces;
+    }
+  }
+  // the sections that could be seen from the camera's: a flood from section to section through open
+  // faces, never doubling back towards the camera (the classic cave culling). Recomputed when the camera
+  // crosses into another section, and now and then while new chunks are being meshed
+  sectionVisibility(world, cam, rd) {
+    const S = CH_SECTIONS, N = 2 * rd + 1, total = N * N * S;
+    const csx = Math.floor(cam.x) >> 4, csz = Math.floor(cam.z) >> 4, csy = Math.floor(cam.y) >> 4;
+    const camKey = csx + ',' + csy + ',' + csz + ',' + rd + ',' + world.dim;
+    this.frameNo = (this.frameNo || 0) + 1;
+    if (this.visSet && this.visSet.length === total && this.visCam === camKey && (this.visDone === this.visEpoch || this.frameNo - this.visFrame < 4)) return this.visSet;
+    this.visCam = camKey; this.visDone = this.visEpoch; this.visFrame = this.frameNo;
+    if (!this.visSet || this.visSet.length !== total) { this.visSet = new Uint8Array(total); this.visQ = new Int32Array(total); this.visDirs = new Uint8Array(total); this.visFrom = new Int8Array(total); }
+    const set = this.visSet, q = this.visQ, dirs = this.visDirs, from = this.visFrom;
+    this.visOX = csx - rd; this.visOZ = csz - rd;
+    // above the sky or under the world: everything in reach
+    if (csy < 0 || csy >= S) { set.fill(1); return set; }
+    set.fill(0);
+    let head = 0, tail = 0;
+    const i0 = (rd * N + rd) * S + csy;
+    set[i0] = 1; dirs[i0] = 0; from[i0] = -1; q[tail++] = i0;
+    while (head < tail) {
+      const i = q[head++], sy = i % S, cell = (i - sy) / S, gx = cell % N, gz = (cell - gx) / N;
+      const c = world.getChunk(this.visOX + gx, this.visOZ + gz), vis = c && c.render ? c.render.vis : null;
+      const f0 = from[i], dm = dirs[i];
+      for (let f = 0; f < 6; f++) {
+        if (dm & (1 << (f ^ 1))) continue;
+        if (f0 >= 0 && vis && !(vis[sy * 6 + f0] & (1 << f))) continue;
+        const d = FACE_DIR[f], nx = gx + d[0], ny = sy + d[1], nz = gz + d[2];
+        if (ny < 0 || ny >= S || nx < 0 || nx >= N || nz < 0 || nz >= N) continue;
+        const j = (nz * N + nx) * S + ny;
+        if (set[j]) continue;
+        set[j] = 1; dirs[j] = dm | (1 << f); from[j] = f ^ 1; q[tail++] = j;
+      }
+    }
+    return set;
   }
   computeTints(world, c) {
     const t = new Uint8Array(256 * 9);
@@ -10772,6 +10989,7 @@ class Renderer {
     return true;
   }
   updateMeshes(world, budgetMs) {
+    if (this.pool && this.pool.ready) { const n = this.pool.update(world, budgetMs); this.stats.meshed = n; return n; }
     const t0 = performance.now();
     const pcx = Math.floor(this.camX) >> 4, pcz = Math.floor(this.camZ) >> 4;
     const rd = this.game.settings.renderDistance;
@@ -10793,14 +11011,33 @@ class Renderer {
     this.stats.meshed = n;
     return n;
   }
-  meshChunk(world, c) {
+  prepareChunk(world, c) {
     if (!c.tints) this.computeTints(world, c);
-    if (!c.render) c.render = { sect: new Array(CH_SECTIONS).fill(null), passes: [null, null, null], minY: 0, maxY: 0 };
+    if (!c.render) c.render = { sect: new Array(CH_SECTIONS).fill(null), passes: [null, null, null], minY: 0, maxY: 0, vis: new Uint8Array(CH_SECTIONS * 6).fill(63) };
+    if (!c.meshGen) c.meshGen = new Uint32Array(CH_SECTIONS);
+  }
+  // sections built on a worker are in: work out the chunk's extent and upload what changed
+  finishChunk(c) {
+    const r = c.render;
+    if (!r) return;
+    let minY = CH_SECTIONS, maxY = -1;
+    for (let sy = 0; sy < CH_SECTIONS; sy++) if (r.sect[sy]) { if (sy < minY) minY = sy; if (sy > maxY) maxY = sy; }
+    r.minY = minY * 16; r.maxY = (maxY + 1) * 16;
+    r.sunLo = this.sunlitFloor(c);
+    const t = c.touched;
+    if (t) for (let p = 0; p < 3; p++) if (t[p]) { this.uploadPass(c, p); t[p] = false; }
+    this.visEpoch++;
+  }
+  meshChunk(world, c) {
+    this.prepareChunk(world, c);
     const r = c.render;
     const touched = [false, false, false];
+    this.visEpoch++;
     for (let sy = 0; sy < CH_SECTIONS; sy++) {
       if (!c.dirty[sy]) continue;
       c.dirty[sy] = 0;
+      c.meshGen[sy]++;
+      this.sectionVis(c, sy, r.vis, sy * 6);
       const old = r.sect[sy];
       const res = this.mesher.build(world, c, sy);
       r.sect[sy] = res;
@@ -10810,6 +11047,7 @@ class Renderer {
     let minY = CH_SECTIONS, maxY = -1;
     for (let sy = 0; sy < CH_SECTIONS; sy++) if (r.sect[sy]) { if (sy < minY) minY = sy; if (sy > maxY) maxY = sy; }
     r.minY = minY * 16; r.maxY = (maxY + 1) * 16;
+    r.sunLo = this.sunlitFloor(c);
     for (let p = 0; p < 3; p++) if (touched[p]) this.uploadPass(c, p);
   }
   uploadPass(c, p) {
@@ -10820,9 +11058,13 @@ class Renderer {
       if (r.passes[p]) { gl.deleteBuffer(r.passes[p].vbo); gl.deleteVertexArray(r.passes[p].vao); this.vaos.delete(r.passes[p].vao); r.passes[p] = null; }
       return;
     }
-    const data = new Uint32Array(total);
+    const data = new Uint32Array(total), sq = new Int32Array(CH_SECTIONS * 2);
     let o = 0;
-    for (let sy = 0; sy < CH_SECTIONS; sy++) { const s = r.sect[sy]; if (s && s[p]) { data.set(s[p], o); o += s[p].length; } }
+    for (let sy = 0; sy < CH_SECTIONS; sy++) {
+      const s = r.sect[sy];
+      sq[sy * 2] = o / 12;
+      if (s && s[p]) { data.set(s[p], o); o += s[p].length; sq[sy * 2 + 1] = s[p].length / 12; }
+    }
     const quads = total / 12;
     this.ensureIndices(quads);
     let ps = r.passes[p];
@@ -10839,10 +11081,11 @@ class Renderer {
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, ps.vbo);
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-    ps.quads = quads;
+    ps.quads = quads; ps.sq = sq;
   }
   setMeshOptions(fancy, smooth) {
     this.mesher.fancy = fancy; this.mesher.smooth = smooth;
+    if (this.pool) this.pool.setOptions(fancy, smooth);
     const w = this.game.world;
     if (w) for (const c of w.chunks.values()) c.markAllDirty();
   }
@@ -11129,6 +11372,25 @@ class Renderer {
     if (hooks && hooks.dark > 0 && inFluid !== 'lava') { const k = hooks.dark; fogStart *= 1 - k; fogEnd = fogEnd * (1 - k) + 13 * k; fogColor = [fogColor[0] * (1 - k), fogColor[1] * (1 - k), fogColor[2] * (1 - k)]; }
     if (this.rain > 0) { fogStart *= 1 - this.rain * 0.3; }
     this.fogStart = fogStart; this.fogEnd = fogEnd; this.curFog = fogColor;
+    // shaders: wind in the leaves; in full, the sun's shadows and the sky mirrored in water
+    const sm = settings.shaders || 'off';
+    const wave = sm !== 'off' ? 0.7 + this.rain * 1.3 : 0, time = ((world.time + partial) / 20) % 3600;
+    let shadowK = 0, lightDir = this.sunDir, sunK = 0;
+    if (sm === 'full' && !world.dim && !world.menu) {
+      const up = this.sunDir[1];
+      if (up > 0) { shadowK = 0.42 * clamp((up - 0.06) / 0.22, 0, 1); sunK = clamp(up * 4, 0, 1); }
+      else { lightDir = [-this.sunDir[0], -this.sunDir[1], -this.sunDir[2]]; shadowK = 0.2 * clamp((-up - 0.06) / 0.22, 0, 1); sunK = 0.25 * clamp(-up * 4, 0, 1); }
+      shadowK *= 1 - this.rain; sunK *= 1 - this.rain;
+    }
+    let sh = this.shadow;
+    if (shadowK > 0.001) {
+      // a big card gets a big, far-reaching shadow map; a phone a small one
+      const big = this.gpu.tier >= 3 && !IS_MOBILE;
+      sh = this.ensureShadow(IS_MOBILE ? 1024 : big ? 4096 : 2048);
+      this.shadowR = IS_MOBILE ? 40 : big ? 96 : 64;
+      if (sh.ok) { this.shadowMatrix(cam, lightDir, this.shadowR, 128, sh.size, sh.vp); this.drawShadowMap(world, cam, sh, wave, time); }
+      else shadowK = 0;
+    }
     gl.clearColor(fogColor[0], fogColor[1], fogColor[2], 1);
     gl.depthMask(true);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -11183,10 +11445,27 @@ class Renderer {
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.lightmap);
     gl.uniform1i(pc.u.uTex, 0); gl.uniform1i(pc.u.uLightmap, 1);
     gl.uniform1f(pc.u.uAlpha, 1);
+    const shaderUniforms = () => {
+      gl.uniform1f(pc.u.uWave, wave); gl.uniform1f(pc.u.uTime, time); gl.uniform3f(pc.u.uCamW, cam.x, cam.y, cam.z);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.flagTex);
+      gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, sh.tex);
+      gl.uniform1i(pc.u.uFlags, 2); gl.uniform1i(pc.u.uShadowMap, 3);
+      gl.uniform1f(pc.u.uShadowOn, shadowK > 0.001 ? 1 : 0); gl.uniform1f(pc.u.uShadowK, shadowK > 0.001 ? shadowK : 0);
+      gl.uniformMatrix4fv(pc.u.uShadowVP, false, sh.vp);
+      gl.uniform3fv(pc.u.uLightDir, lightDir); gl.uniform1f(pc.u.uShadowTexel, 1 / sh.size);
+      gl.uniform1f(pc.u.uFancyWater, sm === 'full' ? 1 : 0); gl.uniform1f(pc.u.uSunK, sunK);
+      const sk = this.skyColor, fc = fogColor;
+      gl.uniform3f(pc.u.uSkyRefl, (sk[0] + fc[0]) * 0.5, (sk[1] + fc[1]) * 0.5, (sk[2] + fc[2]) * 0.5);
+    };
+    shaderUniforms();
     const vis = [];
     const rdc = settings.renderDistance;
     const pcx = Math.floor(cam.x) >> 4, pcz = Math.floor(cam.z) >> 4;
     let quads = 0;
+    // only the sections that could be seen from here (caves stay hidden from the surface, and the
+    // surface from the caves), and only those in view
+    const seeable = this.sectionVisibility(world, cam, rdc), SN = 2 * rdc + 1;
+    let sections = 0;
     for (const c of world.chunks.values()) {
       const r = c.render;
       if (!r || r.maxY <= r.minY) continue;
@@ -11194,18 +11473,40 @@ class Renderer {
       if (dx * dx + dz * dz > (rdc + 0.5) * (rdc + 0.5)) continue;
       const ox = c.cx * 16 - cam.x, oz = c.cz * 16 - cam.z;
       if (!this.frustum.testBox(ox, r.minY - cam.y, oz, ox + 16, r.maxY - cam.y, oz + 16)) continue;
-      vis.push([c, dx * dx + dz * dz, ox, oz]);
+      const gx = c.cx - this.visOX, gz = c.cz - this.visOZ;
+      let mask = 0;
+      if (this.noCull) mask = 0xffff;
+      else if (gx >= 0 && gx < SN && gz >= 0 && gz < SN) {
+        const base = (gz * SN + gx) * CH_SECTIONS;
+        for (let sy = r.minY >> 4, e = r.maxY >> 4; sy < e; sy++) {
+          if (!seeable[base + sy]) continue;
+          const y0 = sy * 16 - cam.y;
+          if (this.frustum.testBox(ox, y0, oz, ox + 16, y0 + 16, oz + 16)) { mask |= 1 << sy; sections++; }
+        }
+      } else mask = 0xffff;
+      if (!mask) continue;
+      vis.push([c, dx * dx + dz * dz, ox, oz, mask]);
     }
+    this.stats.sections = sections;
     vis.sort((a, b) => a[1] - b[1]);
     this.stats.chunks = world.chunks.size; this.stats.drawn = vis.length;
     const drawPass = (p, list) => {
-      for (const [c, , ox, oz] of list) {
+      for (const [c, , ox, oz, mask] of list) {
         const ps = c.render.passes[p];
         if (!ps) continue;
         gl.uniform3f(pc.u.uOrigin, ox, -cam.y, oz);
         gl.bindVertexArray(ps.vao);
-        gl.drawElements(gl.TRIANGLES, ps.quads * 6, gl.UNSIGNED_INT, 0);
-        quads += ps.quads;
+        const sq = ps.sq;
+        if (!sq || mask === 0xffff) { gl.drawElements(gl.TRIANGLES, ps.quads * 6, gl.UNSIGNED_INT, 0); quads += ps.quads; continue; }
+        // runs of neighbouring visible sections go in one draw
+        let start = -1, count = 0;
+        for (let sy = 0; sy < CH_SECTIONS; sy++) {
+          const n = sq[sy * 2 + 1];
+          if (!n) continue;
+          if (mask & (1 << sy)) { if (start < 0) { start = sq[sy * 2]; count = 0; } count += n; }
+          else if (start >= 0) { gl.drawElements(gl.TRIANGLES, count * 6, gl.UNSIGNED_INT, start * 24); quads += count; start = -1; }
+        }
+        if (start >= 0) { gl.drawElements(gl.TRIANGLES, count * 6, gl.UNSIGNED_INT, start * 24); quads += count; }
       }
     };
     gl.uniform1f(pc.u.uAlphaTest, -1);
@@ -11216,7 +11517,9 @@ class Renderer {
     this.drawGates(vis, cam, world, partial, fogColor, fogStart, fogEnd);
 
     // ---- entities, particles, block overlays ----
+    this.entShadowK = shadowK > 0.001 ? shadowK : 0;
     if (hooks && hooks.drawWorldObjects) hooks.drawWorldObjects(this, partial);
+    this.entShadowK = 0;
 
     // ---- clouds ----
     if (settings.clouds !== 'off' && !world.menuNoClouds && !world.dim) this.drawClouds(world, cam, partial, fogColor);
@@ -11229,6 +11532,7 @@ class Renderer {
     gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(false);
     gl.uniform1f(pc.u.uAlphaTest, 0.01);
+    shaderUniforms();
     const back = vis.slice().reverse();
     drawPass(2, back);
     gl.bindVertexArray(null);
@@ -11238,6 +11542,115 @@ class Renderer {
 
     if (hooks && hooks.drawWeather) hooks.drawWeather(this, partial);
     if (hooks && hooks.drawHand) hooks.drawHand(this, partial);
+  }
+
+  // ------------------------------------------------------------ shaders
+  // which textures sway in the wind: 1 leaves and wall vines, 2 plants (their tops), 3 hanging vines
+  // (their tips), 4 water (its surface ripples)
+  buildLayerFlags() {
+    const gl = this.gl, data = new Uint8Array(1024);
+    const PLANTS = new Set(['tall_grass', 'fern', 'dead_bush', 'cattail', 'dune_grass', 'moonpetal', 'drift_grass', 'bramble', 'bramble_ripe']);
+    const HANGING = new Set(['glow_vine', 'glow_vine_berries', 'starvine', 'starvine_fruit']);
+    this.atlas.names.forEach((n, i) => {
+      if (i >= 1024) return;
+      if (/leaves/.test(n) || n === 'vine') data[i] = 1;
+      else if (/^(sapling_|flower_|wheat_|carrots_|potatoes_|bloodcap_|stem_)/.test(n) || PLANTS.has(n)) data[i] = 2;
+      else if (HANGING.has(n)) data[i] = 3;
+      else if (n === 'water_still' || n === 'water_flow') data[i] = 4;
+    });
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 1024, 1, 0, gl.RED, gl.UNSIGNED_BYTE, data);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return t;
+  }
+  // the shadow map: a depth texture the terrain shader compares against (a tiny one while shadows are off)
+  ensureShadow(size) {
+    if (this.shadow && this.shadow.size === size) return this.shadow;
+    const gl = this.gl;
+    if (this.shadow) { gl.deleteTexture(this.shadow.tex); gl.deleteFramebuffer(this.shadow.fbo); }
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT24, size, size);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
+    const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, tex, 0);
+    gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE);
+    const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.shadow = { tex, fbo, size, ok, vp: new Float32Array(16) };
+    return this.shadow;
+  }
+  // the lowest point open to the sky in a chunk: anything well below it (and below its neighbours'
+  // lowest, so that cliff faces still count) is sealed in rock and casts no shadow on the open air
+  sunlitFloor(c) {
+    const hm = c.heightmap;
+    if (!hm) return 0;
+    let lo = CH_H;
+    for (let i = 0; i < 256; i++) if (hm[i] < lo) lo = hm[i];
+    return lo;
+  }
+  // the light's view of the world around the camera (camera-relative coordinates), snapped to whole
+  // shadow texels so that shadow edges hold still as you move
+  shadowMatrix(cam, L, R, D, size, out) {
+    let ax = [-L[1], L[0], 0];
+    const al = Math.hypot(ax[0], ax[1]) || 1; ax = [ax[0] / al, ax[1] / al, 0];
+    const ay = [L[1] * ax[2] - L[2] * ax[1], L[2] * ax[0] - L[0] * ax[2], L[0] * ax[1] - L[1] * ax[0]];
+    const texel = 2 * R / size;
+    const px = cam.x * ax[0] + cam.y * ax[1] + cam.z * ax[2], py = cam.x * ay[0] + cam.y * ay[1] + cam.z * ay[2];
+    const fx = px - Math.floor(px / texel) * texel, fy = py - Math.floor(py / texel) * texel;
+    out[0] = ax[0] / R; out[1] = ay[0] / R; out[2] = -L[0] / D; out[3] = 0;
+    out[4] = ax[1] / R; out[5] = ay[1] / R; out[6] = -L[1] / D; out[7] = 0;
+    out[8] = ax[2] / R; out[9] = ay[2] / R; out[10] = -L[2] / D; out[11] = 0;
+    out[12] = fx / R; out[13] = fy / R; out[14] = 0; out[15] = 1;
+    return out;
+  }
+  // terrain near the camera, drawn from the sun into the shadow map
+  drawShadowMap(world, cam, sh, wave, time) {
+    const gl = this.gl, ps = this.progShadow;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, sh.fbo);
+    gl.viewport(0, 0, sh.size, sh.size);
+    gl.depthMask(true);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
+    gl.disable(gl.CULL_FACE); gl.disable(gl.BLEND);
+    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1.2, 2.0);
+    gl.useProgram(ps.p);
+    gl.uniformMatrix4fv(ps.u.uVP, false, sh.vp);
+    gl.uniform1f(ps.u.uWave, wave); gl.uniform1f(ps.u.uTime, time); gl.uniform3f(ps.u.uCamW, cam.x, cam.y, cam.z);
+    gl.uniform1f(ps.u.uShadowOn, 0);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.atlas.tex);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.flagTex);
+    gl.uniform1i(ps.u.uTex, 0); gl.uniform1i(ps.u.uFlags, 2);
+    const pcx = Math.floor(cam.x) >> 4, pcz = Math.floor(cam.z) >> 4, rc = Math.ceil(this.shadowR / 16) + 1;
+    for (const p of [0, 1]) {
+      gl.uniform1f(ps.u.uAlphaTest, p === 1 ? 0.5 : -1);
+      for (const c of world.chunks.values()) {
+        const r = c.render;
+        if (!r || r.maxY <= r.minY || !r.passes[p]) continue;
+        const dx = c.cx - pcx, dz = c.cz - pcz;
+        if (dx * dx + dz * dz > rc * rc) continue;
+        gl.uniform3f(ps.u.uOrigin, c.cx * 16 - cam.x, -cam.y, c.cz * 16 - cam.z);
+        let lo = r.sunLo || 0;
+        for (let k = 0; k < 8 && lo > 0; k++) { const n = world.getChunk(c.cx + NB8[k][0], c.cz + NB8[k][1]); lo = n && n.render ? Math.min(lo, n.render.sunLo || 0) : 0; }
+        const pass = r.passes[p], sq = pass.sq, s0 = Math.max(0, (lo >> 4) - 1);
+        gl.bindVertexArray(pass.vao);
+        if (!sq || s0 <= 0) gl.drawElements(gl.TRIANGLES, pass.quads * 6, gl.UNSIGNED_INT, 0);
+        else { const start = sq[s0 * 2], n = pass.quads - start; if (n > 0) gl.drawElements(gl.TRIANGLES, n * 6, gl.UNSIGNED_INT, start * 24); }
+      }
+    }
+    gl.bindVertexArray(null);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    gl.enable(gl.CULL_FACE);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.width, this.height);
   }
 
   // Begin a batch draw with the entity program
@@ -11256,6 +11669,12 @@ class Renderer {
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.skinTex);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.lightmap);
     gl.uniform1i(pe.u.uTex, 0); gl.uniform1i(pe.u.uSkin, 1); gl.uniform1i(pe.u.uLightmap, 2);
+    // the sun's shadows, while the world's creatures and objects are drawn (never the hand or the GUI)
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.shadow.tex);
+    gl.uniform1i(pe.u.uShadowMap, 3);
+    const k = this.entShadowK || 0;
+    gl.uniform1f(pe.u.uShadowK, k);
+    if (k > 0) { gl.uniformMatrix4fv(pe.u.uShadowVP, false, this.shadow.vp); gl.uniform1f(pe.u.uShadowTexel, 1 / this.shadow.size); }
     return pe;
   }
 
@@ -11469,6 +11888,175 @@ function hsbToRgb(h, s, v) {
   switch (i) {
     case 0: return [v, t, p]; case 1: return [q, v, p]; case 2: return [p, v, t];
     case 3: return [p, q, v]; case 4: return [t, p, v]; default: return [v, p, q];
+  }
+}
+
+// ---- src/render/meshpool.js
+// ---------------------------------------------------------------------------
+// Chunk meshing on worker threads. The main thread copies each dirty section,
+// with a one-block border of its neighbours, and hands it to a worker, which
+// builds the vertex data and hands it back; the main thread only uploads the
+// result. Streaming terrain in then costs the frame almost nothing, and a
+// machine with cores to spare (or a phone) keeps its frame rate while flying.
+// Where workers cannot be had (an old browser, or the separate source files
+// opened straight from disk) meshing carries on, budgeted, on the main thread.
+// ---------------------------------------------------------------------------
+const MESH_WORKER_MAIN = `
+let mesher = null;
+self.onmessage = (e) => {
+  const m = e.data;
+  if (m.type === 'init') {
+    const face = m.face, index = m.index;
+    // the atlas as the mesher sees it: the texture of each block face, textures by name, and the
+    // handful of layers it keeps to hand (the grass side overlay and the like)
+    const atlas = Object.assign({ face: (id, meta, f) => face[((id << 8) | (meta & 255)) * 6 + f], layer: (n) => (index[n] === undefined ? 0 : index[n]) }, m.consts);
+    mesher = new Mesher(atlas);
+    mesher.fancy = m.fancy; mesher.smooth = m.smooth;
+  } else if (m.type === 'opts') {
+    if (mesher) { mesher.fancy = m.fancy; mesher.smooth = m.smooth; }
+  } else if (m.type === 'mesh') {
+    mesher.ids.set(m.ids); mesher.metas.set(m.metas); mesher.lts.set(m.lts);
+    const res = mesher.buildFilled({ cx: m.cx, cz: m.cz, tints: m.tints }, m.sy);
+    const tr = [];
+    for (let p = 0; p < 3; p++) if (res[p]) tr.push(res[p].buffer);
+    self.postMessage({ type: 'done', id: m.id, p0: res[0], p1: res[1], p2: res[2], gates: res.gates || null }, tr);
+  }
+};
+`;
+
+class MeshPool {
+  constructor(renderer) {
+    this.r = renderer;
+    this.workers = []; this.ready = false; this.seq = 0;
+    this.inflight = new Map();     // job id -> { c, sy, gen, w, world }
+    this.uploads = new Set();      // chunks with freshly built sections to upload
+    if (typeof Worker === 'undefined' || typeof Blob === 'undefined') return;
+    MeshPool.source((src) => { if (src) this.start(src); });
+  }
+  // the scripts a mesher needs, read out of this very page
+  static source(cb) {
+    const files = ['src/core/util.js', 'src/core/blocks.js', 'src/render/mesher.js'];
+    // the single-file build: one inline script, each file after a "// ---- path" marker (a file ends
+    // where the next file's marker begins, not at a comment of its own that happens to look similar)
+    for (const s of document.scripts) {
+      const t = s.textContent;
+      if (!t || t.indexOf('// ---- src/render/mesher.js') < 0) continue;
+      const part = (f) => {
+        const a = t.indexOf('\n// ---- ' + f + '\n');
+        if (a < 0) return null;
+        const next = /\n\/\/ ---- [\w./-]+\.js\n/g;
+        next.lastIndex = a + 1;
+        const b = next.exec(t);
+        return t.slice(a, b ? b.index : t.length);
+      };
+      const parts = files.map(part);
+      cb(parts.every(Boolean) ? parts.join('\n') : null);
+      return;
+    }
+    // the separate files (served over http, or a browser that lets a page read its own folder)
+    const parts = []; let left = files.length, failed = false;
+    const settle = () => { if (--left === 0) cb(failed ? null : parts.join('\n')); };
+    files.forEach((f, i) => {
+      try {
+        const x = new XMLHttpRequest();
+        x.onload = () => { if ((x.status === 200 || x.status === 0) && x.responseText) parts[i] = x.responseText.replace(/^'use strict';\s*/, ''); else failed = true; settle(); };
+        x.onerror = () => { failed = true; settle(); };
+        x.open('GET', f); x.send();
+      } catch (e) { failed = true; settle(); }
+    });
+  }
+  start(src) {
+    const r = this.r, atlas = r.atlas;
+    // leave a core for the game itself and some for world generation
+    const n = Math.max(1, Math.min(IS_MOBILE ? 2 : 4, (navigator.hardwareConcurrency || 4) - 2));
+    let url = null;
+    try { url = URL.createObjectURL(new Blob(["'use strict';\n" + src + '\n' + MESH_WORKER_MAIN], { type: 'application/javascript' })); } catch (e) { return; }
+    const index = {}, consts = {};
+    for (const k in atlas.index) index[k] = atlas.index[k];
+    for (const k of Object.keys(atlas)) if (/^L_/.test(k) && typeof atlas[k] === 'number') consts[k] = atlas[k];
+    for (let i = 0; i < n; i++) {
+      try {
+        const w = new Worker(url);
+        w.load = 0;
+        w.onmessage = (e) => this.done(w, e.data);
+        w.onerror = (e) => { console.warn('mesh worker failed, meshing on the main thread instead:', e.message || e); this.fail(); };
+        w.postMessage({ type: 'init', face: atlas.faceTex, index, consts, fancy: r.mesher.fancy, smooth: r.mesher.smooth });
+        this.workers.push(w);
+      } catch (e) { break; }
+    }
+    this.ready = this.workers.length > 0;
+  }
+  // a worker broke: everything goes back to the main thread, and nothing in flight is lost
+  fail() {
+    for (const w of this.workers) w.terminate();
+    this.workers = []; this.ready = false;
+    for (const j of this.inflight.values()) { j.c.dirty[j.sy] = 1; j.c.anyDirty = true; j.c.meshPending = 0; }
+    this.inflight.clear();
+  }
+  setOptions(fancy, smooth) { for (const w of this.workers) w.postMessage({ type: 'opts', fancy, smooth }); }
+  // once a frame: put finished sections in place, then hand out more work
+  update(world, budgetMs) {
+    const r = this.r, t0 = performance.now();
+    for (const c of this.uploads) r.finishChunk(c);
+    this.uploads.clear();
+    const cap = this.workers.length * (IS_MOBILE ? 3 : 4);
+    if (this.inflight.size >= cap) return 0;
+    const pcx = Math.floor(r.camX) >> 4, pcz = Math.floor(r.camZ) >> 4, rd = r.game.settings.renderDistance;
+    const list = [];
+    for (const c of world.chunks.values()) {
+      if (!c.anyDirty) continue;
+      const dx = c.cx - pcx, dz = c.cz - pcz;
+      if (Math.abs(dx) > rd || Math.abs(dz) > rd) continue;
+      if (!r.neighborsLoaded(world, c)) continue;
+      list.push([c, dx * dx + dz * dz]);
+    }
+    list.sort((a, b) => a[1] - b[1]);
+    let sent = 0;
+    for (const [c] of list) {
+      r.prepareChunk(world, c);
+      for (let sy = 0; sy < CH_SECTIONS; sy++) {
+        if (!c.dirty[sy]) continue;
+        if (this.inflight.size >= cap || (sent > 0 && performance.now() - t0 > budgetMs)) return sent;
+        c.dirty[sy] = 0;
+        const gen = ++c.meshGen[sy];
+        r.sectionVis(c, sy, c.render.vis, sy * 6);
+        r.visEpoch++;
+        // an empty section needs no worker
+        if (!r.mesher.hasBlocks(c, sy)) { this.apply(c, sy, null); continue; }
+        r.mesher.fill(world, c, sy);
+        let w = this.workers[0];
+        for (const o of this.workers) if (o.load < w.load) w = o;
+        const id = ++this.seq;
+        w.load++; c.meshPending = (c.meshPending || 0) + 1;
+        this.inflight.set(id, { c, sy, gen, w, world });
+        const ids = r.mesher.ids.slice(), metas = r.mesher.metas.slice(), lts = r.mesher.lts.slice();
+        w.postMessage({ type: 'mesh', id, cx: c.cx, cz: c.cz, sy, ids, metas, lts, tints: c.tints }, [ids.buffer, metas.buffer, lts.buffer]);
+        sent++;
+      }
+      c.anyDirty = false;
+    }
+    return sent;
+  }
+  done(w, m) {
+    if (m.type !== 'done') return;
+    w.load = Math.max(0, w.load - 1);
+    const j = this.inflight.get(m.id);
+    if (!j) return;
+    this.inflight.delete(m.id);
+    const c = j.c;
+    c.meshPending = Math.max(0, (c.meshPending || 1) - 1);
+    // stale: the chunk has gone, or the section has changed again since
+    if (!c.render || j.world.getChunk(c.cx, c.cz) !== c || c.meshGen[j.sy] !== j.gen) return;
+    let res = null;
+    if (m.p0 || m.p1 || m.p2) { res = [m.p0, m.p1, m.p2]; if (m.gates) res.gates = m.gates; }
+    this.apply(c, j.sy, res);
+  }
+  apply(c, sy, res) {
+    const r = c.render, old = r.sect[sy];
+    r.sect[sy] = res;
+    if (!c.touched) c.touched = [false, false, false];
+    for (let p = 0; p < 3; p++) if ((old && old[p]) || (res && res[p])) c.touched[p] = true;
+    this.uploads.add(c);
   }
 }
 
@@ -12113,6 +12701,7 @@ const DEFAULT_SETTINGS = {
   graphics: 'fancy',
   smoothLighting: true,
   clouds: 'fancy',
+  shaders: 'off',
   particles: 'all',
   viewBobbing: true,
   guiScale: 0,
@@ -20212,6 +20801,8 @@ function cachedFaces(b) { let f = _faceCache.get(b); if (!f) { f = boxFaces(b); 
 // ---------------------------------------------------------------------------
 // Entity rendering, held items, first-person hand, block outline & cracks
 // ---------------------------------------------------------------------------
+// the two triangles of a quad, by corner
+const QUAD_TRIS = [0, 1, 2, 0, 2, 3];
 class EntityRenderer {
   constructor(game, renderer) {
     this.game = game;
@@ -20227,6 +20818,9 @@ class EntityRenderer {
     this.glintBatch = new DynBatch(gl, [[3, 'f'], [3, 'f'], [4, 'ub'], [2, 'f']], 16384);
     this.extrudeCache = new Map();
     this.tmp = [0, 0, 0];
+    // scratch space for drawing model faces
+    this.mNrm = [0, 0, 0]; this.mCol = [0, 0, 0, 0];
+    this.mVerts = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]; this.mUVs = [[0, 0], [0, 0], [0, 0], [0, 0]];
     this.handProj = Mat4.create();
     this.deferred = [];
     this.glows = [];
@@ -20249,8 +20843,7 @@ class EntityRenderer {
     b.n++;
   }
   quadOut(b, p, uv, layer, col, sky, blk) {
-    const idx = [0, 1, 2, 0, 2, 3];
-    for (const k of idx) this.vtx(b, p[k][0], p[k][1], p[k][2], uv[k][0], uv[k][1], layer, col, sky, blk);
+    for (let i = 0; i < 6; i++) { const k = QUAD_TRIS[i]; this.vtx(b, p[k][0], p[k][1], p[k][2], uv[k][0], uv[k][1], layer, col, sky, blk); }
   }
   shadeFor(n) {
     // simple directional lighting (normals already in world space)
@@ -20263,7 +20856,7 @@ class EntityRenderer {
     opts = opts || {};
     const slot = Skins.slots[skin] || Skins.slots.wanderer;
     const b = this.skinBatch;
-    const p = this.tmp, nrm = [0, 0, 0];
+    const p = this.tmp, nrm = this.mNrm, verts = this.mVerts, uvs = this.mUVs, c = this.mCol;
     for (const name in model) {
       const part = model[name];
       if (!part) continue;
@@ -20293,10 +20886,15 @@ class EntityRenderer {
         for (const f of (opts.inflate ? boxFaces(box) : cachedFaces(box))) {
           M3.applyDir(m, f.n[0], f.n[1], f.n[2], nrm);
           const nl = Math.hypot(nrm[0], nrm[1], nrm[2]) || 1;
-          const sh = this.shadeFor([nrm[0] / nl, nrm[1] / nl, nrm[2] / nl]);
-          const c = [pc[0] * sh, pc[1] * sh, pc[2] * sh, pc[3]];
-          const verts = f.verts.map((v) => M3.apply(m, v[0], v[1], v[2], [0, 0, 0]));
-          const uvs = f.uv.map((uv) => [slot.u + uv[0] * slot.du, slot.v + uv[1] * slot.dv]);
+          nrm[0] /= nl; nrm[1] /= nl; nrm[2] /= nl;
+          const sh = this.shadeFor(nrm);
+          c[0] = pc[0] * sh; c[1] = pc[1] * sh; c[2] = pc[2] * sh; c[3] = pc[3];
+          // into scratch arrays: no garbage per face, so no collector pauses with a crowd on screen
+          for (let k = 0; k < 4; k++) {
+            const v = f.verts[k], uv = f.uv[k];
+            M3.apply(m, v[0], v[1], v[2], verts[k]);
+            uvs[k][0] = slot.u + uv[0] * slot.du; uvs[k][1] = slot.v + uv[1] * slot.dv;
+          }
           this.quadOut(b, verts, uvs, opts.flash > 0 ? opts.flash : -1, c, sky, blk);
         }
       }
@@ -20399,13 +20997,17 @@ class EntityRenderer {
     const layer = atlas.layer(sn);
     let tint = icons.spriteTint(stack.id, stack.dmg) || [255, 255, 255];
     if (stack.id === ITEM_IDS.spawn_egg) tint = hexToRgb(ITEMS[stack.id].tintFn(stack.dmg)[0]);
-    const quads = flat ? this.extruded(sn).slice(0, 2) : this.extruded(sn);
-    for (const q of quads) {
-      const nn = M3.applyDir(m, q.n[0], q.n[1], q.n[2], [0, 0, 0]);
+    const quads = this.extruded(sn), nq = flat ? Math.min(2, quads.length) : quads.length;
+    const nn = this.mNrm, pv = this.mVerts, c = this.mCol;
+    for (let i = 0; i < nq; i++) {
+      const q = quads[i];
+      M3.applyDir(m, q.n[0], q.n[1], q.n[2], nn);
       const nl = Math.hypot(nn[0], nn[1], nn[2]) || 1;
-      const sh = this.shadeFor([nn[0] / nl, nn[1] / nl, nn[2] / nl]);
-      const c = [tint[0] * sh, tint[1] * sh, tint[2] * sh, al];
-      this.quadOut(b, q.v.map((v) => M3.apply(m, v[0], v[1], v[2], [0, 0, 0])), q.uv, layer, c, sky, blk);
+      nn[0] /= nl; nn[1] /= nl; nn[2] /= nl;
+      const sh = this.shadeFor(nn);
+      c[0] = tint[0] * sh; c[1] = tint[1] * sh; c[2] = tint[2] * sh; c[3] = al;
+      for (let k = 0; k < 4; k++) M3.apply(m, q.v[k][0], q.v[k][1], q.v[k][2], pv[k]);
+      this.quadOut(b, pv, q.uv, layer, c, sky, blk);
     }
   }
 
@@ -23089,7 +23691,7 @@ class Hud {
     const l = w.getLightRaw(bx, Math.floor(p.y + 0.5), bz);
     const left = [
       'Blocklands ' + GAME_VERSION + ' (' + this.fps + ' fps, ' + r.stats.meshed + ' chunk updates)',
-      'C: ' + r.stats.drawn + '/' + r.stats.chunks + ' chunks, ' + Math.round(r.stats.quads / 1000) + 'k quads',
+      'C: ' + r.stats.drawn + '/' + r.stats.chunks + ' chunks, ' + (r.stats.sections || 0) + ' sections, ' + Math.round(r.stats.quads / 1000) + 'k quads',
       'E: ' + w.entities.length + ', P: ' + g.particles.list.length,
       '',
       'XYZ: ' + p.x.toFixed(3) + ' / ' + p.y.toFixed(5) + ' / ' + p.z.toFixed(3),
@@ -23106,7 +23708,7 @@ class Hud {
     let y = 2;
     for (const s of left) { if (s) { ctx.fillStyle = 'rgba(80,80,80,0.56)'; ctx.fillRect(1, y - 1, gui.textWidth(s) + 2, 9); gui.text(s, 2, y, '#e0e0e0', false); } y += 9; }
     const mem = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) + 'MB' : '';
-    const right = ['JS: ' + (navigator.userAgent.match(/(Chrome|Firefox|Safari)\/[\d.]+/) || ['Browser'])[0], mem ? 'Mem: ' + mem : '', 'Display: ' + r.width + 'x' + r.height, 'GUI scale: ' + gui.scale, 'Render distance: ' + g.settings.renderDistance];
+    const right = ['JS: ' + (navigator.userAgent.match(/(Chrome|Firefox|Safari)\/[\d.]+/) || ['Browser'])[0], mem ? 'Mem: ' + mem : '', 'Display: ' + r.width + 'x' + r.height, 'GPU: ' + r.gpu.name + (r.gpu.api ? ' (' + r.gpu.api + ')' : ''), 'GUI scale: ' + gui.scale, 'Render distance: ' + g.settings.renderDistance, 'Shaders: ' + (g.settings.shaders || 'off')];
     y = 2;
     for (const s of right) { if (s) { const tw = gui.textWidth(s); ctx.fillStyle = 'rgba(80,80,80,0.56)'; ctx.fillRect(gui.w - tw - 3, y - 1, tw + 2, 9); gui.text(s, gui.w - tw - 2, y, '#e0e0e0', false); } y += 9; }
     void partial;
@@ -23350,6 +23952,10 @@ class TitleScreen extends Screen {
     for (const w of this.widgets) w.draw(gui, mx, my);
     gui.text('Blocklands ' + GAME_VERSION, 2, H - 10, '#ffffff');
     gui.textRight('A fan tribute. Not affiliated with Mojang.', W - 2, H - 10, '#ffffff');
+    // no graphics acceleration: say so plainly, it is the difference between smooth and unplayable
+    if (this.game.renderer.gpu.software) gui.textCentered('Graphics acceleration is off, so the game will be slow - see Options > Video Settings.', W / 2, 4, '#ff6060');
+    // the settings have just been fitted to this device's graphics chip
+    else if (this.game.tuneNote && performance.now() < this.game.tuneNote.until) gui.textCentered(this.game.tuneNote.text, W / 2, 4, '#a0a0a0');
   }
   keyDown(e) { if (e.key === 'Escape') return; super.keyDown(e); }
 }
@@ -23649,7 +24255,24 @@ class VideoScreen extends Screen {
     r = row();
     this.add(new Slider(L, r, 150, (v) => 'Render Scale: ' + Math.round((0.5 + v * 0.5) * 100) + '%', (s.renderScale - 0.5) / 0.5, (v) => { s.renderScale = 0.5 + v * 0.5; g.saveSettings(); g.resize(); }, 10));
     this.add(new Button(Rx, r, 150, 20, () => 'Show FPS: ' + (s.showFps ? 'ON' : 'OFF'), () => { s.showFps = !s.showFps; g.saveSettings(); }));
+    r = row();
+    // shaders: waving leaves, plants and water; full adds the sun's shadows and the sky mirrored in water
+    this.add(new Button(L, r, 150, 20, () => 'Shaders: ' + ({ off: 'OFF', waving: 'Waving', full: 'Full' }[s.shaders] || 'OFF'), () => { s.shaders = { off: 'waving', waving: 'full', full: 'off' }[s.shaders] || 'waving'; g.saveSettings(); }));
+    this.add(new Button(Rx, r, 150, 20, 'Optimise for This Device', () => { g.applyDevicePreset(false); this.layout(); g.hud.message('Video settings tuned for ' + g.renderer.gpu.name); }));
+    this.infoY = r + 26;
     this.add(new Button(cx - 100, this.H - 27, 200, 20, 'Done', () => this.close()));
+  }
+  draw(gui, mx, my) {
+    super.draw(gui, mx, my);
+    // which graphics chip is drawing the game, and what to do if it is the wrong one
+    const gpu = this.game.renderer.gpu, cx = this.W / 2;
+    let y = this.infoY;
+    if (y + 9 > this.H - 30) return;
+    gui.textCentered('Graphics: ' + gpu.name + (gpu.api ? ' (' + gpu.api + ')' : ''), cx, y, '#a0a0a0');
+    y += 10;
+    const tip = gpu.software ? ['No graphics acceleration! Turn on hardware acceleration', 'in your browser settings, then restart it.']
+      : (gpu.integrated && !IS_MOBILE) ? ['Using built-in graphics. If this computer has an NVIDIA or AMD card,', 'set your browser to High performance in Windows Settings > Display > Graphics.'] : null;
+    if (tip) for (const t of tip) { if (y + 9 > this.H - 30) break; gui.textCentered(t, cx, y, gpu.software ? '#ff6060' : '#ffff60'); y += 10; }
   }
 }
 class SoundScreen extends Screen {
@@ -30847,6 +31470,13 @@ class Game {
       this.fatal('Blocklands needs WebGL 2, which this browser or device does not support.', String(e && e.message || e));
       return;
     }
+    // fit the settings to this device's graphics: the first time we see it, and again whenever the
+    // browser has since moved to a stronger or weaker chip (a laptop switched over to its dedicated card)
+    const gpu = this.renderer.gpu, st = this.settings;
+    if (st.tunedFor === undefined || (st.tunedTier !== undefined && st.tunedTier !== gpu.tier)) {
+      this.applyDevicePreset(true);
+      this.tuneNote = { text: 'Video settings tuned for ' + gpu.name, until: performance.now() + 9000 };
+    }
     this.gui = new GuiRenderer(this, this.guiCanvas);
     this.entityRenderer = new EntityRenderer(this, this.renderer);
     this.particles = new Particles(this);
@@ -30906,17 +31536,36 @@ class Game {
     const cw = Math.max(1, window.innerWidth), ch = Math.max(1, window.innerHeight);
     const pw = Math.round(cw * dpr), ph = Math.round(ch * dpr);
     let rs = this.settings.renderScale || 1;
-    const maxPx = IS_MOBILE ? 1.8e6 : 5e6;
+    // as many pixels as the graphics chip can fill: up to 4K on a dedicated card, near-native on a recent phone
+    const tier = this.renderer.gpu.tier;
+    const maxPx = IS_MOBILE ? (tier >= 2 ? 2.6e6 : 1.6e6) : [1.2e6, 2.5e6, 5e6, 9e6][tier];
     if (pw * ph * rs * rs > maxPx) rs = Math.sqrt(maxPx / (pw * ph));
     this.renderer.resize(Math.max(1, Math.round(pw * rs)), Math.max(1, Math.round(ph * rs)));
     this.gui.resize(pw, ph);
     if (this.screen) this.screen.layout();
   }
   saveSettings() { Settings.save(this.settings); if (this.audio) this.audio.setVolumes(this.settings); }
+  // settings to suit the graphics chip: in full when asked; on their own (a new device, or a change of
+  // chip), only raising what a strong machine can take and reining in what a weak one cannot
+  applyDevicePreset(gentle) {
+    const gpu = this.renderer.gpu, p = devicePreset(gpu), s = this.settings;
+    if (!gentle) Object.assign(s, p);
+    else if (gpu.tier >= 2) {
+      const LV = { off: 0, waving: 1, full: 2 };
+      s.renderDistance = Math.max(s.renderDistance, p.renderDistance);
+      s.renderScale = Math.max(s.renderScale || 1, p.renderScale);
+      if ((LV[s.shaders] || 0) < LV[p.shaders]) s.shaders = p.shaders;
+    } else Object.assign(s, p, { renderDistance: Math.min(s.renderDistance, p.renderDistance) });
+    s.tunedFor = gpu.raw || gpu.name; s.tunedTier = gpu.tier;
+    Settings.save(s);
+    if (this.gui) { this.resize(); this.applyVideo(); }
+  }
   applyVideo() {
     const r = this.renderer;
+    if (!r) return;
     r.mesher.fancy = this.settings.graphics !== 'fast';
     r.mesher.smooth = this.settings.smoothLighting;
+    if (r.pool) r.pool.setOptions(r.mesher.fancy, r.mesher.smooth);
     if (this.world) for (const c of this.world.chunks.values()) c.markAllDirty();
   }
   updateTouch() { this.touch.update(); }
@@ -31076,7 +31725,7 @@ class Game {
     for (let dz = -R; dz <= R; dz++) for (let dx = -R; dx <= R; dx++) {
       need++;
       const c = w.getChunk(pcx + dx, pcz + dz);
-      if (c) { have++; if (!c.anyDirty || Math.abs(dx) === R || Math.abs(dz) === R) meshed++; }
+      if (c) { have++; if ((!c.anyDirty && !c.meshPending) || Math.abs(dx) === R || Math.abs(dz) === R) meshed++; }
     }
     L.screen.progress = (have + meshed) / (need * 2);
     L.screen.sub = have < need ? 'Building terrain' : 'Preparing spawn area';

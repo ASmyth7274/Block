@@ -2,6 +2,8 @@
 // ---------------------------------------------------------------------------
 // Entity rendering, held items, first-person hand, block outline & cracks
 // ---------------------------------------------------------------------------
+// the two triangles of a quad, by corner
+const QUAD_TRIS = [0, 1, 2, 0, 2, 3];
 class EntityRenderer {
   constructor(game, renderer) {
     this.game = game;
@@ -17,6 +19,9 @@ class EntityRenderer {
     this.glintBatch = new DynBatch(gl, [[3, 'f'], [3, 'f'], [4, 'ub'], [2, 'f']], 16384);
     this.extrudeCache = new Map();
     this.tmp = [0, 0, 0];
+    // scratch space for drawing model faces
+    this.mNrm = [0, 0, 0]; this.mCol = [0, 0, 0, 0];
+    this.mVerts = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]]; this.mUVs = [[0, 0], [0, 0], [0, 0], [0, 0]];
     this.handProj = Mat4.create();
     this.deferred = [];
     this.glows = [];
@@ -39,8 +44,7 @@ class EntityRenderer {
     b.n++;
   }
   quadOut(b, p, uv, layer, col, sky, blk) {
-    const idx = [0, 1, 2, 0, 2, 3];
-    for (const k of idx) this.vtx(b, p[k][0], p[k][1], p[k][2], uv[k][0], uv[k][1], layer, col, sky, blk);
+    for (let i = 0; i < 6; i++) { const k = QUAD_TRIS[i]; this.vtx(b, p[k][0], p[k][1], p[k][2], uv[k][0], uv[k][1], layer, col, sky, blk); }
   }
   shadeFor(n) {
     // simple directional lighting (normals already in world space)
@@ -53,7 +57,7 @@ class EntityRenderer {
     opts = opts || {};
     const slot = Skins.slots[skin] || Skins.slots.wanderer;
     const b = this.skinBatch;
-    const p = this.tmp, nrm = [0, 0, 0];
+    const p = this.tmp, nrm = this.mNrm, verts = this.mVerts, uvs = this.mUVs, c = this.mCol;
     for (const name in model) {
       const part = model[name];
       if (!part) continue;
@@ -83,10 +87,15 @@ class EntityRenderer {
         for (const f of (opts.inflate ? boxFaces(box) : cachedFaces(box))) {
           M3.applyDir(m, f.n[0], f.n[1], f.n[2], nrm);
           const nl = Math.hypot(nrm[0], nrm[1], nrm[2]) || 1;
-          const sh = this.shadeFor([nrm[0] / nl, nrm[1] / nl, nrm[2] / nl]);
-          const c = [pc[0] * sh, pc[1] * sh, pc[2] * sh, pc[3]];
-          const verts = f.verts.map((v) => M3.apply(m, v[0], v[1], v[2], [0, 0, 0]));
-          const uvs = f.uv.map((uv) => [slot.u + uv[0] * slot.du, slot.v + uv[1] * slot.dv]);
+          nrm[0] /= nl; nrm[1] /= nl; nrm[2] /= nl;
+          const sh = this.shadeFor(nrm);
+          c[0] = pc[0] * sh; c[1] = pc[1] * sh; c[2] = pc[2] * sh; c[3] = pc[3];
+          // into scratch arrays: no garbage per face, so no collector pauses with a crowd on screen
+          for (let k = 0; k < 4; k++) {
+            const v = f.verts[k], uv = f.uv[k];
+            M3.apply(m, v[0], v[1], v[2], verts[k]);
+            uvs[k][0] = slot.u + uv[0] * slot.du; uvs[k][1] = slot.v + uv[1] * slot.dv;
+          }
           this.quadOut(b, verts, uvs, opts.flash > 0 ? opts.flash : -1, c, sky, blk);
         }
       }
@@ -189,13 +198,17 @@ class EntityRenderer {
     const layer = atlas.layer(sn);
     let tint = icons.spriteTint(stack.id, stack.dmg) || [255, 255, 255];
     if (stack.id === ITEM_IDS.spawn_egg) tint = hexToRgb(ITEMS[stack.id].tintFn(stack.dmg)[0]);
-    const quads = flat ? this.extruded(sn).slice(0, 2) : this.extruded(sn);
-    for (const q of quads) {
-      const nn = M3.applyDir(m, q.n[0], q.n[1], q.n[2], [0, 0, 0]);
+    const quads = this.extruded(sn), nq = flat ? Math.min(2, quads.length) : quads.length;
+    const nn = this.mNrm, pv = this.mVerts, c = this.mCol;
+    for (let i = 0; i < nq; i++) {
+      const q = quads[i];
+      M3.applyDir(m, q.n[0], q.n[1], q.n[2], nn);
       const nl = Math.hypot(nn[0], nn[1], nn[2]) || 1;
-      const sh = this.shadeFor([nn[0] / nl, nn[1] / nl, nn[2] / nl]);
-      const c = [tint[0] * sh, tint[1] * sh, tint[2] * sh, al];
-      this.quadOut(b, q.v.map((v) => M3.apply(m, v[0], v[1], v[2], [0, 0, 0])), q.uv, layer, c, sky, blk);
+      nn[0] /= nl; nn[1] /= nl; nn[2] /= nl;
+      const sh = this.shadeFor(nn);
+      c[0] = tint[0] * sh; c[1] = tint[1] * sh; c[2] = tint[2] * sh; c[3] = al;
+      for (let k = 0; k < 4; k++) M3.apply(m, q.v[k][0], q.v[k][1], q.v[k][2], pv[k]);
+      this.quadOut(b, pv, q.uv, layer, c, sky, blk);
     }
   }
 

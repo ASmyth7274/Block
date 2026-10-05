@@ -101,6 +101,10 @@ class TitleScreen extends Screen {
     for (const w of this.widgets) w.draw(gui, mx, my);
     gui.text('Blocklands ' + GAME_VERSION, 2, H - 10, '#ffffff');
     gui.textRight('A fan tribute. Not affiliated with Mojang.', W - 2, H - 10, '#ffffff');
+    // no graphics acceleration: say so plainly, it is the difference between smooth and unplayable
+    if (this.game.renderer.gpu.software) gui.textCentered('Graphics acceleration is off, so the game will be slow - see Options > Video Settings.', W / 2, 4, '#ff6060');
+    // the settings have just been fitted to this device's graphics chip
+    else if (this.game.tuneNote && performance.now() < this.game.tuneNote.until) gui.textCentered(this.game.tuneNote.text, W / 2, 4, '#a0a0a0');
   }
   keyDown(e) { if (e.key === 'Escape') return; super.keyDown(e); }
 }
@@ -400,7 +404,24 @@ class VideoScreen extends Screen {
     r = row();
     this.add(new Slider(L, r, 150, (v) => 'Render Scale: ' + Math.round((0.5 + v * 0.5) * 100) + '%', (s.renderScale - 0.5) / 0.5, (v) => { s.renderScale = 0.5 + v * 0.5; g.saveSettings(); g.resize(); }, 10));
     this.add(new Button(Rx, r, 150, 20, () => 'Show FPS: ' + (s.showFps ? 'ON' : 'OFF'), () => { s.showFps = !s.showFps; g.saveSettings(); }));
+    r = row();
+    // shaders: waving leaves, plants and water; full adds the sun's shadows and the sky mirrored in water
+    this.add(new Button(L, r, 150, 20, () => 'Shaders: ' + ({ off: 'OFF', waving: 'Waving', full: 'Full' }[s.shaders] || 'OFF'), () => { s.shaders = { off: 'waving', waving: 'full', full: 'off' }[s.shaders] || 'waving'; g.saveSettings(); }));
+    this.add(new Button(Rx, r, 150, 20, 'Optimise for This Device', () => { g.applyDevicePreset(false); this.layout(); g.hud.message('Video settings tuned for ' + g.renderer.gpu.name); }));
+    this.infoY = r + 26;
     this.add(new Button(cx - 100, this.H - 27, 200, 20, 'Done', () => this.close()));
+  }
+  draw(gui, mx, my) {
+    super.draw(gui, mx, my);
+    // which graphics chip is drawing the game, and what to do if it is the wrong one
+    const gpu = this.game.renderer.gpu, cx = this.W / 2;
+    let y = this.infoY;
+    if (y + 9 > this.H - 30) return;
+    gui.textCentered('Graphics: ' + gpu.name + (gpu.api ? ' (' + gpu.api + ')' : ''), cx, y, '#a0a0a0');
+    y += 10;
+    const tip = gpu.software ? ['No graphics acceleration! Turn on hardware acceleration', 'in your browser settings, then restart it.']
+      : (gpu.integrated && !IS_MOBILE) ? ['Using built-in graphics. If this computer has an NVIDIA or AMD card,', 'set your browser to High performance in Windows Settings > Display > Graphics.'] : null;
+    if (tip) for (const t of tip) { if (y + 9 > this.H - 30) break; gui.textCentered(t, cx, y, gpu.software ? '#ff6060' : '#ffff60'); y += 10; }
   }
 }
 class SoundScreen extends Screen {

@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS = {
   graphics: 'fancy',
   smoothLighting: true,
   clouds: 'fancy',
+  shaders: 'off',
   particles: 'all',
   viewBobbing: true,
   guiScale: 0,

@@ -77,15 +77,22 @@ class Mesher {
 
   // Build all three passes for section sy of chunk c. Returns null if empty.
   build(world, c, sy) {
-    // quick empty check
-    const base = sy << 12;
-    const cb = c.blocks;
-    let any = false;
-    for (let i = base, e = base + 4096; i < e; i++) if (cb[i] !== 0) { any = true; break; }
     for (const o of this.out) o.reset();
     this.gates = null;
-    if (!any) return null;
+    if (!this.hasBlocks(c, sy)) return null;
     this.fill(world, c, sy);
+    return this.buildFilled(c, sy);
+  }
+  hasBlocks(c, sy) {
+    const cb = c.blocks;
+    for (let i = sy << 12, e = i + 4096; i < e; i++) if (cb[i] !== 0) return true;
+    return false;
+  }
+  // the meshing proper, from a section already copied into ids/metas/lts (on a worker thread, c is
+  // just { cx, cz, tints })
+  buildFilled(c, sy) {
+    for (const o of this.out) o.reset();
+    this.gates = null;
     this.c = c; this.sy = sy;
     const ids = this.ids, metas = this.metas;
     const R = BT.render;

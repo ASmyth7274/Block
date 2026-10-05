@@ -8,33 +8,104 @@ precision highp float; precision highp int;
 layout(location=0) in uvec3 a;
 uniform mat4 uVP;
 uniform vec3 uOrigin;
+// shaders: wind for waving leaves, plants and water; a shadow map's projection
+uniform float uWave; uniform float uTime; uniform vec3 uCamW;
+uniform highp sampler2D uFlags;
+uniform mat4 uShadowVP; uniform float uShadowOn;
 out vec3 vUV; out vec4 vCol; out vec2 vLight; out float vDist;
+out vec3 vPos; out vec3 vSP; flat out int vFlag;
 void main() {
   vec3 p = (vec3(float(a.x & 511u), float((a.x >> 18) & 16383u), float((a.x >> 9) & 511u)) - 32.0) * 0.0625 + uOrigin;
   // shade codes 252-254 mark decals (wire on the ground): nudged toward the camera so they never z-fight
   uint shb = (a.z >> 24) & 255u;
   float sh = float(shb) / 255.0;
   if (shb >= 252u && shb <= 254u) { p *= 0.9985; sh = shb == 254u ? 1.0 : (shb == 253u ? 0.8 : 0.6); }
-  gl_Position = uVP * vec4(p, 1.0);
   vUV = vec3(float(a.y & 31u) * 0.0625, float((a.y >> 5) & 31u) * 0.0625, float((a.y >> 10) & 1023u));
+  int fl = 0;
+  if (uWave > 0.0) {
+    // 1 leaves and wall vines sway all over; 2 plants sway at the top; 3 hanging vines at the bottom; 4 water ripples
+    fl = int(texelFetch(uFlags, ivec2(int(vUV.z), 0), 0).r * 255.0 + 0.5);
+    if (fl != 0) {
+      vec3 w = p + uCamW;
+      float t = uTime, k = uWave;
+      if (fl == 1) {
+        p.x += (sin(t * 1.9 + w.x * 0.7 + w.y * 0.45) * 0.6 + sin(t * 3.3 + w.z * 0.9 + w.y) * 0.4) * 0.03 * k;
+        p.z += (cos(t * 1.6 + w.z * 0.6 + w.y * 0.35) * 0.6 + cos(t * 2.9 + w.x * 0.8) * 0.4) * 0.03 * k;
+        p.y += sin(t * 2.3 + w.x * 0.5 + w.z * 0.5) * 0.012 * k;
+      } else if ((fl == 2 && vUV.y < 0.5) || (fl == 3 && vUV.y > 0.5)) {
+        p.x += (sin(t * 2.1 + w.x * 0.8 + w.z * 0.6) * 0.7 + sin(t * 3.7 + w.z * 1.1) * 0.3) * 0.075 * k;
+        p.z += (cos(t * 1.7 + w.z * 0.7 + w.x * 0.4) * 0.7 + cos(t * 3.1 + w.x) * 0.3) * 0.075 * k;
+      } else if (fl == 4) {
+        float fy = fract(w.y);
+        if (fy > 0.02 && fy < 0.98) p.y += (sin(t * 1.4 + w.x * 1.1 + w.z * 0.6) * 0.6 + sin(t * 2.2 - w.x * 0.5 + w.z * 1.3) * 0.4) * 0.03 * (0.6 + 0.4 * k) - 0.035;
+      }
+    }
+  }
+  vFlag = fl;
+  gl_Position = uVP * vec4(p, 1.0);
+  vPos = p;
+  vSP = uShadowOn > 0.0 ? (uShadowVP * vec4(p, 1.0)).xyz * 0.5 + 0.5 : vec3(0.0);
   vLight = vec2(float((a.y >> 20) & 63u), float((a.y >> 26) & 63u)) / 60.0;
   vCol = vec4(vec3(float(a.z & 255u), float((a.z >> 8) & 255u), float((a.z >> 16) & 255u)) / 255.0, sh);
   vDist = length(p.xz);
 }`,
   chunkFS: `#version 300 es
-precision highp float; precision highp sampler2DArray;
-uniform sampler2DArray uTex; uniform sampler2D uLightmap;
+precision highp float; precision highp sampler2DArray; precision highp sampler2DShadow;
+uniform sampler2DArray uTex; uniform sampler2D uLightmap; uniform sampler2DShadow uShadowMap;
 uniform vec3 uFogColor; uniform vec2 uFog; uniform float uAlphaTest; uniform float uAlpha;
-in vec3 vUV; in vec4 vCol; in vec2 vLight; in float vDist;
+// shaders: how dark the shade is, where the light comes from, the sky to mirror in water
+uniform float uShadowK; uniform vec3 uLightDir; uniform float uShadowTexel; uniform vec3 uSkyRefl; uniform float uSunK; uniform float uFancyWater;
+in vec3 vUV; in vec4 vCol; in vec2 vLight; in float vDist; in vec3 vPos; in vec3 vSP; flat in int vFlag;
 out vec4 o;
+// how much of the sun (or moon) reaches this spot: 0 in shade, 1 in full light
+float sunlit(vec3 n) {
+  float ndl = vFlag >= 1 && vFlag <= 3 ? 1.0 : dot(n, uLightDir);
+  if (ndl <= 0.02) return 0.0;
+  vec3 sp = vSP;
+  if (sp.x <= 0.0 || sp.x >= 1.0 || sp.y <= 0.0 || sp.y >= 1.0 || sp.z >= 1.0) return 1.0;
+  float bias = (vFlag >= 1 && vFlag <= 3 ? 0.0012 : 0.0004) + 0.0016 * (1.0 - ndl);
+  float z = sp.z - bias, d = uShadowTexel * 0.5;
+  float s = texture(uShadowMap, vec3(sp.xy + vec2(-d, -d), z)) + texture(uShadowMap, vec3(sp.xy + vec2(d, -d), z))
+          + texture(uShadowMap, vec3(sp.xy + vec2(-d, d), z)) + texture(uShadowMap, vec3(sp.xy + vec2(d, d), z));
+  vec2 e = abs(sp.xy - 0.5) * 2.0;
+  return mix(s * 0.25, 1.0, smoothstep(0.75, 1.0, max(e.x, e.y)));
+}
 void main() {
   vec4 t = texture(uTex, vUV);
   if (t.a < uAlphaTest) discard;
   vec3 lm = texture(uLightmap, vec2(vLight.y * 0.9375 + 0.03125, vLight.x * 0.9375 + 0.03125)).rgb;
   vec3 c = t.rgb * vCol.rgb * vCol.a * lm;
+  float alpha = (uAlphaTest > 0.0 && uAlpha >= 1.0) ? 1.0 : t.a * uAlpha;
+  bool water = uFancyWater > 0.0 && vFlag == 4;
+  if (uShadowK > 0.0 || water) {
+    vec3 n = normalize(cross(dFdx(vPos), dFdy(vPos)));
+    if (dot(n, vPos) > 0.0) n = -n;
+    if (uShadowK > 0.0) {
+      // only daylight is shaded: a torch-lit wall stays bright in the shade
+      float day = clamp((vLight.x - vLight.y) * 1.25, 0.0, 1.0);
+      c *= 1.0 - uShadowK * day * (1.0 - sunlit(n));
+    }
+    if (water) {
+      // the sky mirrored in the water at a glancing angle, and a glint of the sun
+      vec3 v = normalize(vPos);
+      float fr = pow(1.0 - clamp(dot(n, -v), 0.0, 1.0), 4.0) * vLight.x;
+      c = mix(c, uSkyRefl, fr * 0.6);
+      alpha = mix(alpha, 1.0, fr * 0.45);
+      float sp = pow(max(dot(reflect(v, n), uLightDir), 0.0), 120.0) * uSunK * vLight.x;
+      c += vec3(1.0, 0.94, 0.78) * sp;
+      alpha = max(alpha, min(1.0, sp));
+    }
+  }
   float fog = clamp((vDist - uFog.x) / (uFog.y - uFog.x), 0.0, 1.0);
-  o = vec4(mix(c, uFogColor, fog), (uAlphaTest > 0.0 && uAlpha >= 1.0) ? 1.0 : t.a * uAlpha);
+  o = vec4(mix(c, uFogColor, fog), alpha);
 }`,
+  // the shadow map: depth only, cut-outs (leaves) cut out
+  shadowFS: `#version 300 es
+precision highp float; precision highp sampler2DArray;
+uniform sampler2DArray uTex; uniform float uAlphaTest;
+in vec3 vUV;
+out vec4 o;
+void main() { if (uAlphaTest > 0.0 && texture(uTex, vUV).a < uAlphaTest) discard; o = vec4(1.0); }`,
   // full screen sky
   skyVS: `#version 300 es
 layout(location=0) in vec2 aPos;
@@ -212,14 +283,15 @@ void main() { o = vec4(vCol * uTint, 1.0); }`,
   entVS: `#version 300 es
 precision highp float;
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aUV; layout(location=2) in vec4 aCol; layout(location=3) in vec2 aLight;
-uniform mat4 uVP;
-out vec3 vUV; out vec4 vCol; out vec2 vLight; out float vDist;
-void main() { gl_Position = uVP * vec4(aPos, 1.0); vUV = aUV; vCol = aCol; vLight = aLight; vDist = length(aPos.xz); }`,
+uniform mat4 uVP; uniform mat4 uShadowVP;
+out vec3 vUV; out vec4 vCol; out vec2 vLight; out float vDist; out vec3 vSP;
+void main() { gl_Position = uVP * vec4(aPos, 1.0); vUV = aUV; vCol = aCol; vLight = aLight; vDist = length(aPos.xz); vSP = (uShadowVP * vec4(aPos, 1.0)).xyz * 0.5 + 0.5; }`,
   entFS: `#version 300 es
-precision highp float; precision highp sampler2DArray;
-uniform sampler2DArray uTex; uniform sampler2D uSkin; uniform sampler2D uLightmap;
+precision highp float; precision highp sampler2DArray; precision highp sampler2DShadow;
+uniform sampler2DArray uTex; uniform sampler2D uSkin; uniform sampler2D uLightmap; uniform sampler2DShadow uShadowMap;
 uniform int uMode; uniform vec3 uFogColor; uniform vec2 uFog; uniform float uAlphaTest; uniform vec4 uOverlay; uniform vec4 uTint;
-in vec3 vUV; in vec4 vCol; in vec2 vLight; in float vDist;
+uniform float uShadowK; uniform float uShadowTexel;
+in vec3 vUV; in vec4 vCol; in vec2 vLight; in float vDist; in vec3 vSP;
 out vec4 o;
 void main() {
   vec4 t;
@@ -230,6 +302,15 @@ void main() {
   vec3 lm = vLight.x < 0.0 ? vec3(1.0) : texture(uLightmap, vec2(vLight.y * 0.9375 + 0.03125, vLight.x * 0.9375 + 0.03125)).rgb;
   vec3 c = t.rgb * vCol.rgb * lm * uTint.rgb;
   if (uMode == 1 && vUV.z > 0.0) c = mix(c, vec3(1.0), vUV.z);
+  // shaders: creatures and things standing in the shade of the terrain are shaded too
+  if (uShadowK > 0.0 && vLight.x >= 0.0 && vSP.x > 0.0 && vSP.x < 1.0 && vSP.y > 0.0 && vSP.y < 1.0 && vSP.z < 1.0) {
+    float d = uShadowTexel * 0.5, z = vSP.z - 0.002;
+    float s = (texture(uShadowMap, vec3(vSP.xy + vec2(-d, -d), z)) + texture(uShadowMap, vec3(vSP.xy + vec2(d, -d), z))
+             + texture(uShadowMap, vec3(vSP.xy + vec2(-d, d), z)) + texture(uShadowMap, vec3(vSP.xy + vec2(d, d), z))) * 0.25;
+    vec2 e = abs(vSP.xy - 0.5) * 2.0;
+    s = mix(s, 1.0, smoothstep(0.75, 1.0, max(e.x, e.y)));
+    c *= 1.0 - uShadowK * clamp((vLight.x - vLight.y) * 1.25, 0.0, 1.0) * (1.0 - s);
+  }
   c = mix(c, uOverlay.rgb, uOverlay.a);
   float fog = clamp((vDist - uFog.x) / (uFog.y - uFog.x), 0.0, 1.0);
   o = vec4(mix(c, uFogColor, fog), t.a * vCol.a * uTint.a);
