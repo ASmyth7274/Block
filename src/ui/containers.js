@@ -571,7 +571,7 @@ const CREATIVE_TABS = (() => {
     ...all(B.SAPLING), ...all(B.LEAVES), blk(B.COBWEB), ...all(B.TALL_GRASS), blk(B.DEAD_BUSH), ...all(B.FLOWER), blk(B.MUSHROOM_BROWN), blk(B.MUSHROOM_RED), blk(B.GLOWSHROOM), blk(B.LUMITE_CRYSTAL),
     blk(B.TORCH), blk(B.CHEST), blk(B.CRAFTING_TABLE), blk(B.FURNACE), blk(B.ENCHANTING_TABLE), blk(B.LADDER), blk(B.ROPE), blk(B.SNOW_LAYER), blk(B.CACTUS), blk(B.PUMPKIN), blk(B.JACK_O_LANTERN), blk(B.MELON), blk(B.VINE),
     blk(B.LILY_PAD), blk(B.CATTAIL), blk(B.BRAMBLE), blk(B.LEAF_LITTER), ...all(B.FENCE), blk(B.FENCE_GATE), blk(B.TRAPDOOR), blk(B.GLASS_PANE), ...all(B.CARPET), blk(B.LUMITE_LAMP), blk(B.MOB_SPAWNER), blk(B.BRIMSTONE_FENCE), [I.bloodcap, 0],
-    blk(B.IRON_BARS), blk(B.RIFT_FRAME), ...all(B.INFESTED_BRICKS), [I.star_crystal, 0],
+    blk(B.IRON_BARS), blk(B.RIFT_FRAME), ...all(B.INFESTED_BRICKS), [I.star_crystal, 0], blk(B.WYRM_EGG), [I.star_fragment, 0],
     blk(B.GLOW_VINE), blk(B.GLOW_VINE_BERRIES), blk(B.PALE_LANTERN), blk(B.HUSH_SENSOR), blk(B.HUSH_SHRIEKER), blk(B.GATE_KEYSTONE), blk(B.DUNE_GRASS),
     [I.door_wood, 0], [I.door_iron, 0], [I.bed, 0], ...WOOD.map((w, i) => [I.sign, i]), [I.painting, 0]] });
   T.push({ name: 'Tools', icon: [I.iron_axe, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ['shovel', 'pickaxe', 'axe', 'hoe'].map((k) => [I[m + '_' + k], 0])),
@@ -615,7 +615,7 @@ class CreativeScreen extends ContainerScreen {
   }
   tabItems() {
     const t = CREATIVE_TABS[this.tab];
-    if (t.name === 'Creatures') return MOB_TYPES.map((m, i) => m && m.egg ? [ITEM_IDS.spawn_egg, i] : null).filter(Boolean);
+    if (t.name === 'Creatures') return MOB_TYPES.map((m, i) => m && m.egg && !m.noEgg ? [ITEM_IDS.spawn_egg, i] : null).filter(Boolean);
     if (t.search) {
       const q = this.search.toLowerCase();
       const out = [];

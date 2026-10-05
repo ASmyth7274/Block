@@ -441,16 +441,19 @@ class Game {
   }
   tickPortal() {
     const p = this.player, w = this.world;
-    let inPortal = false, inRift = false, inGate = false;
+    let inPortal = false, inRift = false, inGate = false, inStar = null;
     if (!p.dead && !p.riding && !p.sleeping) {
       const b = p.box;
       for (let x = Math.floor(b.x0); x <= Math.floor(b.x1 - 1e-4); x++) for (let y = Math.floor(b.y0); y <= Math.floor(b.y1 - 1e-4); y++) for (let z = Math.floor(b.z0); z <= Math.floor(b.z1 - 1e-4); z++) {
         const id = w.getBlock(x, y, z);
         if (id === B.PORTAL) inPortal = true; else if (id === B.RIFT) inRift = true; else if (id === B.SIFT_GATE) inGate = true;
+        else if (id === B.STAR_GATEWAY && !inStar) inStar = [x, y, z];
       }
     }
     if (inPortal && w.dim === DIM_ISLES) inPortal = false;
-    if (!inPortal && !inRift && !inGate) p.portalLock = false;
+    if (!inPortal && !inRift && !inGate && !inStar) p.portalLock = false;
+    // a star gateway throws you across the gulf at once
+    if (inStar && !p.portalLock) { p.portalLock = true; Wyrm.travel(this, inStar[0], inStar[1], inStar[2]); return; }
     // a city gate, once woken, opens on the Sift
     if (inGate && !p.portalLock) {
       p.portalLock = true;
@@ -534,7 +537,7 @@ class Game {
     const list = [];
     for (const e of w.entities) {
       if (e.removed) continue;
-      if ((Math.floor(e.x) >> 4) !== c.cx || (Math.floor(e.z) >> 4) !== c.cz) continue;
+      if ((Math.floor(e.x) >> 4) !== c.cx || (Math.floor(e.z) >> 4) !== c.cz || e.keepLoaded) continue;
       if (this.persistable(e)) { const d = e.save(); if (d) list.push(d); }
       e.removed = true;
     }
@@ -728,6 +731,7 @@ class Game {
     if (w.lightningFlash > 0) w.lightningFlash--;
     this.pfovMod = this.fovMod;
     p.tick(this.input);
+    this.tickHold();
     this.tickPlayerEnvironment();
     this.tickPortal();
     if (this.loading) return;
@@ -754,6 +758,7 @@ class Game {
     }
     Circuits.tickPlates(this);
     Hush.tick(this);
+    Wyrm.tick(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
     const h = p.inventory.held();
@@ -835,7 +840,7 @@ class Game {
       const e = list[i];
       if (e.removed) continue;
       const bx = Math.floor(e.x), bz = Math.floor(e.z);
-      if (!w.isLoaded(bx, bz)) continue;
+      if (!w.isLoaded(bx, bz) && !e.keepLoaded) continue;
       try { e.tick(this); } catch (err) { console.error('entity tick', e.type, err); e.removed = true; }
       if (e.checkDespawn && !e.removed) e.checkDespawn(this);
     }
@@ -1240,6 +1245,7 @@ class Game {
     if (st.id === B.COBALT_ORE) this.achieve('cobalt');
     if (st.id === B.STARMETAL_ORE) this.achieve('star');
     if (st.id === I.flare_rod) this.achieve('flare');
+    if (st.id === B.WYRM_EGG) this.achieve('egg');
   }
   onPlayerDeath(src) {
     const p = this.player, w = this.world;
@@ -1325,6 +1331,26 @@ class Game {
     }
     if (!pos) { const s = w.spawn || { x: 0, y: 80, z: 0 }; const y = w.isLoaded(s.x, s.z) ? Math.max(s.y, w.topSolidY(s.x, s.z) + 1) : s.y; pos = [s.x + 0.5, y, s.z + 0.5]; }
     p.setPos(pos[0], pos[1], pos[2]);
+  }
+  // set the player down somewhere far off in this same world, and keep them there
+  // (no falling) until the ground under them has loaded
+  holdPlayer(x, y, z, yaw) {
+    const p = this.player;
+    p.setPos(x, y, z); p.vx = p.vy = p.vz = 0; p.fallDistance = 0;
+    if (yaw !== undefined) { p.yaw = p.pyaw = yaw; p.pitch = 0; }
+    this.hold = { x, y, z, t: 0, w: this.world };
+    this.portalFx = 1;
+  }
+  tickHold() {
+    const h = this.hold, p = this.player, w = this.world;
+    if (!h) return;
+    if (h.w !== w || p.dead) { this.hold = null; return; }
+    h.t++;
+    let ready = true;
+    for (const [dx, dz] of [[0, 0], [16, 0], [-16, 0], [0, 16], [0, -16]]) if (!w.isLoaded(Math.floor(h.x) + dx, Math.floor(h.z) + dz)) ready = false;
+    if (ready && h.t > 4 || h.t > 600) { this.hold = null; return; }
+    p.setPos(h.x, h.y, h.z); p.vx = p.vy = p.vz = 0; p.fallDistance = 0;
+    this.portalFx = Math.max(this.portalFx, 0.6);
   }
   // through the Star Well and home; the first time, the long way round
   leaveIsles() {

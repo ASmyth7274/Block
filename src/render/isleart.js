@@ -38,6 +38,52 @@
     for (let y = 8; y < 15; y++) { img.set(15, y, mortar); img.set(0, y, hi); }
     return img;
   })());
+  // a star gateway: deep violet night with gold and white stars wheeling slowly round its heart
+  function GatewayAnim() {
+    const rng = new Noise.Random(9171);
+    const stars = Array.from({ length: 22 }, (_, i) => [rng.nextFloat() * TAU, 1.5 + rng.nextFloat() * 9, rng.nextFloat(), i % 3]);
+    let t = 0;
+    this.step = function () { t++; };
+    this.render = function (img) {
+      for (let i = 0; i < 256; i++) {
+        const x = i & 15, y = i >> 4, d = Math.hypot(x - 7.5, y - 7.5);
+        const swirl = Math.sin(Math.atan2(y - 7.5, x - 7.5) * 3 + d * 0.7 - t * 0.05) * 0.5 + 0.5;
+        const v = 10 + swirl * 14 * Math.max(0, 1 - d / 11);
+        img.d[i * 4] = v * 1.3; img.d[i * 4 + 1] = v * 0.55; img.d[i * 4 + 2] = v * 2.4 + 12; img.d[i * 4 + 3] = 255;
+      }
+      const cols = [[255, 226, 140], [255, 255, 255], [200, 160, 255]];
+      for (const [a0, r, ph, k] of stars) {
+        const a = a0 + t * (0.012 + 0.03 / r), x = Math.floor(7.5 + Math.cos(a) * r), y = Math.floor(7.5 + Math.sin(a) * r);
+        if (x < 0 || y < 0 || x > 15 || y > 15) continue;
+        const tw = 0.55 + 0.45 * Math.sin(t * 0.2 + ph * 30), c = cols[k], i = (y * 16 + x) * 4;
+        img.d[i] = Math.max(img.d[i], c[0] * tw); img.d[i + 1] = Math.max(img.d[i + 1], c[1] * tw); img.d[i + 2] = Math.max(img.d[i + 2], c[2] * tw);
+      }
+    };
+  }
+  TexGen.ANIM.star_gateway = new GatewayAnim();
+  { const img = new Img(); TexGen.ANIM.star_gateway.render(img); reg('star_gateway', img); }
+  // the wyrm's egg: a shell of night, flecked with stars, with a seam of warm light
+  reg('wyrm_egg', (() => {
+    const img = new Img(), rng = new Noise.Random(5150);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const k = 0.85 + rng.nextFloat() * 0.3, band = Math.sin(x * 0.9 + y * 0.35) * 0.5 + 0.5;
+      img.set(x, y, mix(C('#140f2a'), C('#2e2456'), band * 0.6 * k));
+    }
+    for (let i = 0; i < 9; i++) img.set(rng.nextInt(16), rng.nextInt(16), rng.nextInt(3) ? C('#c8b8ff') : C('#fff4c8'));
+    // the seam, glowing faintly
+    for (let x = 0; x < 16; x++) { const y = 9 + Math.round(Math.sin(x * 0.8) * 1.5); img.set(x, y, C('#e0a040')); if (x % 3 === 0) img.set(x, y - 1, C('#7a4a20')); }
+    return img;
+  })());
+  reg('wyrm_egg_top', (() => {
+    const img = new Img(), rng = new Noise.Random(5151);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) img.set(x, y, mix(C('#1a1434'), C('#2a2250'), rng.nextFloat() * 0.5));
+    for (let i = 0; i < 6; i++) img.set(rng.nextInt(16), rng.nextInt(16), C('#c8b8ff'));
+    return img;
+  })());
+  sprite('star_fragment', [
+    '................', '................', '.......o........', '......oYo.......', '......oYo.......', '..oo.oYWYo.oo...', '..oYooYWWYooYo..', '...oYYWWWWYYo...',
+    '....oYWWWWYo....', '...oYYWWWYYYo...', '..oYooYWWYooYo..', '..oo.oYWYo.oo...', '......oYo.......', '......oYo.......', '.......o........', '................'],
+    { o: '#6a4a8a', Y: '#ffd860', W: '#fffbe8' });
   sprite('star_crystal', [
     '................', '.......ww.......', '......wccw......', '.....wcwwcw.....', '....wcwssscw....', '...wcwsSSSscw...',
     '..wcwsSSWSSscw..', '.wcwsSSWWWSSscw.', '.wcwsSSWWWSSscw.', '..wcwsSSWSSscw..', '...wcwsSSSscw...', '....wcwssscw....',

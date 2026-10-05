@@ -201,6 +201,9 @@ const Recipes = (() => {
   // ---------------- the Far Isles ----------------
   shaped([B.STARSTONE_BRICKS, 4], ['##', '##'], { '#': B.STARSTONE });
   shaped([I.star_crystal], ['GGG', 'GEG', 'GTG'], { G: B.GLASS, E: I.seeker_eye, T: I.wailer_tear });
+  // what the Starwyrm calls down: crystals to call it back with, and starmetal
+  shaped([I.star_crystal], ['GGG', 'GFG', 'GTG'], { G: B.GLASS, F: I.star_fragment, T: I.wailer_tear });
+  shaped([I.starmetal_ingot], ['FFF', 'FFF', 'FFF'], { F: I.star_fragment });
   // ---------------- the Sift ----------------
   shaped([B.SILTSTONE_BRICKS, 4, 0], ['##', '##'], { '#': B.SILTSTONE });
   shaped([B.SILTSTONE_BRICKS, 4, 1], ['##', '##'], { '#': [B.SILTSTONE_BRICKS, 0] });

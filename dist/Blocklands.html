@@ -1188,6 +1188,19 @@ defBlock(167, 'siltstone_bricks', {
 });
 defBlock(168, 'sift_glass', { name: 'Sift Glass', opaque: false, translucent: true, opacity: 0, light: 3, hardness: 0.3, sound: 'glass' });
 defBlock(169, 'dune_grass', Object.assign({}, plantBase, { name: 'Dune Grass', tex: 'dune_grass', itemSprite: 'dune_grass', replaceable: true, select: () => box16(2, 0, 2, 14, 12, 14), drops: () => [] }));
+// --- the Starwyrm's isle ------------------------------------------------------
+// a star gateway: a knot of night that throws you across the gulf and back
+defBlock(170, 'star_gateway', {
+  name: 'Star Gateway', render: R.MODEL, tex: 'star_gateway', opaque: false, solid: false, opacity: 0, light: 15, hardness: -1, resistance: 18000000,
+  itemMetaMask: 0, drops: () => [], select: () => null, model: () => [{ b: [0, 0, 0, 16, 16, 16] }],
+});
+// the wyrm's egg: warm to the touch, and something moves inside when the stars are out
+defBlock(171, 'wyrm_egg', {
+  name: 'Wyrm Egg', render: R.MODEL, tex: (m, f) => f === 1 ? 'wyrm_egg_top' : f === 0 ? 'wyrm_egg_top' : 'wyrm_egg', opaque: false, opacity: 0, light: 2,
+  hardness: 3, resistance: 1200, tool: 'pickaxe', sound: 'stone', itemMetaMask: 0,
+  model: () => [{ b: [5, 0, 5, 11, 1, 11] }, { b: [3, 1, 3, 13, 3, 13] }, { b: [2, 3, 2, 14, 8, 14] }, { b: [3, 8, 3, 13, 11, 13] }, { b: [4, 11, 4, 12, 13, 12] }, { b: [6, 13, 6, 10, 15, 10] }],
+  collide: () => [[2 / 16, 0, 2 / 16, 14 / 16, 15 / 16, 14 / 16]], select: () => [2 / 16, 0, 2 / 16, 14 / 16, 15 / 16, 14 / 16],
+});
 // infested bricks: something lives inside
 defBlock(151, 'infested_bricks', {
   name: (m) => ['Stone Bricks', 'Mossy Stone Bricks', 'Cracked Stone Bricks', 'Chiseled Stone Bricks'][m & 3],
@@ -1495,6 +1508,9 @@ defItem('sift_scale', { name: 'Sifter Scale' });
 defItem('silent_boots', { name: 'Silent Boots', tex: 'silent_boots', maxDamage: 13 * 9, armor: { slot: 3, points: 1, mat: 'leather' }, silent: true, rare: true });
 // strike it and its note rings out wherever you point: a way to lead the Listener astray
 defItem('echo_fork', { name: 'Echo Fork', maxDamage: 48, handheld: true });
+// ---- the Starwyrm's isle ----  (items are numbered in the order they are defined: always add new ones at the end)
+// a shard of a fallen star, still warm: the Starwyrm calls them down from the sky
+defItem('star_fragment', { name: 'Star Fragment', rare: true });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1540,8 +1556,13 @@ class ItemStack {
   isEmpty() { return this.count <= 0 || this.id === 0; }
   sameItem(o) { return o && o.id === this.id && (maxDamageOf(this.id) > 0 || o.dmg === this.dmg) && !this.tag && !o.tag; }
   canStackWith(o) { return o && o.id === this.id && o.dmg === this.dmg && maxDamageOf(this.id) === 0 && !this.tag && !o.tag; }
-  toJSON() { const o = { id: this.id, c: this.count, d: this.dmg }; if (this.tag) o.t = this.tag; return o; }
-  static fromJSON(o) { if (!o) return null; const s = new ItemStack(o.id, o.c, o.d); if (o.t) s.tag = o.t; return itemExists(s.id) ? s : null; }
+  // saved by name as well as number, so items defined later can never shift what a save holds
+  toJSON() { const o = { id: this.id, c: this.count, d: this.dmg }; if (this.id >= 256 && ITEMS[this.id]) o.k = ITEMS[this.id].key; if (this.tag) o.t = this.tag; return o; }
+  static fromJSON(o) {
+    if (!o) return null;
+    const id = o.k && ITEM_IDS[o.k] !== undefined ? ITEM_IDS[o.k] : o.id;
+    const s = new ItemStack(id, o.c, o.d); if (o.t) s.tag = o.t; return itemExists(s.id) ? s : null;
+  }
 }
 
 // Map a block meta to the item damage used for drops / pick-block
@@ -4244,6 +4265,52 @@ const TexGen = (function () {
     for (let y = 8; y < 15; y++) { img.set(15, y, mortar); img.set(0, y, hi); }
     return img;
   })());
+  // a star gateway: deep violet night with gold and white stars wheeling slowly round its heart
+  function GatewayAnim() {
+    const rng = new Noise.Random(9171);
+    const stars = Array.from({ length: 22 }, (_, i) => [rng.nextFloat() * TAU, 1.5 + rng.nextFloat() * 9, rng.nextFloat(), i % 3]);
+    let t = 0;
+    this.step = function () { t++; };
+    this.render = function (img) {
+      for (let i = 0; i < 256; i++) {
+        const x = i & 15, y = i >> 4, d = Math.hypot(x - 7.5, y - 7.5);
+        const swirl = Math.sin(Math.atan2(y - 7.5, x - 7.5) * 3 + d * 0.7 - t * 0.05) * 0.5 + 0.5;
+        const v = 10 + swirl * 14 * Math.max(0, 1 - d / 11);
+        img.d[i * 4] = v * 1.3; img.d[i * 4 + 1] = v * 0.55; img.d[i * 4 + 2] = v * 2.4 + 12; img.d[i * 4 + 3] = 255;
+      }
+      const cols = [[255, 226, 140], [255, 255, 255], [200, 160, 255]];
+      for (const [a0, r, ph, k] of stars) {
+        const a = a0 + t * (0.012 + 0.03 / r), x = Math.floor(7.5 + Math.cos(a) * r), y = Math.floor(7.5 + Math.sin(a) * r);
+        if (x < 0 || y < 0 || x > 15 || y > 15) continue;
+        const tw = 0.55 + 0.45 * Math.sin(t * 0.2 + ph * 30), c = cols[k], i = (y * 16 + x) * 4;
+        img.d[i] = Math.max(img.d[i], c[0] * tw); img.d[i + 1] = Math.max(img.d[i + 1], c[1] * tw); img.d[i + 2] = Math.max(img.d[i + 2], c[2] * tw);
+      }
+    };
+  }
+  TexGen.ANIM.star_gateway = new GatewayAnim();
+  { const img = new Img(); TexGen.ANIM.star_gateway.render(img); reg('star_gateway', img); }
+  // the wyrm's egg: a shell of night, flecked with stars, with a seam of warm light
+  reg('wyrm_egg', (() => {
+    const img = new Img(), rng = new Noise.Random(5150);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const k = 0.85 + rng.nextFloat() * 0.3, band = Math.sin(x * 0.9 + y * 0.35) * 0.5 + 0.5;
+      img.set(x, y, mix(C('#140f2a'), C('#2e2456'), band * 0.6 * k));
+    }
+    for (let i = 0; i < 9; i++) img.set(rng.nextInt(16), rng.nextInt(16), rng.nextInt(3) ? C('#c8b8ff') : C('#fff4c8'));
+    // the seam, glowing faintly
+    for (let x = 0; x < 16; x++) { const y = 9 + Math.round(Math.sin(x * 0.8) * 1.5); img.set(x, y, C('#e0a040')); if (x % 3 === 0) img.set(x, y - 1, C('#7a4a20')); }
+    return img;
+  })());
+  reg('wyrm_egg_top', (() => {
+    const img = new Img(), rng = new Noise.Random(5151);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) img.set(x, y, mix(C('#1a1434'), C('#2a2250'), rng.nextFloat() * 0.5));
+    for (let i = 0; i < 6; i++) img.set(rng.nextInt(16), rng.nextInt(16), C('#c8b8ff'));
+    return img;
+  })());
+  sprite('star_fragment', [
+    '................', '................', '.......o........', '......oYo.......', '......oYo.......', '..oo.oYWYo.oo...', '..oYooYWWYooYo..', '...oYYWWWWYYo...',
+    '....oYWWWWYo....', '...oYYWWWYYYo...', '..oYooYWWYooYo..', '..oo.oYWYo.oo...', '......oYo.......', '......oYo.......', '.......o........', '................'],
+    { o: '#6a4a8a', Y: '#ffd860', W: '#fffbe8' });
   sprite('star_crystal', [
     '................', '.......ww.......', '......wccw......', '.....wcwwcw.....', '....wcwssscw....', '...wcwsSSSscw...',
     '..wcwsSSWSSscw..', '.wcwsSSWWWSSscw.', '.wcwsSSWWWSSscw.', '..wcwsSSWSSscw..', '...wcwsSSSscw...', '....wcwssscw....',
@@ -7631,6 +7698,24 @@ function WorldGenFactory(Noise, TAB) {
         if (s.x >= X0 && s.x < X0 + 16 && s.z >= Z0 && s.z < Z0 + 16) out.entities.push({ type: 'star_crystal', x: s.x + 0.5, y: s.h + 1, z: s.z + 0.5 });
       }
     }
+    // where star gateway k of n comes out: on the crown of the first drift isle along its ray
+    exitGateSpot(k, n) {
+      const a = Math.PI * 2 * k / n, ca = Math.cos(a), sa = Math.sin(a);
+      for (let r = ISLES.GULF - 50; r < ISLES.GULF + 1200; r += 6) {
+        const x = Math.round(ca * r), z = Math.round(sa * r), col = this.column(x, z);
+        if (!col || !col[2]) continue;
+        const d = col[2];
+        let best = null, bs = -1e9;
+        for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) {
+          const c = this.column(d.x + dx, d.z + dz);
+          if (!c || c[2] !== d) continue;
+          const score = c[1] - Math.hypot(dx, dz) * 0.3;
+          if (score > bs) { bs = score; best = [d.x + dx, c[1] + 1, d.z + dz]; }
+        }
+        return best || [x, col[1] + 1, z];
+      }
+      return [Math.round(ca * (ISLES.GULF + 120)), 60, Math.round(sa * (ISLES.GULF + 120))];
+    }
     // the Star Well: a ring of bedrock round a dry basin and a torch-lit pillar
     wellTop() { const c = this.column(0, 0); return c ? c[1] : 60; }
     starWell(out) {
@@ -9101,7 +9186,7 @@ void main() { vNdc = aPos; gl_Position = vec4(aPos, 0.9999, 1.0); }`,
   skyFS: `#version 300 es
 precision highp float;
 uniform mat4 uInvVP; uniform vec3 uSky; uniform vec3 uFogColor; uniform vec3 uSunDir; uniform vec4 uSunrise; uniform vec3 uVoid; uniform float uIsles;
-uniform mat3 uCel; uniform float uNight; uniform float uTime; uniform float uAurora; uniform float uSift;
+uniform mat3 uCel; uniform float uNight; uniform float uTime; uniform float uAurora; uniform float uSift; uniform float uEclipse;
 in vec2 vNdc; out vec4 o;
 // the Milky Way's plane and its bright heart, in the stars' own frame (match buildStars)
 const vec3 MW_N = vec3(0.5009, 0.3506, 0.7913);
@@ -9124,6 +9209,19 @@ void main() {
     col += vec3(0.14, 0.06, 0.2) * band * smoothstep(0.25, 0.85, n) * 1.4;
     col += vec3(0.02, 0.1, 0.11) * pow(band, 3.0) * smoothstep(0.45, 0.9, n);
     col = mix(col, uFogColor, 1.0 - smoothstep(-0.05, 0.3, e));
+    if (uEclipse > 0.001) {
+      // the Starwyrm's eclipse: a black sun high overhead in a ring of fire, its corona streaming
+      vec3 ed = normalize(vec3(0.16, 1.0, -0.1));
+      vec3 q = normalize(floor(d * 160.0) / 160.0);
+      float a = acos(clamp(dot(q, ed), -1.0, 1.0)), r0 = 0.085;
+      vec3 t1 = normalize(cross(ed, vec3(0.0, 0.0, 1.0))), t2 = cross(ed, t1);
+      float az = atan(dot(q, t2), dot(q, t1));
+      float rays = 0.55 + 0.45 * vn(vec3(az * 5.0, a * 4.0 - uTime * 0.05, 1.7)) + 0.35 * pow(abs(sin(az * 4.0 + uTime * 0.02)), 8.0);
+      float corona = exp(-max(a - r0, 0.0) / (0.045 + 0.06 * rays)) * step(r0, a);
+      float ring = smoothstep(r0 + 0.016, r0, a) * step(r0 - 0.004, a);
+      col += (vec3(1.0, 0.62, 0.28) * corona * 0.9 + vec3(1.0, 0.93, 0.75) * ring * 1.6) * uEclipse;
+      col = mix(col, vec3(0.006, 0.003, 0.01), step(a, r0 - 0.004) * uEclipse);
+    }
   }
   // the night sky: the Milky Way turning with the stars, and the northern lights
   if (uNight > 0.004 && e > -0.05) {
@@ -10332,8 +10430,10 @@ class Renderer {
       this.fogT = now;
       if (!this.uFog || this.uFogWorld !== world) { this.uFog = want.slice(); this.uFogWorld = world; }
       for (let i = 0; i < 3; i++) this.uFog[i] += (want[i] - this.uFog[i]) * Math.min(1, dt * 1.5);
-      this.fogColor = this.uFog.slice();
-      this.skyColor = [this.uFog[0] * 0.45, this.uFog[1] * 0.4, this.uFog[2] * 0.62];
+      // the Starwyrm's eclipse: the violet drains out of the sky, leaving a dark with a little fire in it
+      const ek = world.eclipseK || 0;
+      this.fogColor = [this.uFog[0] * (1 - ek * 0.62) + ek * 0.02, this.uFog[1] * (1 - ek * 0.72), this.uFog[2] * (1 - ek * 0.68)];
+      this.skyColor = [this.uFog[0] * 0.45 * (1 - ek * 0.6) + ek * 0.025, this.uFog[1] * 0.4 * (1 - ek * 0.75), this.uFog[2] * 0.62 * (1 - ek * 0.7)];
       this.sunrise = null; this.sunDir = [0, 1, 0]; this.dayFactor = 0.4; this.rain = 0;
       this.celestial = ((world.time + partial) % 192000) / 192000;
       return;
@@ -10421,7 +10521,7 @@ class Renderer {
   }
   updateLightmap(world, partial, extra) {
     const under = world.dim === 1, isles = world.dim === 2, sift = world.dim === 3;
-    const sunB = world.menu ? 1 : under ? 0 : isles ? 0.66 : sift ? 0.62 : world.sunBrightness(partial) * 0.95 + 0.05;
+    const sunB = world.menu ? 1 : under ? 0 : isles ? 0.66 * (1 - 0.65 * (world.eclipseK || 0)) : sift ? 0.62 : world.sunBrightness(partial) * 0.95 + 0.05;
     const BR = under || isles || sift ? BRIGHTNESS_UNDER : BRIGHTNESS;
     this.flickerT += (Math.random() - Math.random()) * Math.random() * Math.random() * 0.1;
     this.flickerT *= 0.9;
@@ -10628,6 +10728,7 @@ class Renderer {
       else gl.uniform3fv(ps.u.uVoid, [lerp(fogColor[0], this.skyColor[0] * 0.2 + 0.04, vk), lerp(fogColor[1], this.skyColor[1] * 0.2 + 0.04, vk), lerp(fogColor[2], this.skyColor[2] * 0.6 + 0.1, vk)]);
       gl.uniform1f(ps.u.uIsles, isles ? 1 : 0);
       gl.uniform1f(ps.u.uSift, world.dim === 3 ? 1 : 0);
+      gl.uniform1f(ps.u.uEclipse, isles ? (world.eclipseK || 0) : 0);
       const ca = Math.cos(this.celestial * TAU), sa = Math.sin(this.celestial * TAU);
       gl.uniformMatrix3fv(ps.u.uCel, false, [ca, -sa, 0, sa, ca, 0, 0, 0, 1]);
       gl.uniform1f(ps.u.uNight, isles || world.menu ? 0 : this.nightK);
@@ -10745,8 +10846,10 @@ class Renderer {
     const time = (world.time + partial) / 20;
     if (world.dim === 2) {
       // no sun, no moon: only the stars, turning slowly overhead, and stars falling often
-      this.drawStars(vp, [0.85, 0.82, 1], time);
-      this.drawMeteors(world, time, 1, [0.85, 0.7, 1], 9);
+      // (and in the Starwyrm's eclipse, brighter, falling thick and fast, round a black sun)
+      const ek = world.eclipseK || 0;
+      this.drawStars(vp, [0.85 + ek * 0.4, 0.82 + ek * 0.3, 1 + ek * 0.3], time);
+      this.drawMeteors(world, time, 1 + ek * 1.5, [0.85 + ek * 0.15, 0.7, 1 - ek * 0.3], ek > 0.3 ? 1.5 : 9);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.disable(gl.BLEND);
       return;
@@ -13744,6 +13847,9 @@ const Recipes = (() => {
   // ---------------- the Far Isles ----------------
   shaped([B.STARSTONE_BRICKS, 4], ['##', '##'], { '#': B.STARSTONE });
   shaped([I.star_crystal], ['GGG', 'GEG', 'GTG'], { G: B.GLASS, E: I.seeker_eye, T: I.wailer_tear });
+  // what the Starwyrm calls down: crystals to call it back with, and starmetal
+  shaped([I.star_crystal], ['GGG', 'GFG', 'GTG'], { G: B.GLASS, F: I.star_fragment, T: I.wailer_tear });
+  shaped([I.starmetal_ingot], ['FFF', 'FFF', 'FFF'], { F: I.star_fragment });
   // ---------------- the Sift ----------------
   shaped([B.SILTSTONE_BRICKS, 4, 0], ['##', '##'], { '#': B.SILTSTONE });
   shaped([B.SILTSTONE_BRICKS, 4, 1], ['##', '##'], { '#': [B.SILTSTONE_BRICKS, 0] });
@@ -16389,6 +16495,234 @@ const Isles = (() => {
   return { ARRIVE, state, platform, wellCells, setWell };
 })();
 
+// ---- src/world/wyrmfight.js
+// ---------------------------------------------------------------------------
+// The fight for the Great Isle, and what comes after it. While the Starwyrm
+// lives the Star Well is dry, and there is no way home but to fall. When it
+// dies the Well fills with light; the first time, its egg is left on the
+// Well's pillar; and a star gateway opens out at the isle's edge, across the
+// gulf to the Drift Isles (one more for every time it falls). Set four star
+// crystals round the Well's rim and the crystals on the spires return, and
+// so does the wyrm.
+// ---------------------------------------------------------------------------
+const Wyrm = (() => {
+  const GATES = 20, GATE_R = 96;
+  let bar = null;
+  const st = (w) => Isles.state(w.info);
+  const wellY = (w) => (w.localGen && w.localGen.wellTop ? w.localGen.wellTop() : 60);
+  const gateY = (w) => wellY(w) + 13;
+  function find(w) { for (const e of w.entities) if (e.type === 'starwyrm' && !e.removed) return e; return null; }
+  function firstKill(w) { return !st(w).kills; }
+
+  function tick(game) {
+    const w = game.world;
+    bar = null;
+    if (!w || w.menu) return;
+    // an eclipse comes on slowly and lifts more slowly still
+    const want = w.eclipseUntil && w.time < w.eclipseUntil ? 1 : 0, k = w.eclipseK || 0;
+    w.eclipseK = k + (want - k) * (want ? 0.02 : 0.008);
+    if (w.dim !== DIM_ISLES) return;
+    const s = st(w), p = game.player, e = find(w);
+    if (e && p && (e.x - p.x) ** 2 + (e.z - p.z) ** 2 < 230 * 230) bar = { name: 'Starwyrm', frac: e.health / e.maxHealth, dying: !!e.dead };
+    if (w.time % 10) return;
+    if (e && !e.dead) s.wyrm = { health: Math.ceil(e.health) };
+    if (!s.ritual) Isles.setWell(w, !!s.wyrmDead);
+    if (!s.wyrmDead && !e && !s.ritual && p && !p.dead && w.isLoaded(0, 0) && p.x * p.x + p.z * p.z < 260 * 260) spawn(game, false);
+    if (s.ritual) ritualTick(game, s);
+    buildPending(game, s);
+  }
+  function spawn(game, rising) {
+    const w = game.world, s = st(w), y = wellY(w), e = new Starwyrm(w), a = Math.random() * TAU;
+    e.center = [0.5, y, 0.5];
+    if (rising) {
+      // up out of the void beside the isle
+      e.setPos(Math.cos(a) * 105, y - 45, Math.sin(a) * 105);
+      e.dir = [-Math.cos(a) * 0.45, 0.8, -Math.sin(a) * 0.45];
+      e.speed = 0.6;
+      e.setPhase('rise');
+    } else {
+      e.setPos(Math.cos(a) * 75, y + 36, Math.sin(a) * 75);
+      e.dir = [-Math.sin(a), 0, Math.cos(a)];
+      e.setPhase('circle');
+      if (s.wyrm && s.wyrm.health > 0) e.health = Math.min(e.maxHealth, s.wyrm.health);
+      game.hud.showAction('§dSomething vast is circling the spires...');
+    }
+    const l = Math.hypot(e.dir[0], e.dir[1], e.dir[2]); e.dir = e.dir.map((v) => v / l);
+    w.addEntity(e);
+    return e;
+  }
+  function eclipse(game, ticks) { const w = game.world; w.eclipseUntil = w.time + ticks; }
+
+  // ---------------------------------------------------------------- its fall
+  function slain(game, e) {
+    const w = game.world, s = st(w), first = !s.kills;
+    s.wyrmDead = true; s.kills = (s.kills || 0) + 1; s.wyrm = null;
+    w.eclipseUntil = 0;
+    Isles.setWell(w, true);
+    // the first time, it leaves its egg on the Well's pillar
+    const y = wellY(w) + 5;
+    if (first && w.getBlock(0, y, 0) === 0) w.setBlock(0, y, 0, B.WYRM_EGG, 0);
+    openGateway(game);
+    game.achieve('wyrm');
+    game.hud.showTitle('§dThe Starwyrm falls', 'The Star Well fills with light');
+    void e;
+  }
+  // a crystal broke: if the wyrm was drinking from it, the backlash burns it
+  function crystalLost(game, crystal, src) {
+    const w = game.world;
+    if (!w) return;
+    const e = find(w);
+    if (e && !e.dead && e.healer === crystal) {
+      e.healer = null;
+      const by = src && src.entity && src.entity.type === 'player' ? src.entity : null;
+      e.damage(e.parts[0] || { idx: 0, x: e.x, y: e.y, z: e.z, h: 1, w: 1 }, 10, { type: 'crystal', entity: by });
+      e.roar(game);
+    }
+    const s = w.dim === DIM_ISLES ? st(w) : null;
+    if (s && s.ritual && crystal.ritual) {
+      s.ritual = null;
+      for (const c of rimCrystals(w)) { c.ritual = false; c.beamTo = null; }
+      game.hud.showAction('§7The light gutters out.');
+    }
+  }
+
+  // ---------------------------------------------------------------- the gateways
+  function order(w) {
+    const o = []; for (let i = 0; i < GATES; i++) o.push(i);
+    let h = ((w.seed | 0) ^ 0x5bd1e995) >>> 0;
+    for (let i = GATES - 1; i > 0; i--) { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; const j = h % (i + 1); const t = o[i]; o[i] = o[j]; o[j] = t; }
+    return o;
+  }
+  function innerSpot(w, k) { const a = TAU * k / GATES; return [Math.round(Math.cos(a) * GATE_R), gateY(w), Math.round(Math.sin(a) * GATE_R)]; }
+  function exitSpot(w, k) { return w.localGen.exitGateSpot ? w.localGen.exitGateSpot(k, GATES) : [Math.round(Math.cos(TAU * k / GATES) * 880), 60, Math.round(Math.sin(TAU * k / GATES) * 880)]; }
+  function openGateway(game) {
+    const w = game.world, s = st(w);
+    s.gateways = s.gateways || [];
+    const k = order(w).find((i) => s.gateways.indexOf(i) < 0);
+    if (k === undefined) return;
+    s.gateways.push(k);
+    queue(s, 'inner', k);
+    const [x, y, z] = innerSpot(w, k);
+    s.flare = { x, y, z, until: w.time + 200 };
+    game.audio.play('gateway_open', 0.9, 1);
+  }
+  function queue(s, kind, k) { s.pending = s.pending || []; if (!s.pending.some((q) => q.kind === kind && q.k === k)) s.pending.push({ kind, k }); }
+  function buildPending(game, s) {
+    const w = game.world;
+    if (s.flare && w.time < s.flare.until && game.settings.particles !== 'minimal') {
+      // a column of light where a new gateway has opened
+      const f = s.flare, L = game.particles.layer('particle_glint');
+      for (let i = 0; i < 12; i++) game.particles.add({ x: f.x + 0.5 + (Math.random() - 0.5) * 0.6, y: f.y + Math.random() * 40, z: f.z + 0.5 + (Math.random() - 0.5) * 0.6, vx: 0, vy: 0.3, vz: 0, size: 0.18, life: 30, layer: L, r: 1, g: 0.85, b: 0.55, collide: false, bright: true, fade: true });
+    }
+    if (!s.pending || !s.pending.length) return;
+    s.pending = s.pending.filter((q) => {
+      const [x, y, z] = q.kind === 'inner' ? innerSpot(w, q.k) : exitSpot(w, q.k);
+      for (const [dx, dz] of [[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2]]) if (!w.isLoaded(x + dx, z + dz)) return true;
+      if (q.kind === 'inner') buildInner(w, x, y, z); else buildExit(w, x, y, z);
+      return false;
+    });
+  }
+  // out over the gulf at the isle's edge: a gateway on a little bedrock floor
+  function buildInner(w, x, y, z) {
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+      w.setBlock(x + dx, y - 1, z + dz, B.BEDROCK, 0);
+      for (let dy = 0; dy <= 2; dy++) if (dx || dz) { if (w.getBlock(x + dx, y + dy, z + dz) !== 0) w.setBlock(x + dx, y + dy, z + dz, 0, 0); }
+    }
+    w.setBlock(x, y, z, B.STAR_GATEWAY, 0);
+    w.setBlock(x, y + 1, z, B.BEDROCK, 0);
+  }
+  // on the crown of a drift isle: a gateway you can walk into
+  function buildExit(w, x, y, z) {
+    w.setBlock(x, y - 1, z, B.BEDROCK, 0);
+    w.setBlock(x, y, z, B.STAR_GATEWAY, 0);
+    w.setBlock(x, y + 1, z, B.BEDROCK, 0);
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (let dy = 0; dy <= 1; dy++) if (w.getBlock(x + dx, y + dy, z + dz) !== 0) w.setBlock(x + dx, y + dy, z + dz, 0, 0);
+  }
+  // stepped into a gateway: across the gulf, one way or the other
+  function travel(game, bx, by, bz) {
+    const w = game.world, s = st(w);
+    const a = Math.atan2(bz + 0.5, bx + 0.5), r = Math.hypot(bx + 0.5, bz + 0.5);
+    const k = ((Math.round(a / TAU * GATES) % GATES) + GATES) % GATES;
+    game.audio.play('gateway_travel', 0.9, 1);
+    if (r < 400) {
+      const [x, y, z] = exitSpot(w, k), ux = Math.cos(a), uz = Math.sin(a);
+      queue(s, 'exit', k);
+      game.holdPlayer(x + 0.5 + Math.round(ux * 2), y, z + 0.5 + Math.round(uz * 2), Math.atan2(-ux, -uz));
+      game.achieve('gateway');
+    } else {
+      s.gateways = s.gateways || [];
+      if (s.gateways.indexOf(k) < 0) s.gateways.push(k);
+      queue(s, 'inner', k);
+      const [x, y, z] = innerSpot(w, k), ka = TAU * k / GATES, ox = -Math.round(Math.cos(ka)), oz = -Math.round(Math.sin(ka));
+      game.holdPlayer(x + ox + 0.5, y, z + oz + 0.5, Math.atan2(Math.cos(ka), Math.sin(ka)));
+    }
+    buildPending(game, s);
+  }
+
+  // ---------------------------------------------------------------- calling it back
+  function rimCrystals(w) {
+    const y = wellY(w);
+    return w.entities.filter((e) => e.type === 'star_crystal' && !e.removed && Math.hypot(e.x - 0.5, e.z - 0.5) < 4.6 && Math.abs(e.y - (y + 2)) < 1.6);
+  }
+  function crystalPlaced(game) {
+    const w = game.world;
+    if (!w || w.dim !== DIM_ISLES) return;
+    const s = st(w);
+    if (!s.wyrmDead || s.ritual) return;
+    const rim = rimCrystals(w);
+    if (rim.length < 4) return;
+    for (const c of rim) c.ritual = true;
+    s.ritual = { t: 0 };
+    game.hud.showAction('§dThe Star Well drinks the light of the crystals...');
+    game.audio.play('wyrm_ritual', 1, 1);
+  }
+  function ritualTick(game, s) {
+    const w = game.world, r = s.ritual, y = wellY(w);
+    r.t += 10;
+    const rim = rimCrystals(w);
+    for (const c of rim) { c.ritual = true; c.beamTo = [0.5, y + 46, 0.5]; }
+    // the crystals on the spires come back, one by one
+    if (r.t >= 60 && r.t < 160) {
+      const spires = w.localGen.spireList ? w.localGen.spireList() : [];
+      const sp = spires[(r.t - 60) / 10];
+      if (sp) restoreSpire(game, sp);
+    }
+    if (r.t === 160) eclipse(game, 200);
+    if (r.t >= 230) {
+      for (const c of rim) {
+        c.removed = true;
+        game.audio.play('crystal_break', 1.6, 1.1, c.x, c.y + 1, c.z);
+        if (game.settings.particles !== 'minimal') for (let i = 0; i < 30; i++) game.particles.sparkle(c.x, c.y + 1, c.z, 0.85, 0.6, 1, 1, 2);
+      }
+      s.ritual = null; s.wyrmDead = false; s.wyrm = null;
+      Isles.setWell(w, false);
+      const e = spawn(game, true);
+      e.roar(game);
+      game.hud.showTitle('', '§dThe Starwyrm returns');
+    }
+  }
+  function restoreSpire(game, sp) {
+    const w = game.world;
+    if (!w.isLoaded(sp.x, sp.z)) return;
+    const cx = sp.x + 0.5, cz = sp.z + 0.5;
+    if (w.getBlock(sp.x, sp.h, sp.z) !== B.BEDROCK) w.setBlock(sp.x, sp.h, sp.z, B.BEDROCK, 0);
+    for (let yy = sp.h + 1; yy <= sp.h + 2; yy++) if (w.getBlock(sp.x, yy, sp.z) !== 0) w.setBlock(sp.x, yy, sp.z, 0, 0);
+    if (sp.caged) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+      if (Math.abs(dx) === 2 || Math.abs(dz) === 2) for (let yy = sp.h; yy <= sp.h + 3; yy++) if (w.getBlock(sp.x + dx, yy, sp.z + dz) === 0) w.setBlock(sp.x + dx, yy, sp.z + dz, B.IRON_BARS, 0);
+      if (w.getBlock(sp.x + dx, sp.h + 4, sp.z + dz) === 0) w.setBlock(sp.x + dx, sp.h + 4, sp.z + dz, B.IRON_BARS, 0);
+    }
+    if (!w.entities.some((e) => e.type === 'star_crystal' && !e.removed && Math.abs(e.x - cx) < 1 && Math.abs(e.z - cz) < 1 && Math.abs(e.y - (sp.h + 1)) < 2)) game.spawnEntity(new StarCrystal(w, cx, sp.h + 1, cz));
+    game.audio.play('crystal_hum', 2, 1.3, cx, sp.h + 2, cz);
+    if (game.settings.particles !== 'minimal') for (let i = 0; i < 24; i++) game.particles.sparkle(cx, sp.h + 2, cz, 0.85, 0.6, 1, 1, 2);
+  }
+
+  return {
+    tick, spawn, slain, eclipse, crystalLost, crystalPlaced, travel, firstKill, find,
+    bar: () => bar, fighting: () => !!bar && !bar.dying,
+    GATES, innerSpot, exitSpot, order,
+  };
+})();
+
 // ---- src/world/hush.js
 // ---------------------------------------------------------------------------
 // The Hush: the listening dark deep under the world. Everything you do makes
@@ -17718,6 +18052,61 @@ const Skins = (() => {
     return s;
   })();
 
+  // ------------------------------------------------------------ the Starwyrm
+  // night-blue scales in rows, a pale violet belly, horns of old gold, and stars
+  // caught in its hide (those, and its eyes, are drawn again full-bright)
+  const WY = { d0: C('#14123a'), d1: C('#1c1a4c'), d2: C('#26245e'), sc: C('#343074'), belly: C('#5a4e98'), bellyL: C('#7a6cb8'), horn: C('#cdb878'), hornT: C('#fff0b8'), mem: C('#2a1e5a'), rib: C('#6a5ab0') };
+  const wyScale = (r, f, x, y, fw, fh) => {
+    if (f === 'bottom') return (y % 3 === 0) ? vary(r, WY.belly, 0.06) : vary(r, WY.bellyL, 0.06);
+    if (f === 'left' || f === 'right' || f === 'front' || f === 'back') {
+      const k = y / Math.max(1, fh - 1);
+      if (k > 0.75) return vary(r, WY.belly, 0.08);
+      return ((x + (y >> 1)) % 3 === 0) ? vary(r, WY.sc, 0.1) : vary(r, k > 0.4 ? WY.d2 : WY.d1, 0.1);
+    }
+    return ((x + y) % 4 === 0) ? vary(r, WY.sc, 0.1) : vary(r, (x * 7 + y * 3) % 5 === 0 ? WY.d2 : WY.d0, 0.1);
+  };
+  // which pixels of a face hold a star (shared by the hide and its glow)
+  const wyStar = (f, x, y, salt) => f !== 'bottom' && (((x * 73 + y * 151 + salt * 29) * 2654435761) >>> 0) % 23 === 0;
+  const STAR_COLS = [[255, 248, 220], [200, 184, 255], [150, 230, 255]];
+  S.starwyrm_head = (() => {
+    const s = new Skin(); const r = rng('starwyrm_head');
+    s.box(0, 0, 8, 6, 12, (f, x, y, fw, fh) => wyScale(r, f, x, y, fw, fh));
+    s.box(40, 0, 6, 4, 6, (f, x, y, fw, fh) => f === 'front' ? (y === 2 && (x === 1 || x === 4) ? C('#0a0818') : vary(r, WY.d2, 0.08)) : wyScale(r, f, x, y, fw, fh));
+    s.box(0, 18, 6, 2, 10, (f, x, y) => f === 'top' ? ((x + y) % 2 ? C('#e8e0f8') : C('#3a1430')) : vary(r, WY.belly, 0.08));
+    s.box(40, 10, 2, 2, 8, (f, x, y) => (f === 'back' || (f !== 'front' && f !== 'top' && f !== 'bottom' && x < 2)) ? WY.hornT : vary(r, WY.horn, 0.1));
+    s.box(32, 20, 1, 1, 6, () => vary(r, WY.horn, 0.12));
+    s.box(46, 20, 1, 3, 4, (f, x, y) => y === 0 ? WY.hornT : vary(r, WY.horn, 0.1));
+    return s;
+  })();
+  S.starwyrm_eyes = (() => {
+    const s = new Skin();
+    // the eyes on the sides of the skull, toward its front (+X face counts from the back, -X from the front)
+    s.box(0, 0, 8, 6, 12, (f, x, y) => {
+      if (f === 'right' && y === 1 && (x === 9 || x === 10)) return x === 10 ? [255, 255, 255] : [130, 240, 255];
+      if (f === 'left' && y === 1 && (x === 1 || x === 2)) return x === 1 ? [255, 255, 255] : [130, 240, 255];
+      if ((f === 'right' || f === 'left' || f === 'top') && wyStar(f, x, y, 1)) return STAR_COLS[(x + y) % 3];
+      return null;
+    });
+    return s;
+  })();
+  S.starwyrm_body = (() => {
+    const s = new Skin(); const r = rng('starwyrm_body');
+    s.box(0, 0, 8, 8, 10, (f, x, y, fw, fh) => (f === 'top' && (x === 3 || x === 4)) ? vary(r, WY.d2, 0.08) : wyScale(r, f, x, y, fw, fh));
+    s.box(36, 0, 1, 3, 3, (f, x, y) => y === 0 ? WY.horn : vary(r, C('#7a6a48'), 0.12));
+    s.box(0, 18, 10, 1, 6, (f, x, y) => (f === 'top' || f === 'bottom') ? ((x % 3 === 0) ? vary(r, WY.rib, 0.1) : vary(r, WY.mem, 0.1)) : vary(r, WY.rib, 0.1));
+    s.box(36, 8, 1, 8, 10, (f, x, y) => (f === 'left' || f === 'right') ? ((y % 3 === 0 || x === 0) ? vary(r, WY.rib, 0.1) : vary(r, WY.mem, 0.1)) : vary(r, WY.rib, 0.1));
+    return s;
+  })();
+  S.starwyrm_glow = (() => {
+    const s = new Skin();
+    s.box(0, 0, 8, 8, 10, (f, x, y) => {
+      if (f === 'top' && (x === 3 || x === 4) && y % 3 === 1) return [170, 150, 255];
+      return wyStar(f, x, y, 2) ? STAR_COLS[(x * 3 + y) % 3] : null;
+    });
+    s.box(0, 18, 10, 1, 6, (f, x, y) => (f === 'top' && x === 9 && y % 2 === 0) ? [190, 170, 255] : null);
+    return s;
+  })();
+
   // ------------------------------------------------------------ the Hush
   // the Listener: slate-dark hide over a cage of ribs that glow when its heart beats,
   // and no face at all - only a dish of an ear, whorled like a shell
@@ -18674,6 +19063,29 @@ const MODELS = (() => {
       rwing: { pivot: [3, 6, 0], rot0: [Math.PI / 2, 0, 0], boxes: [bx([0, -8, 0], [10, 16, 1], [42, 0])] },
       lwing: { pivot: [-3, 6, 0], rot0: [Math.PI / 2, 0, 0], boxes: [bx([-10, -8, 0], [10, 16, 1], [42, 0], { mirror: true })] },
     },
+    // the Starwyrm, built small and drawn large. Its head: a long skull with swept-back
+    // horns, a heavy jaw and barbels trailing from the snout (centred on the neck joint)
+    wyrmHead: {
+      skull: { pivot: [0, 0, 0], boxes: [bx([-4, -3, -6], [8, 6, 12], [0, 0])] },
+      snout: { pivot: [0, -0.5, -6], boxes: [bx([-3, -2, -6], [6, 4, 6], [40, 0])] },
+      jaw: { pivot: [0, -2.5, -2], boxes: [bx([-3, -2, -10], [6, 2, 10], [0, 18])] },
+      hornR: { pivot: [2.5, 2, 2], rot0: [-0.55, 0.3, 0], boxes: [bx([-1, -1, 0], [2, 2, 8], [40, 10])] },
+      hornL: { pivot: [-2.5, 2, 2], rot0: [-0.55, -0.3, 0], boxes: [bx([-1, -1, 0], [2, 2, 8], [40, 10], { mirror: true })] },
+      barbelR: { pivot: [2.5, -1.5, -11], rot0: [0.35, 0.5, 0], boxes: [bx([0, 0, 0], [1, 1, 6], [32, 20])] },
+      barbelL: { pivot: [-2.5, -1.5, -11], rot0: [0.35, -0.5, 0], boxes: [bx([-1, 0, 0], [1, 1, 6], [32, 20], { mirror: true })] },
+      crest: { pivot: [0, 3, -3], boxes: [bx([-0.5, 0, 0], [1, 3, 4], [46, 20])] },
+    },
+    // a body segment, with a spine along its back
+    wyrmSeg: {
+      body: { pivot: [0, 0, 0], boxes: [bx([-4, -4, -5], [8, 8, 10], [0, 0])] },
+      spine: { pivot: [0, 4, 0], rot0: [-0.35, 0, 0], boxes: [bx([-0.5, 0, -1.5], [1, 3, 3], [36, 0])] },
+    },
+    // the long fins it swims the air with, on a few of its segments
+    wyrmFins: {
+      finR: { pivot: [4, 0, 0], boxes: [bx([0, -0.5, -3], [10, 1, 6], [0, 18])] },
+      finL: { pivot: [-4, 0, 0], boxes: [bx([-10, -0.5, -3], [10, 1, 6], [0, 18], { mirror: true })] },
+    },
+    wyrmTail: { fin: { pivot: [0, 0, 4], boxes: [bx([-0.5, -4, 0], [1, 8, 10], [36, 8])] } },
   };
 })();
 
@@ -20299,6 +20711,93 @@ const SOUND_DEFS = (() => {
     });
   };
   S.crystal_hum = () => render(3, (t) => (Math.sin(2 * Math.PI * 440 * t) * 0.5 + Math.sin(2 * Math.PI * 660.4 * t) * 0.3 + Math.sin(2 * Math.PI * 880.9 * t) * 0.15) * Math.sin(Math.PI * t / 3));
+  // ----- the Starwyrm -----
+  // a voice like a whale's under a sky full of bells: a deep saw growl with a high, glassy shimmer over it
+  const wyrmVoice = (dur, f0, f1, rough, shimmer, roar) => () => {
+    const lp = new Biquad('lp', 380, 0.9), bp = new Biquad('bp', 900, 1.5), hp = new Biquad('hp', 2600, 0.7);
+    let ph = 0, ph2 = 0;
+    const bells = [523.3, 659.3, 784, 987.8, 1174.7].map((f) => f * (0.98 + rnd() * 0.04));
+    return render(dur, (t) => {
+      const u = t / dur, f = f0 + (f1 - f0) * Math.pow(u, 0.8) + Math.sin(t * 2 * Math.PI * 5) * f0 * 0.05;
+      ph += 2 * Math.PI * f / DSP.SR; ph2 += 2 * Math.PI * f * 1.5 / DSP.SR;
+      const saw = ((ph / (2 * Math.PI)) % 1) * 2 - 1, sq = Math.sin(ph2) > 0 ? 0.4 : -0.4;
+      const e = Math.sin(Math.PI * Math.min(1, u * 1.1)) * (u < 0.05 ? u / 0.05 : 1);
+      let v = (lp.p(saw + sq * 0.5 + noise() * rough) * 1.5 + bp.p(noise()) * rough * (roar || 0)) * e;
+      let sh = 0; bells.forEach((bf, i) => { sh += Math.sin(2 * Math.PI * bf * t + i) * Math.sin(Math.PI * clamp((t - i * dur * 0.06) / (dur * 0.7), 0, 1)); });
+      v += (sh * 0.06 + hp.p(noise()) * 0.05) * shimmer * Math.max(0, Math.sin(Math.PI * u));
+      return v;
+    });
+  };
+  S.wyrm_say = wyrmVoice(2.6, 64, 50, 0.25, 0.8, 0.2);
+  S.wyrm_hurt = wyrmVoice(0.8, 96, 70, 0.45, 0.4, 0.6);
+  S.wyrm_roar = wyrmVoice(3.4, 58, 46, 0.5, 1.2, 1.2);
+  // its end: the roar falls away and the stars ring out of it
+  S.wyrm_death = () => {
+    const base = wyrmVoice(4.5, 70, 26, 0.5, 0.5, 1)();
+    const bells = [261.6, 329.6, 392, 523.3, 659.3, 784, 1046.5];
+    return render((base.length / DSP.SR) + 2.5, (t, i) => {
+      let s = i < base.length ? base[i] : 0;
+      bells.forEach((f, k) => { const u = t - 1.2 - k * 0.32; if (u > 0) s += Math.sin(2 * Math.PI * f * u) * Math.exp(-u / 1.6) * 0.18; });
+      return s;
+    });
+  };
+  // a starbolt spat: a breath of air and a flurry of sparks
+  S.wyrm_spit = () => {
+    const bp = new Biquad('bp', 1200, 1.2), ck = [];
+    for (let i = 0; i < 12; i++) ck.push([0.05 + rnd() * 0.5, 1800 + rnd() * 2600, 0.25, 0.01 + rnd() * 0.02]);
+    return render(0.8, (t) => { bp.set(600 + t * 2400, 1.2); return bp.p(noise()) * env(t, 0.02, 0.22) * 1.4 + ring(ck, t); });
+  };
+  // starfire rolling out across the ground
+  S.wyrm_breath = () => {
+    const bp = new Biquad('bp', 900, 0.9), hp = new Biquad('hp', 3000, 0.7), ck = [];
+    for (let i = 0; i < 30; i++) ck.push([0.2 + rnd() * 2.2, 1500 + rnd() * 3000, 0.12, 0.015 + rnd() * 0.02]);
+    return render(2.8, (t) => { const e = Math.sin(Math.PI * Math.min(1, t / 2.8)) * (t < 0.1 ? t / 0.1 : 1); bp.set(500 + Math.sin(t * 3) * 300, 0.9); return (bp.p(noise()) * 1.3 + hp.p(noise()) * 0.3) * e + ring(ck, t); });
+  };
+  S.wyrm_bolt_burst = () => {
+    const lp = new Biquad('lp', 600, 0.8), ck = [];
+    for (let i = 0; i < 16; i++) ck.push([rnd() * 0.4, 1200 + rnd() * 3500, 0.3, 0.02 + rnd() * 0.04]);
+    return render(1.2, (t) => lp.p(noise()) * 3 * env(t, 0.003, 0.08) + ring(ck, t) + Math.sin(2 * Math.PI * 880 * t) * env(t, 0.01, 0.4) * 0.25);
+  };
+  // a piece of the wyrm bursting into stars
+  S.wyrm_burst = () => {
+    const hp = new Biquad('hp', 1800, 0.7), f = 600 + rnd() * 500;
+    return render(1.6, (t) => hp.p(noise()) * env(t, 0.002, 0.12) + (Math.sin(2 * Math.PI * f * t) + Math.sin(2 * Math.PI * f * 1.5 * t) * 0.6 + Math.sin(2 * Math.PI * f * 2 * t) * 0.3) * env(t, 0.005, 0.5) * 0.4);
+  };
+  // a star falling out of the dark: a long whistle, getting lower and louder
+  S.meteor_fall = () => {
+    let ph = 0;
+    const bp = new Biquad('bp', 2000, 2);
+    return render(2.6, (t) => { const u = t / 2.6, f = 2400 - u * 1900; ph += 2 * Math.PI * f / DSP.SR; bp.set(f, 2); return (Math.sin(ph) * 0.4 + bp.p(noise()) * 0.8) * (0.15 + u * 0.85) * (u > 0.96 ? (1 - u) / 0.04 : 1); });
+  };
+  S.meteor_impact = () => {
+    const lp = new Biquad('lp', 160, 0.8), hp = new Biquad('hp', 2500, 0.7), ck = [];
+    for (let i = 0; i < 24; i++) ck.push([0.05 + rnd() * 0.8, 1500 + rnd() * 3000, 0.15, 0.02 + rnd() * 0.03]);
+    return render(1.8, (t) => lp.p(noise()) * 6 * env(t, 0.004, 0.25) + Math.sin(2 * Math.PI * (55 - t * 15) * t) * env(t, 0.004, 0.4) * 0.8 + hp.p(noise()) * env(t, 0.002, 0.1) * 0.5 + ring(ck, t));
+  };
+  // a star gateway opening far off: a chord swelling out of nothing
+  S.gateway_open = () => {
+    const hp = new Biquad('hp', 3000, 0.7);
+    return render(4.5, (t) => {
+      const u = t / 4.5, sw = Math.sin(Math.PI * Math.min(1, u * 1.15));
+      let s = 0; [196, 246.9, 293.7, 392, 493.9, 587.3].forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t * (1 + Math.sin(t * 0.7 + i) * 0.002)) * (0.4 / (1 + i * 0.4)); });
+      return s * sw + hp.p(noise()) * 0.15 * sw;
+    });
+  };
+  // through it: a rush of air and a bell
+  S.gateway_travel = () => {
+    const bp = new Biquad('bp', 800, 1);
+    return render(1.6, (t) => { bp.set(300 + t * 1800, 1); return bp.p(noise()) * env(t, 0.15, 0.35) * 1.2 + (Math.sin(2 * Math.PI * 1046.5 * t) + Math.sin(2 * Math.PI * 1568 * t) * 0.5) * env(t, 0.3, 0.6) * 0.3 * (t > 0.3 ? 1 : 0); });
+  };
+  // the Star Well drinking in the crystals' light
+  S.wyrm_ritual = () => {
+    const lp = new Biquad('lp', 200, 0.8);
+    return render(6, (t) => {
+      const u = t / 6, sw = Math.sin(Math.PI * Math.min(1, u * 1.1));
+      let s = 0; [55, 82.4, 110, 164.8].forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t) * (0.5 / (i + 1)); });
+      [880, 1108.7, 1318.5].forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t) * 0.07 * Math.max(0, Math.sin(t * (1.3 + i * 0.4))); });
+      return (s + lp.p(noise()) * 0.6) * sw;
+    });
+  };
   // ----- the Hush -----
   // the air of the Hush: a pressure more than a sound, with something ticking far away (looped)
   S.hush_air = () => {
@@ -20682,7 +21181,7 @@ class MusicEngine {
     if (!g.world || g.world.menu) return 'menu';
     const p = g.player, w = g.world;
     if (this.forceMood) return this.forceMood;
-    if (w.dim === 2) return 'isles';
+    if (w.dim === 2) return typeof Wyrm !== 'undefined' && Wyrm.fighting() ? 'wyrm' : 'isles';
     if (w.dim === 3) return 'sift';
     if (w.dim) return 'underworld';
     if (p && p.creative) return Math.random() < 0.5 ? 'creative' : 'day';
@@ -20877,6 +21376,10 @@ class MusicEngine {
     const menu = !this.game.world || this.game.world.menu;
     // switching between the title screen and a world changes the mood soon
     if (this.playing && (this.mood === 'menu') !== menu && this.ctx.currentTime - this.pieceStart > 2) { this.stop(3); this.scheduleNext(true); this.nextStart = performance.now() + (menu ? 3000 : 25000); }
+    // the Starwyrm's fight has its own music, which starts as soon as it does
+    const fight = !menu && typeof Wyrm !== 'undefined' && Wyrm.fighting();
+    if (this.playing && (this.mood === 'wyrm') !== fight && this.ctx.currentTime - this.pieceStart > 2) { this.stop(fight ? 2 : 6); this.scheduleNext(false); this.nextStart = performance.now() + (fight ? 1500 : 20000); }
+    if (!this.playing && fight && this.nextStart > performance.now() + 2000) this.nextStart = performance.now() + 2000;
     if (!this.playing) { if (performance.now() >= this.nextStart && this.ctx.state === 'running') this.start(); return; }
     // render a few note buffers ahead of time
     const t0 = performance.now();
@@ -21223,6 +21726,8 @@ class Hud {
     if (g.portalFx > 0) this.portalOverlay(gui, g.portalFx);
     if (g.hideHud) return;
     const cx = Math.floor(W / 2);
+    const boss = typeof Wyrm !== 'undefined' ? Wyrm.bar() : null;
+    if (boss) this.bossBar(gui, cx, boss);
     const hotY = H - 22 - (touch ? 0 : 0);
     // hotbar
     this.hotbar(gui, cx - 91, hotY);
@@ -21255,6 +21760,15 @@ class Hud {
     this.drawToasts(gui);
     if (g.showDebug) this.debug(gui, partial);
     else if (g.settings.showFps) gui.text(this.fps + ' fps', 2, 2, '#e0e0e0');
+  }
+  // a great foe's name and strength, across the top of the screen
+  bossBar(gui, cx, b) {
+    const W = 182, x = cx - 91, y = 14, f = Math.max(0, Math.min(W, Math.round(W * b.frac)));
+    gui.textCentered(b.name, cx, y - 10, '#ffffff', true);
+    gui.rect(x - 1, y - 1, W + 2, 7, '#100418');
+    gui.rect(x, y, W, 5, '#3a1450');
+    if (f > 0) { gui.rect(x, y, f, 5, '#b048e0'); gui.rect(x, y, f, 1, '#eab0ff'); gui.rect(x, y + 4, f, 1, '#6c1a90'); }
+    for (let i = 1; i < 10; i++) gui.rect(x + Math.round(W * i / 10), y + 1, 1, 3, 'rgba(16,4,24,0.45)');
   }
   vignette(gui) {
     const ctx = gui.ctx, W = gui.w, H = gui.h;
@@ -22865,7 +23379,7 @@ const CREATIVE_TABS = (() => {
     ...all(B.SAPLING), ...all(B.LEAVES), blk(B.COBWEB), ...all(B.TALL_GRASS), blk(B.DEAD_BUSH), ...all(B.FLOWER), blk(B.MUSHROOM_BROWN), blk(B.MUSHROOM_RED), blk(B.GLOWSHROOM), blk(B.LUMITE_CRYSTAL),
     blk(B.TORCH), blk(B.CHEST), blk(B.CRAFTING_TABLE), blk(B.FURNACE), blk(B.ENCHANTING_TABLE), blk(B.LADDER), blk(B.ROPE), blk(B.SNOW_LAYER), blk(B.CACTUS), blk(B.PUMPKIN), blk(B.JACK_O_LANTERN), blk(B.MELON), blk(B.VINE),
     blk(B.LILY_PAD), blk(B.CATTAIL), blk(B.BRAMBLE), blk(B.LEAF_LITTER), ...all(B.FENCE), blk(B.FENCE_GATE), blk(B.TRAPDOOR), blk(B.GLASS_PANE), ...all(B.CARPET), blk(B.LUMITE_LAMP), blk(B.MOB_SPAWNER), blk(B.BRIMSTONE_FENCE), [I.bloodcap, 0],
-    blk(B.IRON_BARS), blk(B.RIFT_FRAME), ...all(B.INFESTED_BRICKS), [I.star_crystal, 0],
+    blk(B.IRON_BARS), blk(B.RIFT_FRAME), ...all(B.INFESTED_BRICKS), [I.star_crystal, 0], blk(B.WYRM_EGG), [I.star_fragment, 0],
     blk(B.GLOW_VINE), blk(B.GLOW_VINE_BERRIES), blk(B.PALE_LANTERN), blk(B.HUSH_SENSOR), blk(B.HUSH_SHRIEKER), blk(B.GATE_KEYSTONE), blk(B.DUNE_GRASS),
     [I.door_wood, 0], [I.door_iron, 0], [I.bed, 0], ...WOOD.map((w, i) => [I.sign, i]), [I.painting, 0]] });
   T.push({ name: 'Tools', icon: [I.iron_axe, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ['shovel', 'pickaxe', 'axe', 'hoe'].map((k) => [I[m + '_' + k], 0])),
@@ -22909,7 +23423,7 @@ class CreativeScreen extends ContainerScreen {
   }
   tabItems() {
     const t = CREATIVE_TABS[this.tab];
-    if (t.name === 'Creatures') return MOB_TYPES.map((m, i) => m && m.egg ? [ITEM_IDS.spawn_egg, i] : null).filter(Boolean);
+    if (t.name === 'Creatures') return MOB_TYPES.map((m, i) => m && m.egg && !m.noEgg ? [ITEM_IDS.spawn_egg, i] : null).filter(Boolean);
     if (t.search) {
       const q = this.search.toLowerCase();
       const out = [];
@@ -23263,6 +23777,9 @@ const MILESTONES = [
   { id: 'isles', name: 'The Far Isles', desc: 'Step through the rift', icon: () => [B.STARSTONE, 0] },
   { id: 'crystal', name: 'Lights Out', desc: 'Shatter a star crystal', icon: () => [ITEM_IDS.star_crystal, 0] },
   { id: 'drift', name: 'Adrift', desc: 'Reach the Drift Isles beyond the gulf', icon: () => [B.STARSTONE_BRICKS, 0] },
+  { id: 'wyrm', name: 'Wyrmfall', desc: 'Bring down the Starwyrm', icon: () => [ITEM_IDS.star_fragment, 0] },
+  { id: 'egg', name: 'Something Stirs', desc: 'Take the Starwyrm\'s egg', icon: () => [B.WYRM_EGG, 0] },
+  { id: 'gateway', name: 'Over the Gulf', desc: 'Pass through a star gateway', icon: () => [B.STAR_GATEWAY, 0] },
   { id: 'city', name: 'Lost and Found', desc: 'Find a forgotten city deep in the Hush', icon: () => [B.DEEPSTONE_BRICKS, 2] },
   { id: 'gate', name: 'The Grey Door', desc: 'Wake a city gate with an Echo Heart', icon: () => [ITEM_IDS.echo_heart, 0] },
   { id: 'listener', name: 'Unheard Of', desc: 'Defeat the Listener', icon: () => [ITEM_IDS.hush_shard, 0] },
@@ -27157,6 +27674,708 @@ MobSpawner.prototype.tickIsles = function (rd, area) {
   }
 };
 
+// ---- src/entity/wyrm.js
+// ---------------------------------------------------------------------------
+// The Starwyrm: a serpent of the void, long as a river, scaled in night and
+// flecked with stars. It circles the Great Isle drinking from the star
+// crystals on the spires; swoops on you and spits starbolts; coils round the
+// Star Well to breathe starfire across the isle; and when it has been hurt
+// badly enough it rises, roars, and calls the sky down on you.
+//
+// The body is a chain of segments laid along the path its head has flown, so
+// it really does coil and wind. Every segment can be struck (each one is a
+// small invisible part entity standing in for it), but its scales turn most
+// of a blow: aim for the head.
+// ---------------------------------------------------------------------------
+MOB_TYPES.push({
+  key: 'starwyrm', name: 'Starwyrm', egg: ['#14123a', '#fff0b8'], cat: 'boss', noEgg: true,
+  lore: 'A serpent of the void, long as a river, scaled in night and flecked with stars. It circles the spires of the Great Isle drinking from the star crystals, coils round the Star Well to breathe starfire, and when it is badly hurt it calls the sky down. Strike at its head: its scales turn most of a blow.',
+});
+MOB_TYPES.forEach((m, i) => { if (m) { m.index = i; MOB_INDEX[m.key] = m; } });
+
+const WYRM_SEGS = 18;
+// drawing scale of each segment (model pixels, so 8px * 2.7 / 16 = 1.35 blocks across), tapering to the tail
+const WYRM_SIZE = (i) => 2.7 - 1.3 * Math.pow(i / (WYRM_SEGS - 1), 1.3);
+const WYRM_HEAD_SCALE = 2.7;
+// distance from one segment to the next (a little less than a segment's length, so the body reads as one)
+const WYRM_GAP = (i) => 0.55 * WYRM_SIZE(i) + 0.1;
+const WYRM_NECK = 1.75;
+// what it cannot smash its way through
+const WYRM_PROOF = new Set([B.BEDROCK, B.OBSIDIAN, B.STARSTONE, B.STARSTONE_BRICKS, B.IRON_BARS, B.RIFT, B.RIFT_FRAME, B.STAR_GATEWAY, B.WYRM_EGG, B.TORCH, B.FIRE].filter((id) => id !== undefined));
+
+// one struck-at piece of the Starwyrm: the head (idx 0) or a body segment
+class WyrmPart extends Entity {
+  constructor(world, wyrm, idx, size) {
+    super(world);
+    this.type = 'wyrm_part';
+    this.wyrm = wyrm; this.idx = idx;
+    this.w = size; this.h = size;
+    this.noGravity = true; this.noClip = true;
+  }
+  tick() { if (!this.wyrm || this.wyrm.removed) this.removed = true; }
+  hurt(amount, src) { return this.wyrm && !this.wyrm.removed ? this.wyrm.damage(this, amount, src) : false; }
+  render() {}
+  save() { return null; }
+}
+
+class Starwyrm extends Mob {
+  constructor(world) {
+    super(world, 'starwyrm');
+    this.category = 'boss';
+    this.maxHealth = this.health = 260;
+    // its own box is a pinprick: blows land on its parts instead
+    this.w = 0.05; this.h = 0.05; this.eye = 0;
+    this.noClip = true; this.noGravity = true; this.fireImmune = true;
+    this.keepLoaded = true;
+    this.xpValue = 0;
+    this.talkInterval = 260;
+    this.dir = [1, 0, 0]; this.speed = 0.4; this.speedTarget = 0.5;
+    this.goal = null;
+    this.phase = 'circle'; this.phaseT = 0; this.nextMove = 200 + this.rnd(200);
+    this.circleA = Math.random() * TAU; this.circleR = 32; this.circleDir = Math.random() < 0.5 ? 1 : -1;
+    this.coilCool = 900 + this.rnd(600); this.coilA = 0; this.dmgSinceCoil = 0;
+    this.starfalls = 0; this.bolts = 0; this.boltCool = 0;
+    this.healer = null; this.healT = 0;
+    this.jaw = 0; this.pjaw = 0; this.roarT = 0;
+    this.deathT = 0;
+    this.buffetT = 0;
+    this.trail = [];
+    this.segs = [];
+    for (let i = 0; i < WYRM_SEGS; i++) this.segs.push({ x: 0, y: 0, z: 0, px: 0, py: 0, pz: 0, yaw: 0, pitch: 0, pyaw: 0, ppitch: 0, hidden: false });
+    this.parts = [];
+    this.center = [0, 60, 0];
+  }
+  // ---------------------------------------------------------------- body
+  // lay the body out straight behind the head (on spawning)
+  layOut() {
+    const d = this.dir;
+    this.trail = [];
+    for (let k = 0; k < 120; k++) this.trail.push([this.x - d[0] * k * 0.5, this.y - d[1] * k * 0.5, this.z - d[2] * k * 0.5]);
+    this.placeBody();
+    for (const s of this.segs) { s.px = s.x; s.py = s.y; s.pz = s.z; s.pyaw = s.yaw; s.ppitch = s.pitch; }
+  }
+  recordTrail() {
+    const t = this.trail;
+    if (t.length && Math.abs(t[0][0] - this.x) + Math.abs(t[0][1] - this.y) + Math.abs(t[0][2] - this.z) < 0.04) return;
+    t.unshift([this.x, this.y, this.z]);
+    if (t.length > 900) t.length = 900;
+  }
+  // each segment sits on the path the head has flown, one gap behind the last
+  placeBody() {
+    const t = this.trail, segs = this.segs, N = segs.length;
+    let n = 0, target = WYRM_NECK, acc = 0, ax = this.x, ay = this.y, az = this.z;
+    for (let k = 0; k < t.length && n < N; k++) {
+      const bx = t[k][0], by = t[k][1], bz = t[k][2];
+      const L = Math.hypot(bx - ax, by - ay, bz - az);
+      while (n < N && L > 1e-6 && acc + L >= target) {
+        const f = (target - acc) / L, s = segs[n];
+        s.x = ax + (bx - ax) * f; s.y = ay + (by - ay) * f; s.z = az + (bz - az) * f;
+        n++; target += WYRM_GAP(n - 1);
+      }
+      acc += L; ax = bx; ay = by; az = bz;
+    }
+    // past the end of the remembered path: carry on straight
+    let lx = -this.dir[0], ly = -this.dir[1], lz = -this.dir[2];
+    if (n >= 2) { const a = segs[n - 2], b = segs[n - 1], l = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) || 1; lx = (b.x - a.x) / l; ly = (b.y - a.y) / l; lz = (b.z - a.z) / l; }
+    while (n < N) {
+      const s = segs[n], extra = target - acc;
+      s.x = ax + lx * extra; s.y = ay + ly * extra; s.z = az + lz * extra;
+      n++; target += WYRM_GAP(n - 1);
+    }
+    // each faces the one before it
+    for (let i = 0; i < N; i++) {
+      const s = segs[i], a = i === 0 ? [this.x, this.y, this.z] : [segs[i - 1].x, segs[i - 1].y, segs[i - 1].z], b = i + 1 < N ? segs[i + 1] : s;
+      const fx = a[0] - b.x, fy = a[1] - b.y, fz = a[2] - b.z, l = Math.hypot(fx, fy, fz) || 1;
+      s.yaw = Math.atan2(-fx, -fz); s.pitch = Math.asin(clamp(fy / l, -1, 1));
+    }
+  }
+  // keep the struck-at parts where the body is
+  syncParts() {
+    const w = this.world;
+    if (this.parts.length !== WYRM_SEGS + 1 || this.parts.some((p) => p.removed)) {
+      for (const p of this.parts) p.removed = true;
+      this.parts = [new WyrmPart(w, this, 0, 1.9)];
+      for (let i = 0; i < WYRM_SEGS; i++) this.parts.push(new WyrmPart(w, this, i + 1, 0.5 * WYRM_SIZE(i) + 0.25));
+      for (const p of this.parts) w.addEntity(p);
+    }
+    const put = (p, x, y, z) => { p.px = p.x; p.py = p.y; p.pz = p.z; p.x = x; p.y = y - p.h / 2; p.z = z; p.updateBox(); };
+    // the head's middle is a little forward of its neck joint
+    put(this.parts[0], this.x + this.dir[0] * 0.9, this.y + this.dir[1] * 0.9, this.z + this.dir[2] * 0.9);
+    for (let i = 0; i < WYRM_SEGS; i++) {
+      const s = this.segs[i], p = this.parts[i + 1];
+      if (s.hidden) { p.x = p.y = p.z = 0; p.y = -500; p.updateBox(); continue; }
+      put(p, s.x, s.y, s.z);
+    }
+  }
+  // ---------------------------------------------------------------- harm
+  hurt(amount, src) { return src && (src.type === 'void' || src.type === 'command') ? super.hurt(amount, src) : false; }
+  damage(part, amount, src) {
+    if (this.dead || !src) return false;
+    const t = src.type;
+    if (t === 'explosion' || t === 'fire' || t === 'lava' || t === 'drown' || t === 'fall' || t === 'suffocate' || t === 'magic' || t === 'cactus') return false;
+    if (src.entity === this) return false;
+    const head = part.idx === 0;
+    const dmg = head ? amount : amount * 0.25 + 1;
+    const before = this.health;
+    const ok = Mob.prototype.hurt.call(this, dmg, src);
+    if (ok) {
+      this.dmgSinceCoil += before - this.health;
+      const g = this.game;
+      if (g.settings.particles !== 'minimal') g.particles.sparkle(part.x, part.y + part.h / 2, part.z, head ? 1 : 0.75, head ? 0.95 : 0.7, 1, head ? 14 : 6, part.w);
+      if (head && this.phase === 'coil' && Math.random() < 0.3) this.roar(g);
+    }
+    return ok;
+  }
+  knockback() {}
+  onRevenge(e) { if (e && e.type === 'player' && e.survivalLike && this.phase === 'circle' && Math.random() < 0.25) this.setPhase('dive'); }
+  onHurt(amount, src) {
+    if (!this.dead && this.health > 0) this.game.audio.play('wyrm_hurt', 3, 0.85 + Math.random() * 0.25, this.x, this.y, this.z);
+    if (src && src.entity && src.entity !== this && this.onRevenge) this.onRevenge(src.entity);
+  }
+  onDeath() {
+    const g = this.game;
+    g.audio.play('wyrm_death', 6, 1, this.x, this.y, this.z);
+    this.deathT = 0; this.phase = 'dying'; this.speedTarget = 0.06;
+    if (this.healer) { this.healer.beamTo = null; this.healer = null; }
+  }
+  roar(g) { if (this.roarT > 0) return; this.roarT = 50; g.audio.play('wyrm_roar', 6, 0.9 + Math.random() * 0.15, this.x, this.y, this.z); }
+  // ---------------------------------------------------------------- the tick
+  tick(game) {
+    this.px = this.x; this.py = this.y; this.pz = this.z; this.pyaw = this.yaw; this.ppitch = this.pitch;
+    this.pbodyYaw = this.bodyYaw; this.pheadYaw = this.headYaw;
+    this.age++;
+    if (this.hurtTime > 0) this.hurtTime--;
+    if (this.hurtResist > 0) this.hurtResist--;
+    if (this.recentlyHit > 0) this.recentlyHit--;
+    if (this.roarT > 0) this.roarT--;
+    if (this.buffetT > 0) this.buffetT--;
+    this.pjaw = this.jaw;
+    if (!this.trail.length) this.layOut();
+    for (const s of this.segs) { s.px = s.x; s.py = s.y; s.pz = s.z; s.pyaw = s.yaw; s.ppitch = s.pitch; }
+    if (this.dead) this.dying(game);
+    else { this.think(game); this.feed(game); if (this.age % 2 === 0) this.crush(game); this.buffet(game); this.ambient(game); }
+    this.steer(this.turn || 0.06);
+    this.recordTrail();
+    this.placeBody();
+    this.syncParts();
+    // a slow pulse of light runs down its back
+    if (game.settings.particles !== 'minimal' && this.age % 3 === 0 && !this.dead) {
+      const s = this.segs[this.rnd(WYRM_SEGS)];
+      if (!s.hidden) game.particles.sparkle(s.x, s.y + WYRM_SIZE(0) * 0.25, s.z, 0.75, 0.7, 1, 1, 1.2);
+    }
+    const jawWant = this.breathT > 0 || this.roarT > 30 ? 1 : this.phase === 'dive' ? 0.45 : 0.08 + Math.max(0, Math.sin(this.age * 0.05)) * 0.12;
+    this.jaw += (jawWant - this.jaw) * 0.25;
+  }
+  steer(turn) {
+    const g = this.goal;
+    if (g) {
+      let tx = g[0] - this.x, ty = g[1] - this.y, tz = g[2] - this.z;
+      const tl = Math.hypot(tx, ty, tz);
+      if (tl > 0.01) {
+        tx /= tl; ty /= tl; tz /= tl;
+        const d = this.dir;
+        // dead behind: swing round to one side rather than through itself
+        if (d[0] * tx + d[1] * ty + d[2] * tz < -0.85) { tx += -d[2] * 0.6; tz += d[0] * 0.6; }
+        d[0] += (tx - d[0]) * turn; d[1] += (ty - d[1]) * turn; d[2] += (tz - d[2]) * turn;
+        d[1] = clamp(d[1], -0.8, 0.8);
+        const l = Math.hypot(d[0], d[1], d[2]) || 1; d[0] /= l; d[1] /= l; d[2] /= l;
+      }
+    }
+    this.speed += clamp(this.speedTarget - this.speed, -0.025, 0.025);
+    const d = this.dir;
+    this.x += d[0] * this.speed; this.y += d[1] * this.speed; this.z += d[2] * this.speed;
+    this.yaw = Math.atan2(-d[0], -d[2]); this.pitch = Math.asin(d[1]);
+    this.bodyYaw = this.headYaw = this.yaw;
+    this.updateBox();
+  }
+  setPhase(p) {
+    this.phase = p; this.phaseT = 0; this.turn = 0.06;
+    if (p === 'circle') { this.circleA = Math.atan2(this.z - this.center[2], this.x - this.center[0]); this.nextMove = 160 + this.rnd(240); if (Math.random() < 0.3) this.circleDir = -this.circleDir; this.circleR = Math.random() < 0.75 ? 26 + this.rnd(10) : 56 + this.rnd(10); }
+    if (p === 'strafe') { this.bolts = 2 + this.rnd(2); this.boltCool = 20; }
+    if (p === 'coil') { this.coilA = Math.atan2(this.z - this.center[2], this.x - this.center[0]); this.dmgSinceCoil = 0; this.coilDown = false; }
+  }
+  think(game) {
+    const p = game.player, [cx, cy, cz] = this.center, w = this.world;
+    const prey = p && !p.dead && p.survivalLike && w.difficulty > 0 && (p.x - cx) ** 2 + (p.z - cz) ** 2 < 170 * 170 ? p : null;
+    this.phaseT++;
+    if (this.coilCool > 0) this.coilCool--;
+    if (this.boltCool > 0) this.boltCool--;
+    if (this.breathT > 0) this.breathT--;
+    // badly hurt: it calls the sky down (at half its strength, and again near the end)
+    const f = this.health / this.maxHealth;
+    if (prey && this.phase !== 'starfall' && this.phase !== 'coil' && ((this.starfalls === 0 && f < 0.5) || (this.starfalls === 1 && f < 0.2))) { this.starfalls++; this.setPhase('starfall'); }
+    switch (this.phase) {
+      case 'circle': {
+        // a wide ring round the isle, weaving up and down
+        this.circleA += this.circleDir * (0.42 / this.circleR) * (this.speed / 0.5);
+        const ga = this.circleA + this.circleDir * 0.5, R = this.circleR + Math.sin(this.age * 0.013) * 4;
+        this.goal = [cx + Math.cos(ga) * R, cy + 26 + Math.sin(this.age * 0.021) * 7, cz + Math.sin(ga) * R];
+        this.speedTarget = 0.5; this.turn = 0.07;
+        if (prey && this.phaseT > this.nextMove) {
+          if (this.coilCool <= 0) this.setPhase('coil');
+          else { const r = Math.random(); this.setPhase(r < 0.5 ? 'strafe' : r < 0.78 ? 'dive' : 'circle'); }
+        }
+        break;
+      }
+      case 'strafe': {
+        // come round at you from above and loose a few starbolts, then sweep away
+        if (!prey || this.phaseT > 420) { this.setPhase('circle'); break; }
+        const dx = prey.x - this.x, dz = prey.z - this.z, hd = Math.hypot(dx, dz) || 1;
+        this.goal = [prey.x - dx / hd * 6, prey.y + 16, prey.z - dz / hd * 6];
+        this.speedTarget = 0.55; this.turn = 0.08;
+        const d = Math.hypot(dx, prey.y - this.y, dz);
+        if (d < 44 && this.boltCool <= 0 && this.bolts > 0 && this.facing(prey, 0.75)) {
+          this.spit(game, prey); this.bolts--; this.boltCool = 14;
+          if (this.bolts <= 0) this.phaseT = Math.max(this.phaseT, 360);
+        }
+        if (d < 10) this.setPhase('rise');
+        break;
+      }
+      case 'dive': {
+        // straight at you
+        if (!prey || this.phaseT > 170) { this.setPhase('rise'); break; }
+        this.goal = [prey.x, prey.y + 1.2, prey.z];
+        this.speedTarget = 0.85; this.turn = this.phaseT < 30 ? 0.06 : 0.11;
+        if (this.phaseT === 20) this.roar(game);
+        if (Math.hypot(prey.x - this.x, prey.y + 1 - this.y, prey.z - this.z) < 2.5 || this.y < prey.y - 2) this.setPhase('rise');
+        break;
+      }
+      case 'rise': {
+        // pull up and away
+        this.goal = [this.x + this.dir[0] * 30, Math.max(this.y + 18, cy + 30), this.z + this.dir[2] * 30];
+        this.speedTarget = 0.6; this.turn = 0.07;
+        if (this.phaseT > 50) this.setPhase('circle');
+        break;
+      }
+      case 'coil': {
+        // down to the Star Well, to wind round its pillar and breathe starfire across the isle
+        const r = 4.6, top = cy + 3;
+        if (!this.coilDown) {
+          this.coilA += 0.035;
+          this.goal = [cx + Math.cos(this.coilA) * 10, top + 18, cz + Math.sin(this.coilA) * 10];
+          this.speedTarget = 0.45; this.turn = 0.1;
+          if (Math.hypot(this.x - cx, this.z - cz) < 13 && this.y < top + 24) this.coilDown = true;
+          if (this.phaseT > 600) { this.setPhase('rise'); this.coilCool = 600; }
+          break;
+        }
+        this.coilA += 0.075;
+        // spiralling down round the pillar, then winding up and down it as it circles
+        const h = Math.max(top - 0.5 + 2.4 * (1 + Math.sin(this.phaseT * 0.03)), top + 16 - (this.phaseT - 40) * 0.12);
+        this.goal = [cx + Math.cos(this.coilA) * r, h, cz + Math.sin(this.coilA) * r];
+        this.speedTarget = 0.36; this.turn = 0.3;
+        if (prey && this.y < top + 7 && this.phaseT % 80 === 40 && Math.hypot(prey.x - cx, prey.z - cz) < 30) this.breathe(game, prey);
+        if (this.phaseT > 520 || this.dmgSinceCoil >= 45) { this.setPhase('rise'); this.coilCool = 900 + this.rnd(700); this.roar(game); }
+        break;
+      }
+      case 'starfall': {
+        // up above the isle, a roar, and the stars begin to fall
+        this.goal = [cx + Math.cos(this.age * 0.03) * 9, cy + 64, cz + Math.sin(this.age * 0.03) * 9];
+        this.speedTarget = 0.42; this.turn = 0.1;
+        if (this.phaseT === 70) { this.roar(game); if (typeof Wyrm !== 'undefined') Wyrm.eclipse(game, 420); }
+        if (prey && this.phaseT > 100 && this.phaseT < 400 && this.phaseT % 12 === 0) this.callStar(game, prey);
+        if (this.phaseT > 430 || (!prey && this.phaseT > 120)) this.setPhase('circle');
+        break;
+      }
+    }
+  }
+  facing(e, dot) {
+    const dx = e.x - this.x, dy = e.y + 1 - this.y, dz = e.z - this.z, l = Math.hypot(dx, dy, dz) || 1;
+    return (dx * this.dir[0] + dy * this.dir[1] + dz * this.dir[2]) / l > dot;
+  }
+  // drinking from the nearest star crystal
+  feed(game) {
+    const h = this.healer;
+    if (h && (h.removed || h.distanceSq(this.x, this.y, this.z) > 48 * 48)) { h.beamTo = null; this.healer = null; }
+    if (!this.healer && this.age % 10 === 0) {
+      let best = null, bd = 34 * 34;
+      for (const e of this.world.entities) {
+        if (e.type !== 'star_crystal' || e.removed || e.ritual) continue;
+        const d2 = e.distanceSq(this.x, this.y, this.z);
+        if (d2 < bd) { bd = d2; best = e; }
+      }
+      this.healer = best;
+    }
+    if (this.healer) {
+      this.healer.beamTo = [this.x, this.y, this.z];
+      if (this.age % 10 === 0 && this.health < this.maxHealth) this.health = Math.min(this.maxHealth, this.health + 1);
+    }
+  }
+  // ---------------------------------------------------------------- attacks
+  mouth() { const d = this.dir; return [this.x + d[0] * 2.6, this.y + d[1] * 2.6 - 0.3, this.z + d[2] * 2.6]; }
+  spit(game, prey) {
+    const [mx, my, mz] = this.mouth();
+    // lead the target a little
+    const t = Math.hypot(prey.x - mx, prey.y - my, prey.z - mz) / 1.1;
+    const tx = prey.x + prey.vx * t * 0.6, ty = prey.y + 0.9, tz = prey.z + prey.vz * t * 0.6;
+    game.spawnEntity(new Starbolt(this.world, this, mx, my, mz, tx - mx, ty - my, tz - mz));
+    game.audio.play('wyrm_spit', 4, 0.9 + Math.random() * 0.2, mx, my, mz);
+    this.breathT = 8;
+  }
+  // a cone of starfire rolling out from the Well toward you, settling into burning clouds
+  breathe(game, prey) {
+    const [mx, my, mz] = this.mouth();
+    game.audio.play('wyrm_breath', 5, 0.9 + Math.random() * 0.15, mx, my, mz);
+    this.breathT = 40;
+    const dx = prey.x - mx, dz = prey.z - mz, hd = Math.hypot(dx, dz) || 1;
+    for (let k = 1; k <= 4; k++) {
+      const dist = Math.min(hd + 2, k * 5.5), x = mx + dx / hd * dist + (Math.random() - 0.5) * 2, z = mz + dz / hd * dist + (Math.random() - 0.5) * 2;
+      const y = this.groundBelow(x, my + 2, z);
+      if (y === null) continue;
+      game.spawnEntity(new StarCloud(this.world, x, y, z, 2.2 + k * 0.35, 120 + k * 20, this));
+    }
+    if (game.settings.particles !== 'minimal') {
+      const L = game.particles.layer('particle_glint');
+      for (let i = 0; i < 70; i++) {
+        const s = 0.3 + Math.random() * 0.5, sp = (Math.random() - 0.5) * 0.35;
+        game.particles.add({ x: mx, y: my, z: mz, vx: (dx / hd + sp) * s, vy: -0.05 + Math.random() * 0.06, vz: (dz / hd - sp) * s, size: 0.12 + Math.random() * 0.1, life: 18 + this.rnd(20), layer: L, r: 0.75, g: 0.5, b: 1, collide: true, bright: true, fade: true });
+      }
+    }
+  }
+  groundBelow(x, y, z) {
+    const w = this.world, bx = Math.floor(x), bz = Math.floor(z);
+    for (let yy = Math.floor(y); yy > Math.floor(y) - 30 && yy > 1; yy--) if (BT.solid[w.getBlock(bx, yy - 1, bz)]) return yy;
+    return null;
+  }
+  // a star called down out of the dark, aimed somewhere near you
+  callStar(game, prey) {
+    const tx = prey.x + (Math.random() - 0.5) * 18, tz = prey.z + (Math.random() - 0.5) * 18;
+    const gy = this.groundBelow(tx, prey.y + 12, tz);
+    if (gy === null) return;
+    const a = Math.random() * TAU, sx = tx + Math.cos(a) * 26, sz = tz + Math.sin(a) * 26, sy = gy + 70;
+    const n = Math.hypot(tx - sx, gy - sy, tz - sz), sp = 1.25;
+    game.spawnEntity(new Meteor(this.world, sx, sy, sz, (tx - sx) / n * sp, (gy - sy) / n * sp, (tz - sz) / n * sp, [tx, gy, tz]));
+  }
+  // smash through anything soft in its path
+  crush(game) {
+    const w = this.world;
+    if (!w.gameRules.mobGriefing) return;
+    const pts = [[this.x + this.dir[0] * 0.9, this.y, this.z + this.dir[2] * 0.9, 1.3]];
+    for (let i = 0; i < 6; i++) pts.push([this.segs[i].x, this.segs[i].y, this.segs[i].z, WYRM_SIZE(i) * 0.3]);
+    let broke = 0;
+    for (const [x, y, z, r] of pts) {
+      for (let bx = Math.floor(x - r); bx <= Math.floor(x + r); bx++) for (let by = Math.floor(y - r); by <= Math.floor(y + r); by++) for (let bz = Math.floor(z - r); bz <= Math.floor(z + r); bz++) {
+        const id = w.getBlock(bx, by, bz);
+        if (!id || WYRM_PROOF.has(id) || BT.fluid[id] || !BLOCKS[id] || BLOCKS[id].hardness < 0) continue;
+        if (broke < 6 && game.settings.particles !== 'minimal') game.particles.breakBlock(bx, by, bz, id, w.getMeta(bx, by, bz));
+        w.setBlock(bx, by, bz, 0, 0);
+        broke++;
+      }
+    }
+    if (broke) game.audio.play('explode', 0.6, 1.3, this.x, this.y, this.z);
+  }
+  // anything in the way of its head or forebody is struck aside
+  buffet(game) {
+    if (this.buffetT > 0) return;
+    const p = game.player;
+    if (!p || p.dead || !p.survivalLike) return;
+    const hits = [[this.parts[0], 7]];
+    for (let i = 1; i < 6; i++) hits.push([this.parts[i], 4]);
+    for (const [part, dmg] of hits) {
+      if (!part) continue;
+      const b = part.box;
+      if (p.box.x1 < b.x0 - 0.3 || p.box.x0 > b.x1 + 0.3 || p.box.y1 < b.y0 - 0.3 || p.box.y0 > b.y1 + 0.3 || p.box.z1 < b.z0 - 0.3 || p.box.z0 > b.z1 + 0.3) continue;
+      if (p.hurt(scaleMobDamage(this.world, dmg), { type: 'mob', entity: this, knockback: 0 })) {
+        const dx = p.x - part.x, dz = p.z - part.z, l = Math.hypot(dx, dz) || 1;
+        p.vx += dx / l * 1.1 + this.dir[0] * this.speed; p.vz += dz / l * 1.1 + this.dir[2] * this.speed; p.vy = Math.max(p.vy, 0.55);
+      }
+      this.buffetT = 12;
+      return;
+    }
+  }
+  ambient(game) {
+    if (Math.random() * 1000 < this.ambientTimer++) {
+      this.ambientTimer = -this.talkInterval;
+      game.audio.play('wyrm_say', 4, 0.85 + Math.random() * 0.25, this.x, this.y, this.z);
+    }
+  }
+  // ---------------------------------------------------------------- the end
+  dying(game) {
+    const t = ++this.deathT, w = this.world;
+    this.goal = [this.x + this.dir[0] * 4, this.y + 2, this.z + this.dir[2] * 4];
+    this.turn = 0.02;
+    const pt = game.settings.particles !== 'minimal';
+    // light breaks out of it, and it comes apart from the tail up, star by star
+    if (pt && t % 2 === 0) for (let i = 0; i < 4; i++) {
+      const s = this.segs[this.rnd(WYRM_SEGS)]; if (s.hidden) continue;
+      const a = Math.random() * TAU, b = (Math.random() - 0.5) * Math.PI, v = 0.25 + Math.random() * 0.3;
+      game.particles.add({ x: s.x, y: s.y, z: s.z, vx: Math.cos(a) * Math.cos(b) * v, vy: Math.sin(b) * v, vz: Math.sin(a) * Math.cos(b) * v, size: 0.15, life: 24, layer: game.particles.layer('particle_glint'), r: 1, g: 0.9, b: 0.7, collide: false, bright: true, fade: true });
+    }
+    if (t > 50 && t % 7 === 0) {
+      const i = WYRM_SEGS - 1 - Math.floor((t - 50) / 7);
+      if (i >= 0) {
+        const s = this.segs[i]; s.hidden = true;
+        if (pt) for (let k = 0; k < 30; k++) game.particles.sparkle(s.x, s.y, s.z, 0.85, 0.8, 1, 1, WYRM_SIZE(i) * 0.8);
+        game.audio.play('wyrm_burst', 3, 0.8 + (WYRM_SEGS - i) * 0.03, s.x, s.y, s.z);
+      }
+    }
+    // the last of it: a burst of light, and a fountain of experience
+    const end = 50 + WYRM_SEGS * 7;
+    if (t === end) {
+      game.audio.play('wyrm_burst', 6, 0.6, this.x, this.y, this.z);
+      if (pt) for (let k = 0; k < 120; k++) game.particles.sparkle(this.x, this.y, this.z, 1, 0.95, 0.8, 1, 4);
+      if (game.particles.explosion) game.particles.explosion(this.x, this.y, this.z, 3);
+    }
+    if (t >= end && t < end + 60 && t % 3 === 0) {
+      const first = typeof Wyrm !== 'undefined' ? Wyrm.firstKill(w) : true;
+      game.spawnXP(this.x + (Math.random() - 0.5) * 2, this.y, this.z + (Math.random() - 0.5) * 2, first ? 150 : 30);
+    }
+    if (t >= end + 62) {
+      this.removed = true;
+      for (const p of this.parts) p.removed = true;
+      if (typeof Wyrm !== 'undefined') Wyrm.slain(game, this);
+    }
+  }
+  checkDespawn() {}
+  save() { return null; }
+  // ---------------------------------------------------------------- drawing
+  render(er, rx, ry, rz, partial) {
+    const [hx, hy, hz] = this.lerpPos(partial), ox = hx - rx, oy = hy - ry, oz = hz - rz;
+    const col = er.entColor(this), t = this.age + partial;
+    const light = (x, y, z) => { const [s, b] = er.lightAt(x, y, z); return [Math.max(s, 0.55), b]; };
+    // the head
+    if (!(this.dead && this.deathT > 50 + WYRM_SEGS * 7)) {
+      const yaw = this.pyaw + wrapRadians(this.yaw - this.pyaw) * partial, pitch = this.ppitch + (this.pitch - this.ppitch) * partial;
+      let m = M3.mul(M3.trans(rx, ry, rz), M3.ry(yaw));
+      m = M3.mul(m, M3.rx(pitch));
+      m = M3.mul(m, M3.scale(WYRM_HEAD_SCALE / 16, WYRM_HEAD_SCALE / 16, WYRM_HEAD_SCALE / 16));
+      const jaw = this.pjaw + (this.jaw - this.pjaw) * partial;
+      const sway = Math.sin(t * 0.09) * 0.12;
+      const pose = { jaw: [-jaw * 0.75, 0, 0], barbelR: [Math.sin(t * 0.1) * 0.25, sway, 0], barbelL: [Math.sin(t * 0.1 + 1) * 0.25, -sway, 0] };
+      const [sky, blk] = light(hx, hy, hz);
+      er.drawModel(MODELS.wyrmHead, 'starwyrm_head', m, pose, col, sky, blk);
+      er.drawModel(MODELS.wyrmHead, 'starwyrm_eyes', m, pose, [255, 255, 255, 255], -1, 0, { only: ['skull'], inflate: 0.05 });
+      er.glow(rx + this.dir[0] * 0.3, ry + 0.25, rz + this.dir[2] * 0.3, 0.9, [140, 220, 255, 60]);
+    }
+    // the body, segment by segment
+    for (let i = 0; i < WYRM_SEGS; i++) {
+      const s = this.segs[i];
+      if (s.hidden) continue;
+      const x = s.px + (s.x - s.px) * partial, y = s.py + (s.y - s.py) * partial, z = s.pz + (s.z - s.pz) * partial;
+      const yaw = s.pyaw + wrapRadians(s.yaw - s.pyaw) * partial, pitch = s.ppitch + (s.pitch - s.ppitch) * partial;
+      const sc = WYRM_SIZE(i) / 16;
+      let m = M3.mul(M3.trans(x - ox, y - oy, z - oz), M3.ry(yaw));
+      m = M3.mul(m, M3.rx(pitch));
+      // a ripple running down the body as it swims
+      m = M3.mul(m, M3.rz(Math.sin(t * 0.12 - i * 0.5) * 0.12));
+      m = M3.mul(m, M3.scale(sc, sc, sc));
+      const [sky, blk] = light(x, y, z);
+      er.drawModel(MODELS.wyrmSeg, 'starwyrm_body', m, {}, col, sky, blk);
+      er.drawModel(MODELS.wyrmSeg, 'starwyrm_glow', m, {}, [255, 255, 255, 255], -1, 0, { only: ['body'], inflate: 0.04 });
+      if (i === 2 || i === 8) {
+        const flap = Math.sin(t * 0.14 - i * 0.4) * 0.45;
+        const pose = { finR: [0, 0, -0.25 + flap], finL: [0, 0, 0.25 - flap] };
+        er.drawModel(MODELS.wyrmFins, 'starwyrm_body', m, pose, col, sky, blk);
+        er.drawModel(MODELS.wyrmFins, 'starwyrm_glow', m, pose, [255, 255, 255, 255], -1, 0, { inflate: 0.04 });
+      }
+      if (i === WYRM_SEGS - 1) er.drawModel(MODELS.wyrmTail, 'starwyrm_body', m, { fin: [0, Math.sin(t * 0.2) * 0.4, 0] }, col, sky, blk);
+    }
+  }
+}
+MOB_CLASSES.starwyrm = Starwyrm;
+
+// ---------------------------------------------------------------------------
+// A starbolt: a knot of starfire that bursts into a burning cloud. Strike it
+// back the way it came and it will burn the Starwyrm instead.
+// ---------------------------------------------------------------------------
+class Starbolt extends Entity {
+  constructor(world, shooter, x, y, z, dx, dy, dz) {
+    super(world);
+    this.type = 'starbolt';
+    this.w = this.h = 0.7;
+    this.shooter = shooter;
+    this.noGravity = true;
+    this.setPos(x, y - this.h / 2, z);
+    const l = Math.hypot(dx, dy, dz) || 1;
+    this.vx = dx / l * 1.0; this.vy = dy / l * 1.0; this.vz = dz / l * 1.0;
+  }
+  hurt(amount, src) {
+    const e = src && src.entity;
+    if (!e || e.type !== 'player') return false;
+    const dx = -Math.sin(e.yaw) * Math.cos(e.pitch), dy = Math.sin(e.pitch), dz = -Math.cos(e.yaw) * Math.cos(e.pitch);
+    this.vx = dx * 1.2; this.vy = dy * 1.2; this.vz = dz * 1.2;
+    this.shooter = e; this.age = 0;
+    this.game.audio.play('wyrm_spit', 1.5, 1.5, this.x, this.y, this.z);
+    return true;
+  }
+  get game() { return this.world.game; }
+  tick(game) {
+    this.px = this.x; this.py = this.y; this.pz = this.z;
+    this.age++;
+    const w = this.world;
+    if (this.age > 200 || this.y < -10 || this.y > CH_H + 40) { this.removed = true; return; }
+    const len = Math.hypot(this.vx, this.vy, this.vz), cy = this.y + this.h / 2;
+    const hit = raycastBlocks(w, this.x, cy, this.z, this.vx, this.vy, this.vz, len, { collision: true });
+    let target = null, tb = hit ? hit.t : len;
+    const reflected = this.shooter && this.shooter.type === 'player';
+    for (const e of w.entities.concat(game.player && !game.player.dead ? [game.player] : [])) {
+      if (e === this || e.removed || !e.hurt || e.dead || e.type === 'starbolt' || e.type === 'star_crystal') continue;
+      if (!reflected && (e === this.shooter || e.type === 'wyrm_part')) continue;
+      if (reflected && e === this.shooter && this.age < 10) continue;
+      const b = e.box.copy(); b.x0 -= 0.35; b.y0 -= 0.35; b.z0 -= 0.35; b.x1 += 0.35; b.y1 += 0.35; b.z1 += 0.35;
+      const h = rayBox(this.x, cy, this.z, this.vx / len, this.vy / len, this.vz / len, b);
+      if (h && h.t < tb) { tb = h.t; target = e; }
+    }
+    if (target || hit) {
+      const f = tb / len;
+      this.x += this.vx * f; this.y += this.vy * f; this.z += this.vz * f;
+      this.burst(game, target, hit);
+      return;
+    }
+    this.x += this.vx; this.y += this.vy; this.z += this.vz;
+    this.updateBox();
+    if (game.settings.particles !== 'minimal') game.particles.sparkle(this.x, cy, this.z, 0.8, 0.6, 1, 2, 0.4);
+  }
+  burst(game, target, hit) {
+    const w = this.world;
+    this.removed = true;
+    const cy = this.y + this.h / 2;
+    if (target) target.hurt(target.type === 'wyrm_part' ? 12 : 6, { type: target.type === 'wyrm_part' ? 'starbolt' : 'magic', entity: this.shooter || this, knockback: 0.3 });
+    game.audio.play('wyrm_bolt_burst', 2.5, 0.9 + Math.random() * 0.2, this.x, cy, this.z);
+    if (game.settings.particles !== 'minimal') for (let i = 0; i < 30; i++) game.particles.sparkle(this.x, cy, this.z, 0.85, 0.6, 1, 1, 1.6);
+    // the burning cloud settles on the ground where it struck
+    let gy = null;
+    for (let y = Math.floor(cy) + 1; y > Math.floor(cy) - 6 && y > 1; y--) if (BT.solid[w.getBlock(Math.floor(this.x), y - 1, Math.floor(this.z))] && !BT.solid[w.getBlock(Math.floor(this.x), y, Math.floor(this.z))]) { gy = y; break; }
+    if (gy !== null && !(target && target.type === 'wyrm_part')) game.spawnEntity(new StarCloud(w, this.x, gy, this.z, 2.6, 110, this.shooter));
+  }
+  render(er, rx, ry, rz, partial) {
+    const t = this.age + partial, cy = ry + this.h / 2;
+    let m = M3.mul(M3.trans(rx, cy, rz), M3.ry(t * 0.3));
+    m = M3.mul(m, M3.rx(t * 0.21));
+    er.texBox(er.r.batch, m, [-0.22, -0.22, -0.22, 0.22, 0.22, 0.22], er.r.atlas.layer('star_crystal_core'), -1, 0, 1 / 0.44);
+    er.glow(rx, cy, rz, 0.8 + Math.sin(t * 0.6) * 0.1, [190, 140, 255, 150]);
+    er.glow(rx, cy, rz, 0.35, [255, 245, 255, 220]);
+  }
+  save() { return null; }
+}
+
+// ---------------------------------------------------------------------------
+// Starfire left lying on the ground: a low, glittering cloud that burns
+// whatever stands in it (but never the wyrm).
+// ---------------------------------------------------------------------------
+class StarCloud extends Entity {
+  constructor(world, x, y, z, r, life, owner) {
+    super(world);
+    this.type = 'star_cloud';
+    this.r = r; this.life = life; this.owner = owner || null;
+    this.w = r * 2; this.h = 1.2;
+    this.noGravity = true; this.noClip = true;
+    this.setPos(x, y, z);
+  }
+  tick(game) {
+    this.px = this.x; this.py = this.y; this.pz = this.z;
+    this.age++;
+    if (this.age > this.life) { this.removed = true; return; }
+    const r = this.r * (1 - 0.35 * this.age / this.life);
+    if (game.settings.particles !== 'minimal' && this.age % 2 === 0) {
+      const L = game.particles.layer('particle_glint');
+      for (let i = 0; i < 3; i++) {
+        const a = Math.random() * TAU, d = Math.sqrt(Math.random()) * r;
+        game.particles.add({ x: this.x + Math.cos(a) * d, y: this.y + 0.05 + Math.random() * 0.4, z: this.z + Math.sin(a) * d, vx: 0, vy: 0.012 + Math.random() * 0.02, vz: 0, size: 0.1 + Math.random() * 0.08, life: 20 + Math.floor(Math.random() * 16), layer: L, r: 0.7, g: 0.45, b: 1, collide: false, bright: true, fade: true });
+      }
+    }
+    if (this.age % 10 === 0) {
+      const w = this.world;
+      for (const e of w.entities.concat(game.player && !game.player.dead ? [game.player] : [])) {
+        if (e.removed || e.dead || !e.hurt || !e.box || e.type === 'starwyrm' || e.type === 'wyrm_part' || e.type === 'star_crystal' || e.type === 'item' || e.type === 'xp' || e.type === 'star_cloud' || e.type === 'starbolt') continue;
+        if ((e.x - this.x) ** 2 + (e.z - this.z) ** 2 > r * r || e.y > this.y + 1.4 || e.y + e.h < this.y - 0.5) continue;
+        if (e.type === 'player' && !e.survivalLike) continue;
+        e.hurt(3, { type: 'magic', entity: this.owner && !this.owner.removed ? this.owner : null, knockback: 0 });
+      }
+    }
+  }
+  render(er, rx, ry, rz) { er.glow(rx, ry + 0.3, rz, this.r * 0.9, [150, 90, 255, 40]); }
+  save() { return null; }
+}
+
+// ---------------------------------------------------------------------------
+// A falling star, called down by the Starwyrm: a glowing ring on the ground
+// marks where it will land. Where it strikes it leaves star fragments.
+// ---------------------------------------------------------------------------
+class Meteor extends Entity {
+  constructor(world, x, y, z, vx, vy, vz, target) {
+    super(world);
+    this.type = 'meteor';
+    this.w = this.h = 0.9;
+    this.noGravity = true; this.noClip = true;
+    this.setPos(x, y, z);
+    this.vx = vx; this.vy = vy; this.vz = vz;
+    this.target = target;
+    this.whistled = false;
+  }
+  tick(game) {
+    this.px = this.x; this.py = this.y; this.pz = this.z;
+    this.age++;
+    const w = this.world, [tx, ty, tz] = this.target;
+    if (this.age > 300 || this.y < -20) { this.removed = true; return; }
+    const pt = game.settings.particles !== 'minimal';
+    // the warning ring where it will fall
+    if (pt && this.age % 3 === 0) {
+      const L = game.particles.layer('particle_glint');
+      for (let i = 0; i < 10; i++) { const a = (i / 10) * TAU + this.age * 0.05; game.particles.add({ x: tx + Math.cos(a) * 2.2, y: ty + 0.1, z: tz + Math.sin(a) * 2.2, vx: 0, vy: 0.02, vz: 0, size: 0.1, life: 10, layer: L, r: 1, g: 0.8, b: 0.4, collide: false, bright: true, fade: true }); }
+    }
+    if (!this.whistled && game.player && game.player.distanceSq(tx, ty, tz) < 60 * 60) { this.whistled = true; game.audio.play('meteor_fall', 3, 0.9 + Math.random() * 0.2, this.x, this.y, this.z); }
+    const len = Math.hypot(this.vx, this.vy, this.vz);
+    const hit = raycastBlocks(w, this.x, this.y + 0.45, this.z, this.vx, this.vy, this.vz, len, { collision: true });
+    if (hit || this.y + this.vy <= ty) {
+      const f = hit ? hit.t / len : Math.max(0, (this.y - ty) / -this.vy);
+      this.x += this.vx * f; this.y += this.vy * f; this.z += this.vz * f;
+      this.land(game);
+      return;
+    }
+    this.x += this.vx; this.y += this.vy; this.z += this.vz;
+    this.updateBox();
+    if (pt) {
+      const L = game.particles.layer('particle_glint');
+      for (let i = 0; i < 3; i++) game.particles.add({ x: this.x + (Math.random() - 0.5) * 0.5, y: this.y + 0.45 + (Math.random() - 0.5) * 0.5, z: this.z + (Math.random() - 0.5) * 0.5, vx: -this.vx * 0.05, vy: -this.vy * 0.05, vz: -this.vz * 0.05, size: 0.2, life: 16 + Math.floor(Math.random() * 10), layer: L, r: 1, g: 0.75 + Math.random() * 0.2, b: 0.45, collide: false, bright: true, fade: true });
+      if (this.age % 2 === 0) game.particles.smoke(this.x, this.y + 0.45, this.z, 1, false);
+    }
+  }
+  land(game) {
+    const w = this.world;
+    this.removed = true;
+    Behaviors.explode(game, this.x, this.y + 0.5, this.z, 2, { type: 'meteor', entity: this }, false);
+    game.audio.play('meteor_impact', 3, 0.85 + Math.random() * 0.2, this.x, this.y, this.z);
+    if (game.settings.particles !== 'minimal') for (let i = 0; i < 40; i++) game.particles.sparkle(this.x, this.y + 0.6, this.z, 1, 0.85, 0.5, 1, 2.5);
+    // what is left of it, still warm
+    if (BT.solid[w.getBlock(Math.floor(this.x), Math.floor(this.y - 0.5), Math.floor(this.z))] || BT.solid[w.getBlock(Math.floor(this.x), Math.floor(this.y) - 1, Math.floor(this.z))]) {
+      const n = 1 + (Math.random() < 0.45 ? 1 : 0);
+      Behaviors.dropStack(game, this.x, this.y + 0.6, this.z, new ItemStack(ITEM_IDS.star_fragment, n, 0));
+    }
+  }
+  render(er, rx, ry, rz, partial) {
+    const t = this.age + partial, cy = ry + 0.45;
+    let m = M3.mul(M3.trans(rx, cy, rz), M3.ry(t * 0.4));
+    m = M3.mul(m, M3.rx(t * 0.33));
+    er.texBox(er.r.batch, m, [-0.35, -0.35, -0.35, 0.35, 0.35, 0.35], er.r.atlas.layer('star_crystal_core'), -1, 0, 1 / 0.7);
+    er.glow(rx, cy, rz, 1.6, [255, 200, 120, 140]);
+    er.glow(rx, cy, rz, 0.6, [255, 250, 230, 230]);
+  }
+  save() { return null; }
+}
+
+// ---------------------------------------------------------------------------
+// A star crystal's beam: to the wyrm drinking from it, or up into the sky
+// while the Star Well calls the wyrm back
+// ---------------------------------------------------------------------------
+StarCrystal.prototype.beam = function (er, rx, cy, rz, partial) {
+  const to = this.beamTo;
+  if (!to) return;
+  const cam = er.game.camera;
+  const ax = rx, ay = cy, az = rz, bx = to[0] - cam.x, by = to[1] - cam.y, bz = to[2] - cam.z;
+  const dx = bx - ax, dy = by - ay, dz = bz - az, len = Math.hypot(dx, dy, dz);
+  if (len < 0.5) return;
+  const ux = dx / len, uy = dy / len, uz = dz / len;
+  // two crossed ribbons along the beam
+  let p1 = [uz, 0, -ux]; if (Math.hypot(p1[0], p1[2]) < 0.1) p1 = [1, 0, 0];
+  const pl = Math.hypot(p1[0], p1[1], p1[2]); p1 = [p1[0] / pl, p1[1] / pl, p1[2] / pl];
+  const p2 = [uy * p1[2] - uz * p1[1], uz * p1[0] - ux * p1[2], ux * p1[1] - uy * p1[0]];
+  const t = ((this.world.time + partial) % 40) / 40, L = er.r.atlas.layer('star_crystal_core'), b = er.r.batch, w = 0.16;
+  for (const p of [p1, p2]) {
+    const v = [[ax - p[0] * w, ay - p[1] * w, az - p[2] * w], [ax + p[0] * w, ay + p[1] * w, az + p[2] * w], [bx + p[0] * w, by + p[1] * w, bz + p[2] * w], [bx - p[0] * w, by - p[1] * w, bz - p[2] * w]];
+    er.quadOut(b, v, [[0.4, -t], [0.6, -t], [0.6, len / 3 - t], [0.4, len / 3 - t]], L, [230, 200, 255, 255], -1, 0);
+  }
+};
+
 // ---- src/entity/deepmobs.js
 // ---------------------------------------------------------------------------
 // The Listener: the blind keeper of the Hush. It cannot see you - it hears
@@ -28127,16 +29346,19 @@ class Game {
   }
   tickPortal() {
     const p = this.player, w = this.world;
-    let inPortal = false, inRift = false, inGate = false;
+    let inPortal = false, inRift = false, inGate = false, inStar = null;
     if (!p.dead && !p.riding && !p.sleeping) {
       const b = p.box;
       for (let x = Math.floor(b.x0); x <= Math.floor(b.x1 - 1e-4); x++) for (let y = Math.floor(b.y0); y <= Math.floor(b.y1 - 1e-4); y++) for (let z = Math.floor(b.z0); z <= Math.floor(b.z1 - 1e-4); z++) {
         const id = w.getBlock(x, y, z);
         if (id === B.PORTAL) inPortal = true; else if (id === B.RIFT) inRift = true; else if (id === B.SIFT_GATE) inGate = true;
+        else if (id === B.STAR_GATEWAY && !inStar) inStar = [x, y, z];
       }
     }
     if (inPortal && w.dim === DIM_ISLES) inPortal = false;
-    if (!inPortal && !inRift && !inGate) p.portalLock = false;
+    if (!inPortal && !inRift && !inGate && !inStar) p.portalLock = false;
+    // a star gateway throws you across the gulf at once
+    if (inStar && !p.portalLock) { p.portalLock = true; Wyrm.travel(this, inStar[0], inStar[1], inStar[2]); return; }
     // a city gate, once woken, opens on the Sift
     if (inGate && !p.portalLock) {
       p.portalLock = true;
@@ -28220,7 +29442,7 @@ class Game {
     const list = [];
     for (const e of w.entities) {
       if (e.removed) continue;
-      if ((Math.floor(e.x) >> 4) !== c.cx || (Math.floor(e.z) >> 4) !== c.cz) continue;
+      if ((Math.floor(e.x) >> 4) !== c.cx || (Math.floor(e.z) >> 4) !== c.cz || e.keepLoaded) continue;
       if (this.persistable(e)) { const d = e.save(); if (d) list.push(d); }
       e.removed = true;
     }
@@ -28414,6 +29636,7 @@ class Game {
     if (w.lightningFlash > 0) w.lightningFlash--;
     this.pfovMod = this.fovMod;
     p.tick(this.input);
+    this.tickHold();
     this.tickPlayerEnvironment();
     this.tickPortal();
     if (this.loading) return;
@@ -28440,6 +29663,7 @@ class Game {
     }
     Circuits.tickPlates(this);
     Hush.tick(this);
+    Wyrm.tick(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
     const h = p.inventory.held();
@@ -28521,7 +29745,7 @@ class Game {
       const e = list[i];
       if (e.removed) continue;
       const bx = Math.floor(e.x), bz = Math.floor(e.z);
-      if (!w.isLoaded(bx, bz)) continue;
+      if (!w.isLoaded(bx, bz) && !e.keepLoaded) continue;
       try { e.tick(this); } catch (err) { console.error('entity tick', e.type, err); e.removed = true; }
       if (e.checkDespawn && !e.removed) e.checkDespawn(this);
     }
@@ -28926,6 +30150,7 @@ class Game {
     if (st.id === B.COBALT_ORE) this.achieve('cobalt');
     if (st.id === B.STARMETAL_ORE) this.achieve('star');
     if (st.id === I.flare_rod) this.achieve('flare');
+    if (st.id === B.WYRM_EGG) this.achieve('egg');
   }
   onPlayerDeath(src) {
     const p = this.player, w = this.world;
@@ -29011,6 +30236,26 @@ class Game {
     }
     if (!pos) { const s = w.spawn || { x: 0, y: 80, z: 0 }; const y = w.isLoaded(s.x, s.z) ? Math.max(s.y, w.topSolidY(s.x, s.z) + 1) : s.y; pos = [s.x + 0.5, y, s.z + 0.5]; }
     p.setPos(pos[0], pos[1], pos[2]);
+  }
+  // set the player down somewhere far off in this same world, and keep them there
+  // (no falling) until the ground under them has loaded
+  holdPlayer(x, y, z, yaw) {
+    const p = this.player;
+    p.setPos(x, y, z); p.vx = p.vy = p.vz = 0; p.fallDistance = 0;
+    if (yaw !== undefined) { p.yaw = p.pyaw = yaw; p.pitch = 0; }
+    this.hold = { x, y, z, t: 0, w: this.world };
+    this.portalFx = 1;
+  }
+  tickHold() {
+    const h = this.hold, p = this.player, w = this.world;
+    if (!h) return;
+    if (h.w !== w || p.dead) { this.hold = null; return; }
+    h.t++;
+    let ready = true;
+    for (const [dx, dz] of [[0, 0], [16, 0], [-16, 0], [0, 16], [0, -16]]) if (!w.isLoaded(Math.floor(h.x) + dx, Math.floor(h.z) + dz)) ready = false;
+    if (ready && h.t > 4 || h.t > 600) { this.hold = null; return; }
+    p.setPos(h.x, h.y, h.z); p.vx = p.vy = p.vz = 0; p.fallDistance = 0;
+    this.portalFx = Math.max(this.portalFx, 0.6);
   }
   // through the Star Well and home; the first time, the long way round
   leaveIsles() {

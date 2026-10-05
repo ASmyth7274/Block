@@ -43,7 +43,7 @@ void main() { vNdc = aPos; gl_Position = vec4(aPos, 0.9999, 1.0); }`,
   skyFS: `#version 300 es
 precision highp float;
 uniform mat4 uInvVP; uniform vec3 uSky; uniform vec3 uFogColor; uniform vec3 uSunDir; uniform vec4 uSunrise; uniform vec3 uVoid; uniform float uIsles;
-uniform mat3 uCel; uniform float uNight; uniform float uTime; uniform float uAurora; uniform float uSift;
+uniform mat3 uCel; uniform float uNight; uniform float uTime; uniform float uAurora; uniform float uSift; uniform float uEclipse;
 in vec2 vNdc; out vec4 o;
 // the Milky Way's plane and its bright heart, in the stars' own frame (match buildStars)
 const vec3 MW_N = vec3(0.5009, 0.3506, 0.7913);
@@ -66,6 +66,19 @@ void main() {
     col += vec3(0.14, 0.06, 0.2) * band * smoothstep(0.25, 0.85, n) * 1.4;
     col += vec3(0.02, 0.1, 0.11) * pow(band, 3.0) * smoothstep(0.45, 0.9, n);
     col = mix(col, uFogColor, 1.0 - smoothstep(-0.05, 0.3, e));
+    if (uEclipse > 0.001) {
+      // the Starwyrm's eclipse: a black sun high overhead in a ring of fire, its corona streaming
+      vec3 ed = normalize(vec3(0.16, 1.0, -0.1));
+      vec3 q = normalize(floor(d * 160.0) / 160.0);
+      float a = acos(clamp(dot(q, ed), -1.0, 1.0)), r0 = 0.085;
+      vec3 t1 = normalize(cross(ed, vec3(0.0, 0.0, 1.0))), t2 = cross(ed, t1);
+      float az = atan(dot(q, t2), dot(q, t1));
+      float rays = 0.55 + 0.45 * vn(vec3(az * 5.0, a * 4.0 - uTime * 0.05, 1.7)) + 0.35 * pow(abs(sin(az * 4.0 + uTime * 0.02)), 8.0);
+      float corona = exp(-max(a - r0, 0.0) / (0.045 + 0.06 * rays)) * step(r0, a);
+      float ring = smoothstep(r0 + 0.016, r0, a) * step(r0 - 0.004, a);
+      col += (vec3(1.0, 0.62, 0.28) * corona * 0.9 + vec3(1.0, 0.93, 0.75) * ring * 1.6) * uEclipse;
+      col = mix(col, vec3(0.006, 0.003, 0.01), step(a, r0 - 0.004) * uEclipse);
+    }
   }
   // the night sky: the Milky Way turning with the stars, and the northern lights
   if (uNight > 0.004 && e > -0.05) {

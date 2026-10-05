@@ -123,6 +123,8 @@ class Hud {
     if (g.portalFx > 0) this.portalOverlay(gui, g.portalFx);
     if (g.hideHud) return;
     const cx = Math.floor(W / 2);
+    const boss = typeof Wyrm !== 'undefined' ? Wyrm.bar() : null;
+    if (boss) this.bossBar(gui, cx, boss);
     const hotY = H - 22 - (touch ? 0 : 0);
     // hotbar
     this.hotbar(gui, cx - 91, hotY);
@@ -155,6 +157,15 @@ class Hud {
     this.drawToasts(gui);
     if (g.showDebug) this.debug(gui, partial);
     else if (g.settings.showFps) gui.text(this.fps + ' fps', 2, 2, '#e0e0e0');
+  }
+  // a great foe's name and strength, across the top of the screen
+  bossBar(gui, cx, b) {
+    const W = 182, x = cx - 91, y = 14, f = Math.max(0, Math.min(W, Math.round(W * b.frac)));
+    gui.textCentered(b.name, cx, y - 10, '#ffffff', true);
+    gui.rect(x - 1, y - 1, W + 2, 7, '#100418');
+    gui.rect(x, y, W, 5, '#3a1450');
+    if (f > 0) { gui.rect(x, y, f, 5, '#b048e0'); gui.rect(x, y, f, 1, '#eab0ff'); gui.rect(x, y + 4, f, 1, '#6c1a90'); }
+    for (let i = 1; i < 10; i++) gui.rect(x + Math.round(W * i / 10), y + 1, 1, 3, 'rgba(16,4,24,0.45)');
   }
   vignette(gui) {
     const ctx = gui.ctx, W = gui.w, H = gui.h;

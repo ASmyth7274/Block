@@ -3105,6 +3105,24 @@ function WorldGenFactory(Noise, TAB) {
         if (s.x >= X0 && s.x < X0 + 16 && s.z >= Z0 && s.z < Z0 + 16) out.entities.push({ type: 'star_crystal', x: s.x + 0.5, y: s.h + 1, z: s.z + 0.5 });
       }
     }
+    // where star gateway k of n comes out: on the crown of the first drift isle along its ray
+    exitGateSpot(k, n) {
+      const a = Math.PI * 2 * k / n, ca = Math.cos(a), sa = Math.sin(a);
+      for (let r = ISLES.GULF - 50; r < ISLES.GULF + 1200; r += 6) {
+        const x = Math.round(ca * r), z = Math.round(sa * r), col = this.column(x, z);
+        if (!col || !col[2]) continue;
+        const d = col[2];
+        let best = null, bs = -1e9;
+        for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) {
+          const c = this.column(d.x + dx, d.z + dz);
+          if (!c || c[2] !== d) continue;
+          const score = c[1] - Math.hypot(dx, dz) * 0.3;
+          if (score > bs) { bs = score; best = [d.x + dx, c[1] + 1, d.z + dz]; }
+        }
+        return best || [x, col[1] + 1, z];
+      }
+      return [Math.round(ca * (ISLES.GULF + 120)), 60, Math.round(sa * (ISLES.GULF + 120))];
+    }
     // the Star Well: a ring of bedrock round a dry basin and a torch-lit pillar
     wellTop() { const c = this.column(0, 0); return c ? c[1] : 60; }
     starWell(out) {

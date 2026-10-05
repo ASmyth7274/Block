@@ -490,6 +490,93 @@ const SOUND_DEFS = (() => {
     });
   };
   S.crystal_hum = () => render(3, (t) => (Math.sin(2 * Math.PI * 440 * t) * 0.5 + Math.sin(2 * Math.PI * 660.4 * t) * 0.3 + Math.sin(2 * Math.PI * 880.9 * t) * 0.15) * Math.sin(Math.PI * t / 3));
+  // ----- the Starwyrm -----
+  // a voice like a whale's under a sky full of bells: a deep saw growl with a high, glassy shimmer over it
+  const wyrmVoice = (dur, f0, f1, rough, shimmer, roar) => () => {
+    const lp = new Biquad('lp', 380, 0.9), bp = new Biquad('bp', 900, 1.5), hp = new Biquad('hp', 2600, 0.7);
+    let ph = 0, ph2 = 0;
+    const bells = [523.3, 659.3, 784, 987.8, 1174.7].map((f) => f * (0.98 + rnd() * 0.04));
+    return render(dur, (t) => {
+      const u = t / dur, f = f0 + (f1 - f0) * Math.pow(u, 0.8) + Math.sin(t * 2 * Math.PI * 5) * f0 * 0.05;
+      ph += 2 * Math.PI * f / DSP.SR; ph2 += 2 * Math.PI * f * 1.5 / DSP.SR;
+      const saw = ((ph / (2 * Math.PI)) % 1) * 2 - 1, sq = Math.sin(ph2) > 0 ? 0.4 : -0.4;
+      const e = Math.sin(Math.PI * Math.min(1, u * 1.1)) * (u < 0.05 ? u / 0.05 : 1);
+      let v = (lp.p(saw + sq * 0.5 + noise() * rough) * 1.5 + bp.p(noise()) * rough * (roar || 0)) * e;
+      let sh = 0; bells.forEach((bf, i) => { sh += Math.sin(2 * Math.PI * bf * t + i) * Math.sin(Math.PI * clamp((t - i * dur * 0.06) / (dur * 0.7), 0, 1)); });
+      v += (sh * 0.06 + hp.p(noise()) * 0.05) * shimmer * Math.max(0, Math.sin(Math.PI * u));
+      return v;
+    });
+  };
+  S.wyrm_say = wyrmVoice(2.6, 64, 50, 0.25, 0.8, 0.2);
+  S.wyrm_hurt = wyrmVoice(0.8, 96, 70, 0.45, 0.4, 0.6);
+  S.wyrm_roar = wyrmVoice(3.4, 58, 46, 0.5, 1.2, 1.2);
+  // its end: the roar falls away and the stars ring out of it
+  S.wyrm_death = () => {
+    const base = wyrmVoice(4.5, 70, 26, 0.5, 0.5, 1)();
+    const bells = [261.6, 329.6, 392, 523.3, 659.3, 784, 1046.5];
+    return render((base.length / DSP.SR) + 2.5, (t, i) => {
+      let s = i < base.length ? base[i] : 0;
+      bells.forEach((f, k) => { const u = t - 1.2 - k * 0.32; if (u > 0) s += Math.sin(2 * Math.PI * f * u) * Math.exp(-u / 1.6) * 0.18; });
+      return s;
+    });
+  };
+  // a starbolt spat: a breath of air and a flurry of sparks
+  S.wyrm_spit = () => {
+    const bp = new Biquad('bp', 1200, 1.2), ck = [];
+    for (let i = 0; i < 12; i++) ck.push([0.05 + rnd() * 0.5, 1800 + rnd() * 2600, 0.25, 0.01 + rnd() * 0.02]);
+    return render(0.8, (t) => { bp.set(600 + t * 2400, 1.2); return bp.p(noise()) * env(t, 0.02, 0.22) * 1.4 + ring(ck, t); });
+  };
+  // starfire rolling out across the ground
+  S.wyrm_breath = () => {
+    const bp = new Biquad('bp', 900, 0.9), hp = new Biquad('hp', 3000, 0.7), ck = [];
+    for (let i = 0; i < 30; i++) ck.push([0.2 + rnd() * 2.2, 1500 + rnd() * 3000, 0.12, 0.015 + rnd() * 0.02]);
+    return render(2.8, (t) => { const e = Math.sin(Math.PI * Math.min(1, t / 2.8)) * (t < 0.1 ? t / 0.1 : 1); bp.set(500 + Math.sin(t * 3) * 300, 0.9); return (bp.p(noise()) * 1.3 + hp.p(noise()) * 0.3) * e + ring(ck, t); });
+  };
+  S.wyrm_bolt_burst = () => {
+    const lp = new Biquad('lp', 600, 0.8), ck = [];
+    for (let i = 0; i < 16; i++) ck.push([rnd() * 0.4, 1200 + rnd() * 3500, 0.3, 0.02 + rnd() * 0.04]);
+    return render(1.2, (t) => lp.p(noise()) * 3 * env(t, 0.003, 0.08) + ring(ck, t) + Math.sin(2 * Math.PI * 880 * t) * env(t, 0.01, 0.4) * 0.25);
+  };
+  // a piece of the wyrm bursting into stars
+  S.wyrm_burst = () => {
+    const hp = new Biquad('hp', 1800, 0.7), f = 600 + rnd() * 500;
+    return render(1.6, (t) => hp.p(noise()) * env(t, 0.002, 0.12) + (Math.sin(2 * Math.PI * f * t) + Math.sin(2 * Math.PI * f * 1.5 * t) * 0.6 + Math.sin(2 * Math.PI * f * 2 * t) * 0.3) * env(t, 0.005, 0.5) * 0.4);
+  };
+  // a star falling out of the dark: a long whistle, getting lower and louder
+  S.meteor_fall = () => {
+    let ph = 0;
+    const bp = new Biquad('bp', 2000, 2);
+    return render(2.6, (t) => { const u = t / 2.6, f = 2400 - u * 1900; ph += 2 * Math.PI * f / DSP.SR; bp.set(f, 2); return (Math.sin(ph) * 0.4 + bp.p(noise()) * 0.8) * (0.15 + u * 0.85) * (u > 0.96 ? (1 - u) / 0.04 : 1); });
+  };
+  S.meteor_impact = () => {
+    const lp = new Biquad('lp', 160, 0.8), hp = new Biquad('hp', 2500, 0.7), ck = [];
+    for (let i = 0; i < 24; i++) ck.push([0.05 + rnd() * 0.8, 1500 + rnd() * 3000, 0.15, 0.02 + rnd() * 0.03]);
+    return render(1.8, (t) => lp.p(noise()) * 6 * env(t, 0.004, 0.25) + Math.sin(2 * Math.PI * (55 - t * 15) * t) * env(t, 0.004, 0.4) * 0.8 + hp.p(noise()) * env(t, 0.002, 0.1) * 0.5 + ring(ck, t));
+  };
+  // a star gateway opening far off: a chord swelling out of nothing
+  S.gateway_open = () => {
+    const hp = new Biquad('hp', 3000, 0.7);
+    return render(4.5, (t) => {
+      const u = t / 4.5, sw = Math.sin(Math.PI * Math.min(1, u * 1.15));
+      let s = 0; [196, 246.9, 293.7, 392, 493.9, 587.3].forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t * (1 + Math.sin(t * 0.7 + i) * 0.002)) * (0.4 / (1 + i * 0.4)); });
+      return s * sw + hp.p(noise()) * 0.15 * sw;
+    });
+  };
+  // through it: a rush of air and a bell
+  S.gateway_travel = () => {
+    const bp = new Biquad('bp', 800, 1);
+    return render(1.6, (t) => { bp.set(300 + t * 1800, 1); return bp.p(noise()) * env(t, 0.15, 0.35) * 1.2 + (Math.sin(2 * Math.PI * 1046.5 * t) + Math.sin(2 * Math.PI * 1568 * t) * 0.5) * env(t, 0.3, 0.6) * 0.3 * (t > 0.3 ? 1 : 0); });
+  };
+  // the Star Well drinking in the crystals' light
+  S.wyrm_ritual = () => {
+    const lp = new Biquad('lp', 200, 0.8);
+    return render(6, (t) => {
+      const u = t / 6, sw = Math.sin(Math.PI * Math.min(1, u * 1.1));
+      let s = 0; [55, 82.4, 110, 164.8].forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t) * (0.5 / (i + 1)); });
+      [880, 1108.7, 1318.5].forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t) * 0.07 * Math.max(0, Math.sin(t * (1.3 + i * 0.4))); });
+      return (s + lp.p(noise()) * 0.6) * sw;
+    });
+  };
   // ----- the Hush -----
   // the air of the Hush: a pressure more than a sound, with something ticking far away (looped)
   S.hush_air = () => {

@@ -213,8 +213,10 @@ class Renderer {
       this.fogT = now;
       if (!this.uFog || this.uFogWorld !== world) { this.uFog = want.slice(); this.uFogWorld = world; }
       for (let i = 0; i < 3; i++) this.uFog[i] += (want[i] - this.uFog[i]) * Math.min(1, dt * 1.5);
-      this.fogColor = this.uFog.slice();
-      this.skyColor = [this.uFog[0] * 0.45, this.uFog[1] * 0.4, this.uFog[2] * 0.62];
+      // the Starwyrm's eclipse: the violet drains out of the sky, leaving a dark with a little fire in it
+      const ek = world.eclipseK || 0;
+      this.fogColor = [this.uFog[0] * (1 - ek * 0.62) + ek * 0.02, this.uFog[1] * (1 - ek * 0.72), this.uFog[2] * (1 - ek * 0.68)];
+      this.skyColor = [this.uFog[0] * 0.45 * (1 - ek * 0.6) + ek * 0.025, this.uFog[1] * 0.4 * (1 - ek * 0.75), this.uFog[2] * 0.62 * (1 - ek * 0.7)];
       this.sunrise = null; this.sunDir = [0, 1, 0]; this.dayFactor = 0.4; this.rain = 0;
       this.celestial = ((world.time + partial) % 192000) / 192000;
       return;
@@ -302,7 +304,7 @@ class Renderer {
   }
   updateLightmap(world, partial, extra) {
     const under = world.dim === 1, isles = world.dim === 2, sift = world.dim === 3;
-    const sunB = world.menu ? 1 : under ? 0 : isles ? 0.66 : sift ? 0.62 : world.sunBrightness(partial) * 0.95 + 0.05;
+    const sunB = world.menu ? 1 : under ? 0 : isles ? 0.66 * (1 - 0.65 * (world.eclipseK || 0)) : sift ? 0.62 : world.sunBrightness(partial) * 0.95 + 0.05;
     const BR = under || isles || sift ? BRIGHTNESS_UNDER : BRIGHTNESS;
     this.flickerT += (Math.random() - Math.random()) * Math.random() * Math.random() * 0.1;
     this.flickerT *= 0.9;
@@ -509,6 +511,7 @@ class Renderer {
       else gl.uniform3fv(ps.u.uVoid, [lerp(fogColor[0], this.skyColor[0] * 0.2 + 0.04, vk), lerp(fogColor[1], this.skyColor[1] * 0.2 + 0.04, vk), lerp(fogColor[2], this.skyColor[2] * 0.6 + 0.1, vk)]);
       gl.uniform1f(ps.u.uIsles, isles ? 1 : 0);
       gl.uniform1f(ps.u.uSift, world.dim === 3 ? 1 : 0);
+      gl.uniform1f(ps.u.uEclipse, isles ? (world.eclipseK || 0) : 0);
       const ca = Math.cos(this.celestial * TAU), sa = Math.sin(this.celestial * TAU);
       gl.uniformMatrix3fv(ps.u.uCel, false, [ca, -sa, 0, sa, ca, 0, 0, 0, 1]);
       gl.uniform1f(ps.u.uNight, isles || world.menu ? 0 : this.nightK);
@@ -626,8 +629,10 @@ class Renderer {
     const time = (world.time + partial) / 20;
     if (world.dim === 2) {
       // no sun, no moon: only the stars, turning slowly overhead, and stars falling often
-      this.drawStars(vp, [0.85, 0.82, 1], time);
-      this.drawMeteors(world, time, 1, [0.85, 0.7, 1], 9);
+      // (and in the Starwyrm's eclipse, brighter, falling thick and fast, round a black sun)
+      const ek = world.eclipseK || 0;
+      this.drawStars(vp, [0.85 + ek * 0.4, 0.82 + ek * 0.3, 1 + ek * 0.3], time);
+      this.drawMeteors(world, time, 1 + ek * 1.5, [0.85 + ek * 0.15, 0.7, 1 - ek * 0.3], ek > 0.3 ? 1.5 : 9);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.disable(gl.BLEND);
       return;

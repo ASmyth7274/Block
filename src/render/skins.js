@@ -491,6 +491,61 @@ const Skins = (() => {
     return s;
   })();
 
+  // ------------------------------------------------------------ the Starwyrm
+  // night-blue scales in rows, a pale violet belly, horns of old gold, and stars
+  // caught in its hide (those, and its eyes, are drawn again full-bright)
+  const WY = { d0: C('#14123a'), d1: C('#1c1a4c'), d2: C('#26245e'), sc: C('#343074'), belly: C('#5a4e98'), bellyL: C('#7a6cb8'), horn: C('#cdb878'), hornT: C('#fff0b8'), mem: C('#2a1e5a'), rib: C('#6a5ab0') };
+  const wyScale = (r, f, x, y, fw, fh) => {
+    if (f === 'bottom') return (y % 3 === 0) ? vary(r, WY.belly, 0.06) : vary(r, WY.bellyL, 0.06);
+    if (f === 'left' || f === 'right' || f === 'front' || f === 'back') {
+      const k = y / Math.max(1, fh - 1);
+      if (k > 0.75) return vary(r, WY.belly, 0.08);
+      return ((x + (y >> 1)) % 3 === 0) ? vary(r, WY.sc, 0.1) : vary(r, k > 0.4 ? WY.d2 : WY.d1, 0.1);
+    }
+    return ((x + y) % 4 === 0) ? vary(r, WY.sc, 0.1) : vary(r, (x * 7 + y * 3) % 5 === 0 ? WY.d2 : WY.d0, 0.1);
+  };
+  // which pixels of a face hold a star (shared by the hide and its glow)
+  const wyStar = (f, x, y, salt) => f !== 'bottom' && (((x * 73 + y * 151 + salt * 29) * 2654435761) >>> 0) % 23 === 0;
+  const STAR_COLS = [[255, 248, 220], [200, 184, 255], [150, 230, 255]];
+  S.starwyrm_head = (() => {
+    const s = new Skin(); const r = rng('starwyrm_head');
+    s.box(0, 0, 8, 6, 12, (f, x, y, fw, fh) => wyScale(r, f, x, y, fw, fh));
+    s.box(40, 0, 6, 4, 6, (f, x, y, fw, fh) => f === 'front' ? (y === 2 && (x === 1 || x === 4) ? C('#0a0818') : vary(r, WY.d2, 0.08)) : wyScale(r, f, x, y, fw, fh));
+    s.box(0, 18, 6, 2, 10, (f, x, y) => f === 'top' ? ((x + y) % 2 ? C('#e8e0f8') : C('#3a1430')) : vary(r, WY.belly, 0.08));
+    s.box(40, 10, 2, 2, 8, (f, x, y) => (f === 'back' || (f !== 'front' && f !== 'top' && f !== 'bottom' && x < 2)) ? WY.hornT : vary(r, WY.horn, 0.1));
+    s.box(32, 20, 1, 1, 6, () => vary(r, WY.horn, 0.12));
+    s.box(46, 20, 1, 3, 4, (f, x, y) => y === 0 ? WY.hornT : vary(r, WY.horn, 0.1));
+    return s;
+  })();
+  S.starwyrm_eyes = (() => {
+    const s = new Skin();
+    // the eyes on the sides of the skull, toward its front (+X face counts from the back, -X from the front)
+    s.box(0, 0, 8, 6, 12, (f, x, y) => {
+      if (f === 'right' && y === 1 && (x === 9 || x === 10)) return x === 10 ? [255, 255, 255] : [130, 240, 255];
+      if (f === 'left' && y === 1 && (x === 1 || x === 2)) return x === 1 ? [255, 255, 255] : [130, 240, 255];
+      if ((f === 'right' || f === 'left' || f === 'top') && wyStar(f, x, y, 1)) return STAR_COLS[(x + y) % 3];
+      return null;
+    });
+    return s;
+  })();
+  S.starwyrm_body = (() => {
+    const s = new Skin(); const r = rng('starwyrm_body');
+    s.box(0, 0, 8, 8, 10, (f, x, y, fw, fh) => (f === 'top' && (x === 3 || x === 4)) ? vary(r, WY.d2, 0.08) : wyScale(r, f, x, y, fw, fh));
+    s.box(36, 0, 1, 3, 3, (f, x, y) => y === 0 ? WY.horn : vary(r, C('#7a6a48'), 0.12));
+    s.box(0, 18, 10, 1, 6, (f, x, y) => (f === 'top' || f === 'bottom') ? ((x % 3 === 0) ? vary(r, WY.rib, 0.1) : vary(r, WY.mem, 0.1)) : vary(r, WY.rib, 0.1));
+    s.box(36, 8, 1, 8, 10, (f, x, y) => (f === 'left' || f === 'right') ? ((y % 3 === 0 || x === 0) ? vary(r, WY.rib, 0.1) : vary(r, WY.mem, 0.1)) : vary(r, WY.rib, 0.1));
+    return s;
+  })();
+  S.starwyrm_glow = (() => {
+    const s = new Skin();
+    s.box(0, 0, 8, 8, 10, (f, x, y) => {
+      if (f === 'top' && (x === 3 || x === 4) && y % 3 === 1) return [170, 150, 255];
+      return wyStar(f, x, y, 2) ? STAR_COLS[(x * 3 + y) % 3] : null;
+    });
+    s.box(0, 18, 10, 1, 6, (f, x, y) => (f === 'top' && x === 9 && y % 2 === 0) ? [190, 170, 255] : null);
+    return s;
+  })();
+
   // ------------------------------------------------------------ the Hush
   // the Listener: slate-dark hide over a cage of ribs that glow when its heart beats,
   // and no face at all - only a dish of an ear, whorled like a shell

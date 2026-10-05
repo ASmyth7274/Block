@@ -218,6 +218,29 @@ const MODELS = (() => {
       rwing: { pivot: [3, 6, 0], rot0: [Math.PI / 2, 0, 0], boxes: [bx([0, -8, 0], [10, 16, 1], [42, 0])] },
       lwing: { pivot: [-3, 6, 0], rot0: [Math.PI / 2, 0, 0], boxes: [bx([-10, -8, 0], [10, 16, 1], [42, 0], { mirror: true })] },
     },
+    // the Starwyrm, built small and drawn large. Its head: a long skull with swept-back
+    // horns, a heavy jaw and barbels trailing from the snout (centred on the neck joint)
+    wyrmHead: {
+      skull: { pivot: [0, 0, 0], boxes: [bx([-4, -3, -6], [8, 6, 12], [0, 0])] },
+      snout: { pivot: [0, -0.5, -6], boxes: [bx([-3, -2, -6], [6, 4, 6], [40, 0])] },
+      jaw: { pivot: [0, -2.5, -2], boxes: [bx([-3, -2, -10], [6, 2, 10], [0, 18])] },
+      hornR: { pivot: [2.5, 2, 2], rot0: [-0.55, 0.3, 0], boxes: [bx([-1, -1, 0], [2, 2, 8], [40, 10])] },
+      hornL: { pivot: [-2.5, 2, 2], rot0: [-0.55, -0.3, 0], boxes: [bx([-1, -1, 0], [2, 2, 8], [40, 10], { mirror: true })] },
+      barbelR: { pivot: [2.5, -1.5, -11], rot0: [0.35, 0.5, 0], boxes: [bx([0, 0, 0], [1, 1, 6], [32, 20])] },
+      barbelL: { pivot: [-2.5, -1.5, -11], rot0: [0.35, -0.5, 0], boxes: [bx([-1, 0, 0], [1, 1, 6], [32, 20], { mirror: true })] },
+      crest: { pivot: [0, 3, -3], boxes: [bx([-0.5, 0, 0], [1, 3, 4], [46, 20])] },
+    },
+    // a body segment, with a spine along its back
+    wyrmSeg: {
+      body: { pivot: [0, 0, 0], boxes: [bx([-4, -4, -5], [8, 8, 10], [0, 0])] },
+      spine: { pivot: [0, 4, 0], rot0: [-0.35, 0, 0], boxes: [bx([-0.5, 0, -1.5], [1, 3, 3], [36, 0])] },
+    },
+    // the long fins it swims the air with, on a few of its segments
+    wyrmFins: {
+      finR: { pivot: [4, 0, 0], boxes: [bx([0, -0.5, -3], [10, 1, 6], [0, 18])] },
+      finL: { pivot: [-4, 0, 0], boxes: [bx([-10, -0.5, -3], [10, 1, 6], [0, 18], { mirror: true })] },
+    },
+    wyrmTail: { fin: { pivot: [0, 0, 4], boxes: [bx([-0.5, -4, 0], [1, 8, 10], [36, 8])] } },
   };
 })();
 

@@ -155,7 +155,7 @@ class MusicEngine {
     if (!g.world || g.world.menu) return 'menu';
     const p = g.player, w = g.world;
     if (this.forceMood) return this.forceMood;
-    if (w.dim === 2) return 'isles';
+    if (w.dim === 2) return typeof Wyrm !== 'undefined' && Wyrm.fighting() ? 'wyrm' : 'isles';
     if (w.dim === 3) return 'sift';
     if (w.dim) return 'underworld';
     if (p && p.creative) return Math.random() < 0.5 ? 'creative' : 'day';
@@ -350,6 +350,10 @@ class MusicEngine {
     const menu = !this.game.world || this.game.world.menu;
     // switching between the title screen and a world changes the mood soon
     if (this.playing && (this.mood === 'menu') !== menu && this.ctx.currentTime - this.pieceStart > 2) { this.stop(3); this.scheduleNext(true); this.nextStart = performance.now() + (menu ? 3000 : 25000); }
+    // the Starwyrm's fight has its own music, which starts as soon as it does
+    const fight = !menu && typeof Wyrm !== 'undefined' && Wyrm.fighting();
+    if (this.playing && (this.mood === 'wyrm') !== fight && this.ctx.currentTime - this.pieceStart > 2) { this.stop(fight ? 2 : 6); this.scheduleNext(false); this.nextStart = performance.now() + (fight ? 1500 : 20000); }
+    if (!this.playing && fight && this.nextStart > performance.now() + 2000) this.nextStart = performance.now() + 2000;
     if (!this.playing) { if (performance.now() >= this.nextStart && this.ctx.state === 'running') this.start(); return; }
     // render a few note buffers ahead of time
     const t0 = performance.now();

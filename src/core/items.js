@@ -256,6 +256,9 @@ defItem('sift_scale', { name: 'Sifter Scale' });
 defItem('silent_boots', { name: 'Silent Boots', tex: 'silent_boots', maxDamage: 13 * 9, armor: { slot: 3, points: 1, mat: 'leather' }, silent: true, rare: true });
 // strike it and its note rings out wherever you point: a way to lead the Listener astray
 defItem('echo_fork', { name: 'Echo Fork', maxDamage: 48, handheld: true });
+// ---- the Starwyrm's isle ----  (items are numbered in the order they are defined: always add new ones at the end)
+// a shard of a fallen star, still warm: the Starwyrm calls them down from the sky
+defItem('star_fragment', { name: 'Star Fragment', rare: true });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -301,8 +304,13 @@ class ItemStack {
   isEmpty() { return this.count <= 0 || this.id === 0; }
   sameItem(o) { return o && o.id === this.id && (maxDamageOf(this.id) > 0 || o.dmg === this.dmg) && !this.tag && !o.tag; }
   canStackWith(o) { return o && o.id === this.id && o.dmg === this.dmg && maxDamageOf(this.id) === 0 && !this.tag && !o.tag; }
-  toJSON() { const o = { id: this.id, c: this.count, d: this.dmg }; if (this.tag) o.t = this.tag; return o; }
-  static fromJSON(o) { if (!o) return null; const s = new ItemStack(o.id, o.c, o.d); if (o.t) s.tag = o.t; return itemExists(s.id) ? s : null; }
+  // saved by name as well as number, so items defined later can never shift what a save holds
+  toJSON() { const o = { id: this.id, c: this.count, d: this.dmg }; if (this.id >= 256 && ITEMS[this.id]) o.k = ITEMS[this.id].key; if (this.tag) o.t = this.tag; return o; }
+  static fromJSON(o) {
+    if (!o) return null;
+    const id = o.k && ITEM_IDS[o.k] !== undefined ? ITEM_IDS[o.k] : o.id;
+    const s = new ItemStack(id, o.c, o.d); if (o.t) s.tag = o.t; return itemExists(s.id) ? s : null;
+  }
 }
 
 // Map a block meta to the item damage used for drops / pick-block
