@@ -75,7 +75,7 @@ splash text and a slowly turning live panorama.
 
 **New to explore:**
 
-- 23 biomes, including Autumn Woods, Redwood Groves, Moorland with stone
+- 28 biomes, including Autumn Woods, Redwood Groves, Moorland with stone
   circles, the Ashen Wastes with lava pools, blinding Salt Flats, banded Red
   Canyons and Wildflower Meadows.
 - New ores and materials: ember (glows when struck), jade (high places),
@@ -138,6 +138,40 @@ splash text and a slowly turning live panorama.
   ember dust, stronger with sunstone, twisted with a fermented spider eye or
   turned into splash potions with gunpowder. Effects show beside your
   inventory and swirl around whoever is under them.
+- Vaults and the rift: Seeker's Eyes fly towards the ancient Vaults, brick
+  strongholds whose walls hide burrowing vault mites. Twelve eyes set in the
+  rift frame open the way to the Far Isles.
+- The Far Isles and the Starwyrm: a starstone archipelago over the void,
+  walked by gaunts, and the Starwyrm - a vast serpent of stars that coils
+  around the crystal towers, calls down starfall and darkens the sun in an
+  eclipse. Bring it down and its egg can be warmed with star fragments until
+  a wyrmling hatches to follow you; star gateways open across the gulf.
+- The Drift Isles beyond the gulf: glimmerwood groves, moonpetal meadows,
+  starvines heavy with starfruit (which let you fall like a feather), and old
+  observatories guarded by orrery sentinels whose drift motes lift you off
+  your feet - with a drift glider waiting inside for whoever gets that far.
+- The deep: vast caves and ravines, glowing Mossglow Caves, and the Hush -
+  a silent deep dark of hushmoss and listening sensors where the blind
+  Listener hunts by sound. At the bottom of great sinkholes lie forgotten
+  cities, and a city gate woken with an Echo Heart opens into the Sift.
+- The Sift, where lost things go: items that despawn or fall out of the world
+  wash up in its grey dunes, among half-buried relics and lost letters, with
+  gleaners that make off with anything left lying about and sifters that swim
+  through the sand.
+- A living night sky: twinkling stars, shooting stars, the Milky Way and
+  aurora on clear nights.
+- Farms and machines, by the classic rules: hoppers that pull items in and
+  feed chests, furnaces and brewing stands; droppers; dispensers that fire
+  arrows, pour and scoop buckets, scatter bone meal, light TNT and dress you
+  in armour; the ember gauge, which reads how full a container is and
+  compares or subtracts signals. Water currents carry items and creatures
+  (run your item streams over ice for speed), cactus and fire destroy items,
+  creatures take fall damage and drown, and they shoulder each other aside.
+  Melon and pumpkin stems set fruit beside them. Villagers fed bread, carrots
+  or potatoes raise families wherever there are beds or doors to spare;
+  wherever enough of them live together the village raises an iron keeper to
+  guard it - which is how an iron farm is made - and you can build one
+  yourself from four blocks of iron and a pumpkin, or a snowkin from snow.
 - Generative music: calm piano pieces composed on the fly, different by day,
   by night and underground.
 

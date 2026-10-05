@@ -257,6 +257,24 @@ const MODELS = (() => {
       wingR: { pivot: [1, 24, 2.3], boxes: [bx([-1, -20, 0], [10, 20, 2], [22, 0])] },
       wingL: { pivot: [-1, 24, 2.3], boxes: [bx([-9, -20, 0], [10, 20, 2], [22, 0], { mirror: true })] },
     },
+    // the iron keeper (a 128x64 skin): stumpy legs, a barrel chest, a heavy-browed head
+    // sunk forward between the shoulders, and long arms that hang almost to the ground
+    iron_keeper: {
+      body: { pivot: [0, 15, 0], boxes: [bx([-5, 0, -3], [10, 4, 6], [0, 42]), bx([-9, 4, -5.5], [18, 13, 11], [0, 18])] },
+      head: { pivot: [0, 31, -1.5], boxes: [bx([-4, 0, -5.5], [8, 10, 8], [0, 0]), bx([-4, 6.5, -7.5], [8, 2, 2], [32, 0])] },
+      rarm: { pivot: [11, 30, 0], boxes: [bx([-2, -27, -3], [4, 30, 6], [64, 0])] },
+      larm: { pivot: [-11, 30, 0], boxes: [bx([-2, -27, -3], [4, 30, 6], [64, 0], { mirror: true })] },
+      rleg: { pivot: [4.5, 15, 0], boxes: [bx([-3, -15, -2.5], [6, 15, 5], [88, 0])] },
+      lleg: { pivot: [-4.5, 15, 0], boxes: [bx([-3, -15, -2.5], [6, 15, 5], [88, 0], { mirror: true })] },
+    },
+    // the snowkin (a 64x64 skin): two snowballs, a pumpkin for a head, stick arms
+    snowkin: {
+      base: { pivot: [0, 0, 0], boxes: [bx([-6, 0, -6], [12, 12, 12], [0, 36])] },
+      upper: { pivot: [0, 11, 0], boxes: [bx([-5, 0, -5], [10, 10, 10], [0, 16])] },
+      head: { pivot: [0, 20, 0], boxes: [bx([-4, 0, -4], [8, 8, 8], [0, 0])] },
+      rarm: { pivot: [4, 18, 0], rot0: [0, 0, 0.45], boxes: [bx([0, -1, -1], [10, 2, 2], [32, 0])] },
+      larm: { pivot: [-4, 18, 0], rot0: [0, 0, -0.45], boxes: [bx([-10, -1, -1], [10, 2, 2], [32, 0], { mirror: true })] },
+    },
   };
 })();
 

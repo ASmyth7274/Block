@@ -82,6 +82,24 @@
     '................', '................', '................', '................', '.....r....r.....', '....rRr..rRr....',
     '.....s....s.....', '.....s....s.....', '..oooooooooooo..', '..ogggdddggggo..', '..ogggggggggdo..', '..oaaaaaaaaaao..',
     '..oooooooooooo..', '................', '................', '................'], { o: '#3a3a3a', g: '#a8a8a8', d: '#c83a1a', a: '#7a7a7a', r: '#ff5a1a', R: '#ffd0a0', s: '#6b5232' });
+  // gauge top: smooth stone, ember traces joining its three studs, and a little dial between them
+  const gaugeTop = (name, on) => {
+    const img = TexGen.T.stone_slab_top ? TexGen.T.stone_slab_top.copy() : new Img().fill([160, 160, 160]);
+    const D = on ? C('#ff7a30') : C('#7a2a14'), rim = C('#5c5c5c');
+    for (let y = 4; y <= 12; y++) { img.set(4, y, D); img.set(12, y, D); }
+    for (let x = 4; x <= 12; x++) img.set(x, 4, D);
+    for (let y = 2; y < 4; y++) { img.set(7, y, D); img.set(8, y, D); }
+    for (const [x, y] of [[7, 7], [8, 7], [9, 7], [6, 8], [10, 8], [6, 9], [10, 9], [6, 10], [10, 10], [7, 11], [8, 11], [9, 11]]) img.set(x, y, rim);
+    for (const [x, y] of on ? [[8, 10], [8, 9], [9, 8]] : [[8, 10], [8, 9], [7, 8]]) img.set(x, y, D);
+    for (let x = 0; x < 16; x++) img.set(x, 15, C('#6a6a6a'));
+    return reg(name, img);
+  };
+  gaugeTop('gauge_top', false);
+  gaugeTop('gauge_top_on', true);
+  sprite('item_gauge', [
+    '................', '................', '................', '................', '...r.......r....', '..rRr.....rRr...',
+    '...s...r...s....', '...s..rRr..s....', '..oooooooooooo..', '..ogggdddggggo..', '..ogdgggggdggo..', '..oaaaaaaaaaao..',
+    '..oooooooooooo..', '................', '................', '................'], { o: '#3a3a3a', g: '#a8a8a8', d: '#c83a1a', a: '#7a7a7a', r: '#ff5a1a', R: '#ffd0a0', s: '#6b5232' });
   // pistons: a wooden face on a cobblestone body
   const cob = () => (TexGen.T.cobblestone ? TexGen.T.cobblestone.copy() : new Img().fill([110, 110, 110]));
   reg('piston_top', (() => {

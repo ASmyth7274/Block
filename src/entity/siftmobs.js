@@ -19,7 +19,7 @@ const GLEANINGS = () => [[ITEM_IDS.gold_nugget, 1, 4], [ITEM_IDS.string, 1, 3], 
 class Gleaner extends Mob {
   constructor(world) {
     super(world, 'gleaner');
-    this.category = 'creature';
+    this.category = 'creature'; this.noFallDamage = true;
     this.maxHealth = this.health = 8;
     this.w = 0.5; this.h = 0.9; this.eye = 0.75;
     this.baseSpeed = 0.32;
@@ -127,6 +127,7 @@ MOB_CLASSES.gleaner = Gleaner;
 class Sifter extends Monster {
   constructor(world) {
     super(world, 'sifter');
+    this.noFallDamage = true; this.noDrown = true;
     this.maxHealth = this.health = 16;
     this.w = 0.8; this.h = 0.7; this.eye = 0.45;
     this.baseSpeed = 0.2; this.damage = 4;

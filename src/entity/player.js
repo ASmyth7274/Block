@@ -174,7 +174,7 @@ class Player extends Living {
   onLand(dist) {
     if (this.creative || this.flying) return;
     const below = this.world.getBlock(Math.floor(this.x), Math.floor(this.y - 0.2), Math.floor(this.z));
-    let d = Math.ceil(dist - 3);
+    let d = Math.ceil(dist - 3.001);
     if (below === B.HAY_BALE) d = Math.ceil(d * 0.2);
     if (this.inWater) d = 0;
     if (d > 0) {

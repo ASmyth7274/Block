@@ -49,11 +49,11 @@ const Circuits = (() => {
   const ATT = CIRCUIT_ATT;
   const IS = new Uint8Array(256), SOURCE = new Uint8Array(256), MACHINE = new Uint8Array(256), CONNECT = new Uint8Array(256);
   for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE,
-    B.EMBER_LAMP, B.EMBER_LAMP_ON, B.RELAY, B.RELAY_ON, B.NOTE_BLOCK, B.EMBER_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT, B.BOOSTER_RAIL, B.DETECTOR_RAIL, B.HUSH_SENSOR]) IS[id] = 1;
-  for (const id of [B.EMBER_TORCH, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.RELAY_ON, B.EMBER_BLOCK, B.DETECTOR_RAIL, B.HUSH_SENSOR]) SOURCE[id] = 1;
-  for (const id of [B.EMBER_LAMP, B.EMBER_LAMP_ON, B.NOTE_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.RELAY, B.RELAY_ON, B.BOOSTER_RAIL]) MACHINE[id] = 1;
-  for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK, B.DETECTOR_RAIL, B.HUSH_SENSOR]) CONNECT[id] = 1;
-  for (const id of [B.PISTON, B.STICKY_PISTON, B.PISTON_HEAD]) { IS[id] = 1; MACHINE[id] = 1; }
+    B.EMBER_LAMP, B.EMBER_LAMP_ON, B.RELAY, B.RELAY_ON, B.NOTE_BLOCK, B.EMBER_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT, B.BOOSTER_RAIL, B.DETECTOR_RAIL, B.HUSH_SENSOR, B.GAUGE]) IS[id] = 1;
+  for (const id of [B.EMBER_TORCH, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.RELAY_ON, B.EMBER_BLOCK, B.DETECTOR_RAIL, B.HUSH_SENSOR, B.GAUGE]) SOURCE[id] = 1;
+  for (const id of [B.EMBER_LAMP, B.EMBER_LAMP_ON, B.NOTE_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.RELAY, B.RELAY_ON, B.BOOSTER_RAIL, B.GAUGE]) MACHINE[id] = 1;
+  for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK, B.DETECTOR_RAIL, B.HUSH_SENSOR, B.GAUGE]) CONNECT[id] = 1;
+  for (const id of [B.PISTON, B.STICKY_PISTON, B.PISTON_HEAD, B.HOPPER, B.DROPPER, B.DISPENSER]) { IS[id] = 1; MACHINE[id] = 1; }
   // blocks a piston crushes (dropping them) rather than pushes
   const BREAKS = new Uint8Array(256);
   for (const id of [B.DOOR_WOOD, B.DOOR_IRON, B.BED, B.CACTUS, B.RELAY, B.RELAY_ON, B.LADDER, B.TRAPDOOR, B.LILY_PAD, B.COBWEB, B.PUMPKIN, B.JACK_O_LANTERN, B.MELON]) BREAKS[id] = 1;
@@ -69,11 +69,13 @@ const Circuits = (() => {
       case B.HUSH_SENSOR: return (meta & 1) ? 15 : 0;
       case B.EMBER_TORCH: { const a = TORCH_ATT[meta] || TORCH_ATT[0]; return (dx === a[0] && dy === a[1] && dz === a[2]) ? 0 : 15; }
       case B.RELAY_ON: { const f = HFACE_DIR[meta & 3]; return (dy === 0 && dx === f[0] && dz === f[1]) ? 15 : 0; }
+      case B.GAUGE: { const f = HFACE_DIR[meta & 3]; return (dy === 0 && dx === f[0] && dz === f[1]) ? (meta >> 3) & 15 : 0; }
     }
     return 0;
   }
   // power given to an opaque block by sources attached to it
   function strongPower(w, x, y, z) {
+    let best = 0;
     for (let f = 0; f < 6; f++) {
       const d = FACE_DIR[f], sx = x + d[0], sy = y + d[1], sz = z + d[2];
       const id = w.getBlock(sx, sy, sz);
@@ -86,9 +88,10 @@ const Circuits = (() => {
         case B.HUSH_SENSOR: if ((m & 1) && d[1] === 1) return 15; break;
         case B.EMBER_TORCH: if (d[1] === -1) return 15; break;
         case B.RELAY_ON: { const fd = HFACE_DIR[m & 3]; if (d[1] === 0 && fd[0] === -d[0] && fd[1] === -d[2]) return 15; break; }
+        case B.GAUGE: { const fd = HFACE_DIR[m & 3]; if (d[1] === 0 && fd[0] === -d[0] && fd[1] === -d[2]) best = Math.max(best, (m >> 3) & 15); break; }
       }
     }
-    return 0;
+    return best;
   }
   // which horizontal sides wire at (x,y,z) connects to: bit k for H[k]
   function wireConns(w, x, y, z) {
@@ -264,6 +267,15 @@ const Circuits = (() => {
         break;
       }
       case B.BOOSTER_RAIL: Rails.updateBooster(w, x, y, z); break;
+      case B.GAUGE: if (gaugeOutput(w, x, y, z, m) !== ((m >> 3) & 15)) w.scheduleTick(x, y, z, 2, id); break;
+      // power locks a hopper; a pulse fires a dropper or dispenser (once per pulse)
+      case B.HOPPER: { const p = machinePower(w, x, y, z) > 0; if (p !== !!(m & 8)) w.setMeta(x, y, z, p ? m | 8 : m & ~8, 4); break; }
+      case B.DROPPER: case B.DISPENSER: {
+        const p = machinePower(w, x, y, z) > 0, was = (m & 8) !== 0;
+        if (p && !was) { w.setMeta(x, y, z, m | 8, 4); w.scheduleTick(x, y, z, 4, id); }
+        else if (!p && was) w.setMeta(x, y, z, m & ~8, 4);
+        break;
+      }
       case B.TNT: if (machinePower(w, x, y, z) > 0 && g) { w.setBlock(x, y, z, 0, 0); g.spawnEntity(new TNTEntity(w, x + 0.5, y, z + 0.5, 80)); } break;
       case B.DOOR_WOOD: case B.DOOR_IRON: {
         const lower = (m & 8) ? y - 1 : y;
@@ -363,6 +375,46 @@ const Circuits = (() => {
     }
     game.audio.play('piston_in', 0.5, 0.65 + Math.random() * 0.25, x + 0.5, y + 0.5, z + 0.5);
   }
+  // ------------------------------------------------------------ gauges
+  // how full a container is, 0-15 (a single item anywhere reads 1); -1 where there is none
+  function fillLevel(w, x, y, z) {
+    const c = Machines.containerAt(w, x, y, z, 1);
+    if (!c) return -1;
+    let sum = 0;
+    for (const s of c.items) if (s) sum += s.count / maxStackOf(s.id);
+    return sum > 0 ? Math.floor(1 + sum / c.items.length * 14) : 0;
+  }
+  // a gauge reads from behind - a container (even through a solid block) or plain power - and
+  // from its sides; it passes the rear signal on if the sides are no stronger, or the difference
+  function gaugeOutput(w, x, y, z, m) {
+    const f = HFACE_DIR[m & 3], bx = x - f[0], bz = z - f[1];
+    let rear = fillLevel(w, bx, y, bz);
+    if (rear < 0) {
+      const id = w.getBlock(bx, y, bz), bm = w.getMeta(bx, y, bz);
+      if (id === B.EMBER_WIRE) rear = bm;
+      else if (SOURCE[id]) rear = sourcePower(id, bm, f[0], 0, f[1]);
+      else if (BT.opaque[id]) { const through = fillLevel(w, bx - f[0], y, bz - f[1]); rear = through >= 0 ? through : Math.max(strongPower(w, bx, y, bz), wireInto(w, bx, y, bz)); }
+      else rear = 0;
+    }
+    let side = 0;
+    for (const s of [[f[1], -f[0]], [-f[1], f[0]]]) {
+      const sx = x + s[0], sz = z + s[1], id = w.getBlock(sx, y, sz), sm = w.getMeta(sx, y, sz);
+      let v = 0;
+      if (id === B.EMBER_WIRE) v = sm;
+      else if (id === B.RELAY_ON || id === B.GAUGE || id === B.EMBER_BLOCK) v = sourcePower(id, sm, -s[0], 0, -s[1]);
+      if (v > side) side = v;
+    }
+    if (m & 4) return Math.max(0, rear - side);
+    return side > rear ? 0 : rear;
+  }
+  // a gauge keeps an eye on what is behind it (containers fill and empty without a whisper of power)
+  function tickGauge(game, te) {
+    if ((++te.t & 1) !== 0) return;
+    const w = game.world, x = te.x, y = te.y, z = te.z;
+    if (w.getBlock(x, y, z) !== B.GAUGE) return;
+    const m = w.getMeta(x, y, z);
+    if (gaugeOutput(w, x, y, z, m) !== ((m >> 3) & 15)) w.scheduleTick(x, y, z, 2, B.GAUGE);
+  }
   function relayInput(w, x, y, z, m) {
     const f = HFACE_DIR[m & 3];
     const bx = x - f[0], bz = z - f[1];
@@ -408,6 +460,11 @@ const Circuits = (() => {
         else if (!on && id === B.RELAY_ON) w.setBlock(x, y, z, B.RELAY, m);
         break;
       }
+      case B.GAUGE: {
+        const out = gaugeOutput(w, x, y, z, m);
+        if (out !== ((m >> 3) & 15)) w.setBlock(x, y, z, id, (m & 7) | (out << 3));
+        break;
+      }
       case B.STONE_BUTTON: case B.WOOD_BUTTON:
         if (m & 8) { w.setBlock(x, y, z, id, m & ~8); if (g) g.audio.play('click', 0.3, 0.5, x + 0.5, y + 0.5, z + 0.5); }
         break;
@@ -446,6 +503,12 @@ const Circuits = (() => {
       case B.RELAY: case B.RELAY_ON:
         w.setBlock(x, y, z, id, (m & 3) | ((((m >> 2) & 3) + 1) & 3) << 2);
         game.audio.play('click', 0.2, 0.9, x + 0.5, y + 0.2, z + 0.5);
+        return true;
+      // a gauge flips between comparing and subtracting (the front stud lights to subtract)
+      case B.GAUGE:
+        w.setBlock(x, y, z, id, m ^ 4);
+        w.scheduleTick(x, y, z, 2, id);
+        game.audio.play('click', 0.3, (m & 4) ? 0.5 : 0.55, x + 0.5, y + 0.2, z + 0.5);
         return true;
       case B.NOTE_BLOCK: {
         const pitch = ((m & 31) + 1) % 25;
@@ -500,7 +563,7 @@ const Circuits = (() => {
   }
 
   // ------------------------------------------------------------ hooks
-  for (const id of [B.EMBER_LAMP_ON, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.RELAY, B.RELAY_ON, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.PISTON_MOVING, B.HUSH_SENSOR]) BLOCKS[id].circuitTick = (w, x, y, z) => circuitTick(w, x, y, z, id);
+  for (const id of [B.EMBER_LAMP_ON, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.RELAY, B.RELAY_ON, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.PISTON_MOVING, B.HUSH_SENSOR, B.GAUGE]) BLOCKS[id].circuitTick = (w, x, y, z) => circuitTick(w, x, y, z, id);
   // meta-only changes (lever flips, wire levels) and neighbour edits nearby
   function blockChanged(w, x, y, z, oldId, newId) {
     if (w.menu) return;
@@ -511,5 +574,5 @@ const Circuits = (() => {
     }
   }
   BLOCKS[B.NOTE_BLOCK].onPunch = (w, x, y, z) => { if (w.game) playNote(w.game, x, y, z, w.getMeta(x, y, z) & 31); };
-  return { changed, blockChanged, use, tickPlates, machinePower, wireConns, playNote, IS };
+  return { changed, blockChanged, use, tickPlates, machinePower, wireConns, playNote, IS, tickGauge, fillLevel };
 })();

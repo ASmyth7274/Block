@@ -462,7 +462,7 @@ const Paintings = (() => {
       atlas[di] = img.d[si]; atlas[di + 1] = img.d[si + 1]; atlas[di + 2] = img.d[si + 2]; atlas[di + 3] = img.d[si + 3];
     }
   };
-  const top = Math.ceil((Skins.names.length + 1) / 8) * 32;
+  const top = Skins.top;
   // font for sign text: white glyphs in 8x8 cells, 16 per row
   const glyphs = {};
   const chars = Object.keys(GLYPHS);

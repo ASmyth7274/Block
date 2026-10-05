@@ -182,6 +182,7 @@ class Mob extends Living {
     this.flipDeath = Math.random() < 0.5;
     this.idleTime = 0;
     this.swims = true;
+    this.air = 300;
   }
   get game() { return this.world.game; }
   get baby() { return this.growAge < 0; }
@@ -298,6 +299,7 @@ class Mob extends Living {
       if ((this.inWater || this.inLava) && this.swims && Math.random() < 0.8) this.jumping = true;
       if (!this.path && this.aiSpeed === 0 && this.lookTimer > 0) this.yaw = approachAngle(this.yaw, this.headYawTarget === undefined ? this.yaw : this.headYawTarget, 10 * DEG);
       this.updateLook();
+      this.breathe();
     }
     this.livingTick();
     if (!this.dead && this.category !== 'ambient') Hush.step(game, this);
@@ -317,6 +319,18 @@ class Mob extends Living {
   }
   aiTick() {}
   mobTick() {}
+  // a long fall hurts (fliers, floaters and the sure-footed excepted)
+  onLand(dist) {
+    if (this.noFallDamage || this.noGravity || this.inWater || this.dead) return;
+    const d = Math.ceil(dist - 3.001);
+    if (d > 0) this.hurt(d, { type: 'fall' });
+  }
+  // held under water too long, it drowns
+  breathe() {
+    if (this.dead || this.noDrown || this.noGravity || this.category === 'water') return;
+    if (this.headInWater) { if (--this.air <= -20) { this.air = 0; this.hurt(2, { type: 'drown' }); } }
+    else this.air = 300;
+  }
   ambient(game) {
     if (Math.random() * 1000 < this.ambientTimer++) {
       this.ambientTimer = -this.talkInterval;
@@ -497,7 +511,7 @@ class Monster extends Mob {
     if (this.pathDone && Math.random() < 1 / 120) this.wander(10, 4, 1.0, (x, y, z) => this.pathWeight(x, y, z));
     this.idleLook(game); this.keepWatching();
   }
-  onRevenge(e) { if ((e.type === 'player' && e.survivalLike) || e.type === 'wolf') { this.target = e; this.unseen = 0; } }
+  onRevenge(e) { if ((e.type === 'player' && e.survivalLike) || e.type === 'wolf' || e.category === 'golem') { this.target = e; this.unseen = 0; } }
   maybeEquip() {
     const d = this.world.difficulty;
     if (Math.random() < [0, 0.01, 0.025, 0.05][d]) {
@@ -758,6 +772,7 @@ class Boomcap extends Monster {
 class Slime extends Monster {
   constructor(world) {
     super(world, 'slime');
+    this.noFallDamage = true;
     this.size = 1; this.squish = 0; this.psquish = 0; this.squishTarget = 0; this.jumpDelay = 0;
     this.wasOnGround = false; this.slimeYaw = Math.random() * TAU;
     this.setSize(1 << Math.floor(Math.random() * 3));
@@ -1494,6 +1509,7 @@ class Villager extends Mob {
     this.customer = null; this.flee = 0;
     this.opensDoors = true; this.doors = [];
     this.xpValue = 0; this.talkInterval = 80;
+    this.food = 0; this.breedCool = 0; this.mate = null; this.mateT = 0; this.roomT = 0;
   }
   onSpawn(fresh, extra) {
     if (!fresh) return;
@@ -1544,6 +1560,21 @@ class Villager extends Mob {
     if (this.customer) { this.lookAtEntity(this.customer, 2); this.clearPath(); return; }
     // keep away from the undead
     if (this.flee > 0) { this.flee--; if (this.pathDone) this.wander(8, 3, 1.25); return; }
+    // courting: walk up to the other, stand together a while, and a child is born
+    if (this.mate) {
+      const m = this.mate;
+      if (m.dead || m.removed || m.mate !== this || this.distSqTo(m) > 16 * 16) { this.mate = null; this.mateT = 0; }
+      else {
+        this.lookAtEntity(m, 2);
+        if (this.distSqTo(m) > 2.5 * 2.5) { if (--this.repath <= 0 || this.pathDone) { this.repath = 10; if (!this.navigateTo(m.x, m.y, m.z, 0.8, 16)) this.steerTo(m.x, m.y, m.z, 0.8); } }
+        else {
+          this.clearPath();
+          if (++this.mateT % 20 === 0) game.particles.hearts(this.x, this.y + this.h, this.z, 1);
+          if (this.mateT >= 100) this.haveChild(game);
+        }
+        return;
+      }
+    }
     if (this.age % 10 === 0) {
       for (const e of w.entitiesInBox(this.x - 8, this.y - 3, this.z - 8, this.x + 8, this.y + 3, this.z + 8)) {
         if (!e.dead && (e.type === 'zombie' || e.type === 'mummy' || e.type === 'wraith')) {
@@ -1573,9 +1604,53 @@ class Villager extends Mob {
     }
     this.idleLook(game); this.keepWatching();
   }
-  onRevenge(e) { this.flee = 60; this.clearPath(); if (e) { const dx = this.x - e.x, dz = this.z - e.z, d = Math.sqrt(dx * dx + dz * dz) || 1; this.navigateTo(this.x + dx / d * 8, this.y, this.z + dz / d * 8, 1.25, 12); } }
+  onRevenge(e) {
+    this.flee = 60; this.clearPath(); this.mate = null;
+    if (e) { const dx = this.x - e.x, dz = this.z - e.z, d = Math.sqrt(dx * dx + dz * dz) || 1; this.navigateTo(this.x + dx / d * 8, this.y, this.z + dz / d * 8, 1.25, 12); }
+    // the village's keepers saw that
+    if (e && e.type === 'player' && e.survivalLike) {
+      for (const k of this.world.entitiesInBox(this.x - 16, this.y - 6, this.z - 16, this.x + 16, this.y + 6, this.z + 16)) if (k.type === 'iron_keeper' && !k.dead && !k.playerMade && k.canSee(e)) k.setTarget(e);
+    }
+  }
+  // food off the ground: bread, carrots, potatoes. Well fed, a villager is willing to raise a family
+  gather(game) {
+    if (this.baby || this.food >= 24) return;
+    for (const e of this.world.entitiesInBox(this.x - 1, this.y - 0.5, this.z - 1, this.x + 1, this.y + 1.5, this.z + 1, (e) => e.type === 'item' && !e.removed && e.pickupDelay <= 0)) {
+      const v = villagerFood(e.stack.id);
+      if (!v) continue;
+      const take = Math.min(e.stack.count, Math.ceil((24 - this.food) / v));
+      this.food += take * v; e.stack.count -= take;
+      if (e.stack.count <= 0) e.removed = true;
+      game.audio.play('pop', 0.2, 1.4 + Math.random() * 0.4, this.x, this.y + 1, this.z);
+      if (this.food >= 24) break;
+    }
+  }
+  willing() { return !this.baby && !this.dead && this.food >= 12 && this.breedCool <= 0 && !this.mate && !this.customer && this.flee <= 0; }
+  // two willing villagers close together, with a home to spare in the village: they court
+  tryBreed() {
+    if (!this.willing() || this.roomT > 0) return;
+    const w = this.world;
+    const m = w.entitiesInBox(this.x - 8, this.y - 3, this.z - 8, this.x + 8, this.y + 3, this.z + 8).find((e) => e !== this && e.type === 'villager' && e.willing());
+    if (!m) return;
+    if (!Golems.villageRoom(w, this.x, this.y, this.z)) { this.roomT = 400; return; }
+    this.mate = m; m.mate = this; this.mateT = m.mateT = 0;
+  }
+  haveChild(game) {
+    const m = this.mate;
+    this.mate = null; this.mateT = 0;
+    if (!m) return;
+    m.mate = null; m.mateT = 0;
+    this.food -= 12; m.food -= 12; this.breedCool = m.breedCool = 6000;
+    const c = game.spawnMob('villager', (this.x + m.x) / 2, Math.max(this.y, m.y), (this.z + m.z) / 2, { baby: true, home: this.home || m.home });
+    if (c) { c.persistent = true; game.particles.hearts(c.x, c.y + 0.8, c.z, 6); if (game.player && c.distSqTo(game.player) < 32 * 32) game.achieve('family'); }
+    game.audio.play('villager_yes', 0.8, this.soundPitch(), this.x, this.y + this.eye, this.z);
+  }
   mobTick(game) {
     const w = this.world;
+    if (this.breedCool > 0) this.breedCool--;
+    if (this.roomT > 0) this.roomT--;
+    if (this.age % 10 === 3) this.gather(game);
+    if (this.age % 20 === 7) this.tryBreed();
     // new trades arrive with a sparkle
     if (this.unlockIn > 0 && --this.unlockIn === 0) {
       if (this.unlockTier()) game.particles.happy(this.x, this.y + this.h, this.z);
@@ -1626,6 +1701,8 @@ class Villager extends Mob {
     const d = super.save();
     d.prof = this.prof; d.home = this.home; d.tier = this.tier;
     if (this.unlockIn) d.unlockIn = this.unlockIn;
+    if (this.food) d.food = this.food;
+    if (this.breedCool) d.breedCool = this.breedCool;
     if (this.offers) d.offers = this.offers.map((o) => ({ buy: o.buy.toJSON(), buy2: o.buy2 ? o.buy2.toJSON() : null, sell: o.sell.toJSON(), uses: o.uses, max: o.max }));
     return d;
   }
@@ -1633,8 +1710,17 @@ class Villager extends Mob {
     super.load(d);
     if (d.prof && VILLAGER_PROFS[d.prof]) this.prof = d.prof;
     this.home = d.home || null; this.tier = d.tier || 0; this.unlockIn = d.unlockIn || 0;
+    this.food = d.food || 0; this.breedCool = d.breedCool || 0;
     if (d.offers) this.offers = d.offers.map((o) => ({ buy: ItemStack.fromJSON(o.buy), buy2: o.buy2 ? ItemStack.fromJSON(o.buy2) : null, sell: ItemStack.fromJSON(o.sell), uses: o.uses || 0, max: o.max || 7 })).filter((o) => o.buy && o.sell);
   }
+}
+
+// how filling a villager finds a thing lying on the ground (three loaves, or a dozen carrots or potatoes, make them willing)
+function villagerFood(id) {
+  const I = ITEM_IDS;
+  if (id === I.bread) return 4;
+  if (id === I.carrot || id === I.potato || id === I.baked_potato) return 1;
+  return 0;
 }
 
 // tamed wolves defend their owner and join in when the owner attacks
@@ -1870,7 +1956,7 @@ class Wisp extends Mob {
 class Stranger extends Mob {
   constructor(world) {
     super(world, 'stranger');
-    this.category = 'special';
+    this.category = 'special'; this.noFallDamage = true; this.noDrown = true;
     this.maxHealth = this.health = 20;
     this.w = 0.6; this.h = 1.8; this.eye = 1.62;
     this.seen = 0; this.life = 600 + this.rnd(600);

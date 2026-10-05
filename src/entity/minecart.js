@@ -8,6 +8,7 @@
 class Minecart extends Entity {
   constructor(world, x, y, z, kind) {
     super(world);
+    this.waterPush = false;
     this.type = 'minecart';
     this.kind = kind || 0;             // 0 rideable, 1 chest
     this.w = 0.98; this.h = 0.7;

@@ -7,6 +7,7 @@
 class Boat extends Entity {
   constructor(world, x, y, z, wood) {
     super(world);
+    this.waterPush = false;
     this.type = 'boat';
     this.wood = wood || 0;
     this.w = 1.5; this.h = 0.6;

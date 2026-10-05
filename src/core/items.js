@@ -268,6 +268,10 @@ defItem('starfruit', { name: 'Starfruit', food: { hunger: 4, sat: 4.8, featherfa
 defItem('drift_glider', { name: 'Drift Glider', maxDamage: 432, armor: { slot: 1, points: 0, mat: 'glider' }, glider: true, rare: true });
 // what is left of an orrery sentinel: a brass gear still turning slowly by itself
 defItem('orrery_gear', { name: 'Orrery Gear' });
+// ---- farming ----
+defItem('melon_seeds', { name: 'Melon Seeds', plant: { block: 177, on: [46] } });
+defItem('pumpkin_seeds', { name: 'Pumpkin Seeds', plant: { block: 178, on: [46] } });
+defItem('gauge', { name: 'Ember Gauge', tex: 'item_gauge', places: 'gauge' });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -352,6 +356,7 @@ function pickBlockItem(id, meta) {
     case B.EMBER_TORCH_OFF: return [B.EMBER_TORCH, 0];
     case B.EMBER_LAMP_ON: return [B.EMBER_LAMP, 0];
     case B.RELAY: case B.RELAY_ON: return [ITEM_IDS.relay, 0];
+    case B.GAUGE: return [ITEM_IDS.gauge, 0];
     case B.SIGN: return [ITEM_IDS.sign, (meta >> 4) & 7];
     case B.WALL_SIGN: return [ITEM_IDS.sign, (meta >> 2) & 7];
   }

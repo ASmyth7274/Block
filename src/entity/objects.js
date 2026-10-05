@@ -13,12 +13,15 @@ class ItemEntity extends Entity {
     this.bobOffset = Math.random() * Math.PI * 2;
     this.spin = Math.random() * Math.PI * 2;
     this.lifetime = 6000;
+    this.hp = 5;
+    this.fluidInset = 0;
   }
   tick(game) {
     this.baseTick();
+    if (this.removed) return;
     if (this.pickupDelay > 0) this.pickupDelay--;
-    if (!this.inWater) this.vy -= 0.04;
-    else { this.vy += 0.008; this.vy *= 0.92; this.vx *= 0.95; this.vz *= 0.95; }
+    // an item sinks, and rolls along the bottom with the current
+    this.vy -= 0.04;
     this.noClip = this.pushOutOfBlocksItem();
     this.move(this.vx, this.vy, this.vz);
     let f = 0.98;
@@ -26,6 +29,12 @@ class ItemEntity extends Entity {
     this.vx *= f; this.vy *= 0.98; this.vz *= f;
     if (this.onGround) this.vy *= -0.5;
     if (this.inLava) { this.removed = true; game.audio.play('fizz', 0.4, 2 + Math.random() * 0.4, this.x, this.y, this.z); return; }
+    // flames and cactus spines wear it away in a few moments
+    if ((this.inFireBlock || this.touchingCactus) && --this.hp <= 0) {
+      this.removed = true;
+      if (this.inFireBlock) game.audio.play('fizz', 0.4, 2 + Math.random() * 0.4, this.x, this.y, this.z);
+      return;
+    }
     // merge with nearby identical stacks
     if (this.age % 25 === 1) {
       for (const e of this.world.entitiesInBox(this.x - 0.5, this.y - 0.5, this.z - 0.5, this.x + 0.5, this.y + 0.5, this.z + 0.5)) {
@@ -60,9 +69,12 @@ class XPOrb extends Entity {
     this.setPos(x, y, z);
     this.vx = (Math.random() * 0.2 - 0.1) * 2; this.vy = Math.random() * 0.2 * 2; this.vz = (Math.random() * 0.2 - 0.1) * 2;
     this.delay = 10;
+    this.hp = 5;
+    this.fluidInset = 0;
   }
   tick(game) {
     this.baseTick();
+    if (this.inLava || ((this.inFireBlock || this.touchingCactus) && --this.hp <= 0)) { this.removed = true; return; }
     if (this.delay > 0) this.delay--;
     this.vy -= 0.03;
     const p = game.player;

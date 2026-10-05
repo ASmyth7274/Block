@@ -583,6 +583,26 @@ const SOUND_DEFS = (() => {
     return render(0.9, (t) => { const f = 900 + Math.sin(t * 40) * 120 + t * 300; ph += 2 * Math.PI * f / DSP.SR; return Math.sin(ph) * env(t, 0.02, 0.35) * 0.6 + Math.sin(2 * Math.PI * 1760 * t) * env(t, 0.1, 0.3) * 0.2 * (t > 0.1 ? 1 : 0); });
   };
   S.wyrmling_hurt = () => { let ph = 0; return render(0.4, (t) => { const f = 1400 - t * 1500; ph += 2 * Math.PI * f / DSP.SR; return Math.sin(ph) * env(t, 0.005, 0.12); }); };
+  // a dropper or dispenser: the clack of its mechanism (higher and thinner when it is empty)
+  S.dispense = () => { const ck = [[0, 1800, 0.6, 0.012], [0.03, 1200, 0.5, 0.02], [0.05, 2600, 0.3, 0.008]]; const lp = new Biquad('lp', 600, 0.8); return render(0.3, (t) => ring(ck, t) + lp.p(noise()) * env(t, 0.002, 0.03) * 1.5); };
+  S.dispense_fail = () => { const ck = [[0, 2400, 0.6, 0.008], [0.05, 2600, 0.4, 0.006]]; return render(0.25, (t) => ring(ck, t)); };
+  // ----- golems -----
+  // the iron keeper: a deep, ringing footfall; the clang of a struck bell-iron body; a groaning collapse
+  S.keeper_step = () => { const lp = new Biquad('lp', 260, 0.9); const ck = [[0.01, 196, 0.25, 0.05], [0.012, 523, 0.12, 0.03]]; return render(0.45, (t) => lp.p(noise()) * env(t, 0.004, 0.08) * 1.8 + ring(ck, t)); };
+  S.keeper_hurt = () => { const ck = [[0, 220, 0.5, 0.18], [0, 547, 0.35, 0.12], [0, 1130, 0.2, 0.06], [0.004, 1687, 0.1, 0.04]]; const lp = new Biquad('lp', 900, 0.8); return render(1.2, (t) => ring(ck, t) + lp.p(noise()) * env(t, 0.002, 0.04)); };
+  S.keeper_death = () => {
+    const ck = []; for (let i = 0; i < 9; i++) ck.push([i * 0.09 + rnd() * 0.03, 110 + rnd() * 500, 0.35, 0.15 + rnd() * 0.15]);
+    const lp = new Biquad('lp', 400, 0.8);
+    return render(2.2, (t) => ring(ck, t) + lp.p(noise()) * env(t, 0.3, 0.7) * 0.8 + Math.sin(2 * Math.PI * (80 - t * 25) * t) * env(t, 0.05, 1) * 0.4);
+  };
+  S.keeper_attack = () => { const lp = new Biquad('lp', 500, 0.9); return render(0.5, (t) => { lp.set(300 + t * 1600, 0.9); return lp.p(noise()) * env(t, 0.06, 0.12) * 1.4; }); };
+  S.keeper_wake = () => {
+    const ck = [[0, 147, 0.4, 0.4], [0.18, 220, 0.4, 0.35], [0.36, 294, 0.45, 0.5], [0.36, 587, 0.15, 0.4]];
+    const lp = new Biquad('lp', 300, 0.8);
+    return render(2.2, (t) => ring(ck, t) + lp.p(noise()) * env(t, 0.02, 0.4) * 0.6);
+  };
+  // the snowkin: a soft crunch of packed snow
+  S.snowkin_hurt = () => { const bp = new Biquad('bp', 1800, 1.2); return render(0.3, (t) => bp.p(noise()) * env(t, 0.003, 0.07) * (0.6 + 0.4 * Math.sin(t * 300))); };
   // ----- the Drift Isles -----
   // an orrery sentinel: the dry tick of its clockwork as it turns
   S.orrery_tick = () => { const ck = []; for (let i = 0; i < 8; i++) ck.push([i * 0.11 + rnd() * 0.01, 2400 + (i % 2) * 700, 0.4, 0.004]); return render(1, (t) => ring(ck, t)); };

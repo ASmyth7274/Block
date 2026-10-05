@@ -50,7 +50,7 @@ const PISTON_TF = [
 ];
 // what ember wire visibly links up with
 const WIRE_LINK = new Uint8Array(256);
-for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK, B.DETECTOR_RAIL]) WIRE_LINK[id] = 1;
+for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK, B.DETECTOR_RAIL, B.GAUGE]) WIRE_LINK[id] = 1;
 const FIXED_TINT = {
   spruce: [97, 153, 97], birch: [128, 167, 85], redwood: [86, 128, 70], lily: [32, 128, 48], white: [255, 255, 255],
 };
@@ -277,6 +277,16 @@ class Mesher {
 
   cross(pi, id, meta, x, y, z) {
     const xb = x * 16, zb = z * 16, yb = (this.sy * 16 + y) * 16;
+    // a stem holding its fruit: one bent plane, curving over towards it
+    if ((meta & 8) && (id === B.MELON_STEM || id === B.PUMPKIN_STEM)) {
+      const [dx, dz] = [[0, -1], [0, 1], [-1, 0], [1, 0]][(meta >> 4) & 3], L = this.atlas.layer('stem_attached'), light = this.lts[pi], buf = this.out[1];
+      const uv = [[0, 16], [16, 16], [16, 0], [0, 0]];
+      // the texture bends to its right: lay it out so that its right is towards the fruit
+      const p = dx ? [[xb + 8 - 8 * dx, yb, zb + 8], [xb + 8 + 8 * dx, yb, zb + 8], [xb + 8 + 8 * dx, yb + 16, zb + 8], [xb + 8 - 8 * dx, yb + 16, zb + 8]]
+        : [[xb + 8, yb, zb + 8 - 8 * dz], [xb + 8, yb, zb + 8 + 8 * dz], [xb + 8, yb + 16, zb + 8 + 8 * dz], [xb + 8, yb + 16, zb + 8 - 8 * dz]];
+      this.quad2(buf, p, uv, L, light, FIXED_TINT.white, 1);
+      return;
+    }
     const layer = this.atlas.face(id, meta, 2);
     const tint = BT.tint[id] ? this.tintFor(id, meta, x, z) : FIXED_TINT.white;
     let ox = 0, oz = 0, oy = 0;
@@ -533,6 +543,17 @@ class Mesher {
       const post = [[7, 13], [9, 13], [9, 8], [7, 8]], cap = [[7, 6], [9, 6], [9, 8], [7, 8]];
       const delay = (meta >> 2) & 3;
       for (const pz of [2, 6 + delay * 2]) this.lbox(xb, yb, zb, tf, [7, 2, pz, 9, 7, pz + 2], tl, light, W, [post, cap, post, post, post, post]);
+    }
+    // a gauge: two studs behind, lit while it gives power; one in front, lit when it subtracts
+    if (id === B.GAUGE) {
+      const f = meta & 3, on = ((meta >> 3) & 15) > 0, sub = (meta & 4) !== 0;
+      const tf = [(v) => v, (v) => [16 - v[0], v[1], 16 - v[2]], (v) => [v[2], v[1], 16 - v[0]], (v) => [16 - v[2], v[1], v[0]]][f];
+      const top = atlas.layer(on ? 'gauge_top_on' : 'gauge_top'), sideL = atlas.layer('stone_slab_side'), bot = atlas.layer('stone_slab_top');
+      this.lbox(xb, yb, zb, tf, [0, 0, 0, 16, 2, 16], [bot, top, sideL, sideL, sideL, sideL], light, W);
+      const post = [[7, 13], [9, 13], [9, 8], [7, 8]], cap = [[7, 6], [9, 6], [9, 8], [7, 8]];
+      const lit = atlas.layer('ember_torch_on'), dark = atlas.layer('ember_torch_off');
+      for (const px of [3, 11]) this.lbox(xb, yb, zb, tf, [px, 2, 11, px + 2, 7, 13], on ? lit : dark, light, W, [post, cap, post, post, post, post]);
+      this.lbox(xb, yb, zb, tf, [7, 2, 2, 9, 5, 4], sub ? lit : dark, light, W, [post, cap, post, post, post, post]);
     }
   }
   // rails: a flat (or sloping) double-sided track 1px above the ground

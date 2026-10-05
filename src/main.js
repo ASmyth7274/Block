@@ -10,7 +10,7 @@ const MENU_SEEDS = [1337, 20111118, 404, 8675309, 31415, 777, 2468, 99, 12345, 4
 // blocks that receive random ticks
 const RANDOM_TICK = new Uint8Array(256);
 for (const id of [B.GRASS, B.MYCELIUM, B.SAPLING, B.WHEAT, B.CARROTS, B.POTATOES, B.FARMLAND, B.SUGAR_CANE, B.CACTUS, B.LEAVES, B.ICE, B.SNOW_LAYER,
-  B.EMBER_ORE_LIT, B.BRAMBLE, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.GLOWSHROOM, B.FIRE, B.WATER, B.BLOODCAP, B.PORTAL, B.GLOW_VINE, B.GLOW_VINE_BERRIES, B.STARVINE]) if (id !== undefined) RANDOM_TICK[id] = 1;
+  B.EMBER_ORE_LIT, B.BRAMBLE, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.GLOWSHROOM, B.FIRE, B.WATER, B.BLOODCAP, B.PORTAL, B.GLOW_VINE, B.GLOW_VINE_BERRIES, B.STARVINE, B.MELON_STEM, B.PUMPKIN_STEM]) if (id !== undefined) RANDOM_TICK[id] = 1;
 
 // ore values for the prospector's rod
 const PROSPECT = (() => {
@@ -758,6 +758,7 @@ class Game {
     Circuits.tickPlates(this);
     Hush.tick(this);
     Wyrm.tick(this);
+    Golems.tickVillages(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
     const h = p.inventory.held();
@@ -962,6 +963,8 @@ class Game {
       for (const te of c.tiles.values()) {
         if (te.type === 'furnace') this.tickFurnace(te, c);
         else if (te.type === 'brewing') Brewing.tick(this, te, c);
+        else if (te.type === 'hopper') Machines.tickHopper(this, te);
+        else if (te.type === 'gauge') Circuits.tickGauge(this, te);
         else if (te.type === 'enchanting') this.tickEnchantTable(te);
         else if (te.type === 'spawner') { const dx = te.x + 0.5 - p.x, dy = te.y + 0.5 - p.y, dz = te.z + 0.5 - p.z; if (dx * dx + dy * dy + dz * dz < 256) this.tickSpawner(te); }
       }

@@ -1227,6 +1227,32 @@ defBlock(176, 'starvine', Object.assign({}, glowVineBase, {
   name: 'Starvine', tex: (m) => (m & 1) ? 'starvine_fruit' : 'starvine', light: 6, itemSprite: 'starvine',
   drops: (m) => (m & 1) ? [[ITEM_IDS.starfruit, 1, 0]] : [],
 }));
+// --- farming and machines ---------------------------------------------------------
+// melon and pumpkin stems grow on farmland, and once full grown set a fruit on the ground beside them
+const stemBase = Object.assign({}, plantBase, { render: R.CROSS, itemMetaMask: 0, select: (m) => [0.375, 0, 0.375, 0.625, 0.125 + Math.min(7, m & 7) * 0.1, 0.625] });
+defBlock(177, 'melon_stem', Object.assign({}, stemBase, { name: 'Melon Stem', tex: (m) => 'stem_' + Math.min(3, (m & 7) >> 1), itemSprite: 'melon_seeds', drops: (m, rng) => [[ITEM_IDS.melon_seeds, (m & 7) >= 7 ? 1 + rng.nextInt(2) : 1, 0]] }));
+defBlock(178, 'pumpkin_stem', Object.assign({}, stemBase, { name: 'Pumpkin Stem', tex: (m) => 'stem_' + Math.min(3, (m & 7) >> 1), itemSprite: 'pumpkin_seeds', drops: (m, rng) => [[ITEM_IDS.pumpkin_seeds, (m & 7) >= 7 ? 1 + rng.nextInt(2) : 1, 0]] }));
+// an ember gauge: reads how full the container behind it is (or the power behind it), and compares it
+// with what comes in from the sides. Bits 0-1: facing; bit 2: subtract mode; bits 3-6: the output level
+defBlock(182, 'gauge', Object.assign({}, circuitBase, {
+  name: 'Ember Gauge', render: R.CIRCUIT, tex: 'gauge_top', sound: 'wood', itemSprite: 'item_gauge', select: () => box16(0, 0, 0, 16, 2, 16),
+  collide: () => [box16(0, 0, 0, 16, 2, 16)], solid: true, tileEntity: 'gauge', drops: () => [[ITEM_IDS.gauge, 1, 0]],
+}));
+// a hopper: a funnel with a little inventory that pulls in from above and passes things on
+// through its spout. Bits 0-2: the way the spout points (down or a side); bit 3: locked by power
+const HOPPER_SPOUT = { 0: [6, 0, 6, 10, 4, 10], 2: [6, 4, 0, 10, 8, 4], 3: [6, 4, 12, 10, 8, 16], 4: [0, 4, 6, 4, 8, 10], 5: [12, 4, 6, 16, 8, 10] };
+const HOPPER_FLOOR_TEX = ['hopper_outside', 'hopper_inside', 'hopper_outside', 'hopper_outside', 'hopper_outside', 'hopper_outside'];
+defBlock(179, 'hopper', {
+  name: 'Hopper', render: R.MODEL, tex: 'hopper_outside', opaque: false, opacity: 0, hardness: 3, resistance: 24, tool: 'pickaxe', needsTool: true, sound: 'metal',
+  itemMetaMask: 0, itemSprite: 'item_hopper', tileEntity: 'hopper',
+  model: (m) => [{ b: [0, 10, 0, 16, 11, 16], tex: HOPPER_FLOOR_TEX }, { b: [0, 11, 0, 16, 16, 2] }, { b: [0, 11, 14, 16, 16, 16] }, { b: [0, 11, 2, 2, 16, 14] }, { b: [14, 11, 2, 16, 16, 14] },
+    { b: [4, 4, 4, 12, 10, 12] }, { b: HOPPER_SPOUT[m & 7] || HOPPER_SPOUT[0] }],
+  collide: () => [[0, 0.625, 0, 1, 1, 1], [0.25, 0.25, 0.25, 0.75, 0.625, 0.75]], select: () => [0, 0.25, 0, 1, 1, 1],
+});
+// droppers and dispensers: bits 0-2 the way they face (any of six); bit 3 set while powered
+const machineTex = (front, frontV) => (m, f) => f === (m & 7) ? ((m & 7) <= 1 ? frontV : front) : f <= 1 ? 'furnace_top' : ((m & 7) <= 1 ? 'furnace_top' : 'furnace_side');
+defBlock(180, 'dropper', { name: 'Dropper', tex: machineTex('dropper_front', 'dropper_front_vertical'), hardness: 3.5, tool: 'pickaxe', needsTool: true, itemMetaMask: 0, tileEntity: 'dispenser' });
+defBlock(181, 'dispenser', { name: 'Dispenser', tex: machineTex('dispenser_front', 'dispenser_front_vertical'), hardness: 3.5, tool: 'pickaxe', needsTool: true, itemMetaMask: 0, tileEntity: 'dispenser' });
 // infested bricks: something lives inside
 defBlock(151, 'infested_bricks', {
   name: (m) => ['Stone Bricks', 'Mossy Stone Bricks', 'Cracked Stone Bricks', 'Chiseled Stone Bricks'][m & 3],
@@ -1546,6 +1572,10 @@ defItem('starfruit', { name: 'Starfruit', food: { hunger: 4, sat: 4.8, featherfa
 defItem('drift_glider', { name: 'Drift Glider', maxDamage: 432, armor: { slot: 1, points: 0, mat: 'glider' }, glider: true, rare: true });
 // what is left of an orrery sentinel: a brass gear still turning slowly by itself
 defItem('orrery_gear', { name: 'Orrery Gear' });
+// ---- farming ----
+defItem('melon_seeds', { name: 'Melon Seeds', plant: { block: 177, on: [46] } });
+defItem('pumpkin_seeds', { name: 'Pumpkin Seeds', plant: { block: 178, on: [46] } });
+defItem('gauge', { name: 'Ember Gauge', tex: 'item_gauge', places: 'gauge' });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1630,6 +1660,7 @@ function pickBlockItem(id, meta) {
     case B.EMBER_TORCH_OFF: return [B.EMBER_TORCH, 0];
     case B.EMBER_LAMP_ON: return [B.EMBER_LAMP, 0];
     case B.RELAY: case B.RELAY_ON: return [ITEM_IDS.relay, 0];
+    case B.GAUGE: return [ITEM_IDS.gauge, 0];
     case B.SIGN: return [ITEM_IDS.sign, (meta >> 4) & 7];
     case B.WALL_SIGN: return [ITEM_IDS.sign, (meta >> 2) & 7];
   }
@@ -3680,6 +3711,24 @@ const TexGen = (function () {
     '................', '................', '................', '................', '.....r....r.....', '....rRr..rRr....',
     '.....s....s.....', '.....s....s.....', '..oooooooooooo..', '..ogggdddggggo..', '..ogggggggggdo..', '..oaaaaaaaaaao..',
     '..oooooooooooo..', '................', '................', '................'], { o: '#3a3a3a', g: '#a8a8a8', d: '#c83a1a', a: '#7a7a7a', r: '#ff5a1a', R: '#ffd0a0', s: '#6b5232' });
+  // gauge top: smooth stone, ember traces joining its three studs, and a little dial between them
+  const gaugeTop = (name, on) => {
+    const img = TexGen.T.stone_slab_top ? TexGen.T.stone_slab_top.copy() : new Img().fill([160, 160, 160]);
+    const D = on ? C('#ff7a30') : C('#7a2a14'), rim = C('#5c5c5c');
+    for (let y = 4; y <= 12; y++) { img.set(4, y, D); img.set(12, y, D); }
+    for (let x = 4; x <= 12; x++) img.set(x, 4, D);
+    for (let y = 2; y < 4; y++) { img.set(7, y, D); img.set(8, y, D); }
+    for (const [x, y] of [[7, 7], [8, 7], [9, 7], [6, 8], [10, 8], [6, 9], [10, 9], [6, 10], [10, 10], [7, 11], [8, 11], [9, 11]]) img.set(x, y, rim);
+    for (const [x, y] of on ? [[8, 10], [8, 9], [9, 8]] : [[8, 10], [8, 9], [7, 8]]) img.set(x, y, D);
+    for (let x = 0; x < 16; x++) img.set(x, 15, C('#6a6a6a'));
+    return reg(name, img);
+  };
+  gaugeTop('gauge_top', false);
+  gaugeTop('gauge_top_on', true);
+  sprite('item_gauge', [
+    '................', '................', '................', '................', '...r.......r....', '..rRr.....rRr...',
+    '...s...r...s....', '...s..rRr..s....', '..oooooooooooo..', '..ogggdddggggo..', '..ogdgggggdggo..', '..oaaaaaaaaaao..',
+    '..oooooooooooo..', '................', '................', '................'], { o: '#3a3a3a', g: '#a8a8a8', d: '#c83a1a', a: '#7a7a7a', r: '#ff5a1a', R: '#ffd0a0', s: '#6b5232' });
   // pistons: a wooden face on a cobblestone body
   const cob = () => (TexGen.T.cobblestone ? TexGen.T.cobblestone.copy() : new Img().fill([110, 110, 110]));
   reg('piston_top', (() => {
@@ -4705,6 +4754,73 @@ const TexGen = (function () {
     '.oGGgcccggGGo...', '.ooGGgggGGGoo...', '...oGGGGGGo.....', '..oGo.GG.oGo....', '...o..oo..o.....', '................', '................', '................'],
     { o: '#5a3e14', G: '#c8962e', g: '#8a6420', c: '#3a2a10', w: '#fff0a0' });
   void mix;
+})();
+
+// ---- src/render/machineart.js
+// ---------------------------------------------------------------------------
+// Artwork for farming and machines: melon and pumpkin stems and their seeds,
+// the hopper's iron funnel, and the faces of the dropper and the dispenser.
+// ---------------------------------------------------------------------------
+(function () {
+  const { Img, T, reg, sprite, rngFor, noiseImg, C } = TexGen;
+  // stems, growing from a sprout to a long stalk turning yellow
+  const STEM = [
+    { h: 4, c: ['#4e8a2a', '#5e9c34'] }, { h: 8, c: ['#5a9430', '#6aa63a'] }, { h: 12, c: ['#7a9a2e', '#8aaa38'] }, { h: 15, c: ['#a09a2a', '#b8b03a'] },
+  ];
+  STEM.forEach((st, k) => {
+    const img = new Img(), rng = rngFor('stem_' + k);
+    for (let y = 16 - st.h; y < 16; y++) {
+      const x = 7 + ((y >> 2) % 2 === 0 ? 0 : 1);
+      img.set(x, y, C(st.c[(y + k) % 2]));
+      if (y % 4 === 1 && y < 14) { const lx = x + (rng.nextBool() ? 1 : -1); img.set(lx, y, C(st.c[0])); img.set(lx + (lx > x ? 1 : -1), y - 1, C(st.c[1])); }
+    }
+    reg('stem_' + k, img);
+  });
+  // a full-grown stem bent over to hold its fruit (the fruit is to the right)
+  reg('stem_attached', (() => {
+    const img = new Img(), a = C('#a09a2a'), b = C('#b8b03a'), l = C('#8a9a30');
+    const path = [[7, 15], [7, 14], [7, 13], [8, 12], [8, 11], [8, 10], [9, 9], [10, 8], [11, 8], [12, 7], [13, 7], [14, 7], [15, 7]];
+    path.forEach(([x, y], i) => { img.set(x, y, i % 2 ? a : b); if (i > 3 && i < 9) img.set(x, y + 1, a); });
+    for (const [x, y] of [[6, 12], [5, 11], [9, 12], [10, 13], [12, 6], [11, 5], [13, 9]]) img.set(x, y, l);
+    return img;
+  })());
+  sprite('melon_seeds', [
+    '................', '................', '................', '....b...........', '...bb.....b.....', '...b.....bb.....', '.........b......', '......b.........',
+    '.....bb.....b...', '.....b.....bb...', '...........b....', '...b............', '..bb.....b......', '..b.....bb......', '........b.......', '................'],
+    { b: '#2a2018' });
+  sprite('pumpkin_seeds', [
+    '................', '................', '................', '....p...........', '...pP.....p.....', '...p.....pP.....', '.........p......', '......p.........',
+    '.....pP.....p...', '.....p.....pP...', '...........p....', '...p............', '..pP.....p......', '..p.....pP......', '........p.......', '................'],
+    { p: '#d8c890', P: '#f0e6b8' });
+  // the hopper: dark iron plate, riveted
+  reg('hopper_outside', (() => {
+    const img = noiseImg('hopper_outside', ['#3a3a3e', '#424246', '#4a4a4e', '#525256'], { scales: [4, 2], weights: [0.5, 0.5] });
+    for (let i = 0; i < 16; i++) { img.set(i, 0, C('#606066')); img.set(0, i, C('#5a5a60')); img.set(i, 15, C('#28282c')); img.set(15, i, C('#2c2c30')); }
+    for (const [x, y] of [[2, 2], [13, 2], [2, 13], [13, 13]]) img.set(x, y, C('#76767c'));
+    return img;
+  })());
+  reg('hopper_inside', (() => {
+    const img = noiseImg('hopper_inside', ['#1e1e22', '#242428', '#2a2a2e'], { scales: [4, 2], weights: [0.5, 0.5] });
+    for (let i = 4; i < 12; i++) for (let j = 4; j < 12; j++) img.set(i, j, C('#141418'));
+    return img;
+  })());
+  sprite('item_hopper', [
+    '................', '..oooooooooooo..', '..oHHHHHHHHHHo..', '..oHddddddddHo..', '..oHddddddddHo..', '..oHHHHHHHHHHo..', '...ooHHHHHHoo...', '.....oHHHHo.....',
+    '.....oHHHHo.....', '.....oHHHHo.....', '......oHHo......', '......oHHo......', '......oooo......', '................', '................', '................'],
+    { o: '#2a2a2e', H: '#6a6a72', d: '#1c1c20' });
+  // a dropper's mouth: a plain square slot; a dispenser's: a round port set in a bow-shaped frame
+  const face = (name, hole, frame, vertical) => {
+    const img = (vertical ? T.furnace_top : T.furnace_side).copy();
+    for (const [x, y] of frame) img.set(x, y, C('#5a5a5e'));
+    for (const [x, y] of hole) img.set(x, y, C('#141414'));
+    reg(name, img);
+  };
+  const sq = (x0, y0, x1, y1) => { const a = []; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) a.push([x, y]); return a; };
+  const ring = (cx, cy, r0, r1) => { const a = []; for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const d = Math.hypot(x - cx, y - cy); if (d >= r0 && d < r1) a.push([x, y]); } return a; };
+  face('dropper_front', sq(5, 5, 10, 10), sq(4, 4, 11, 11).filter(([x, y]) => x === 4 || x === 11 || y === 4 || y === 11), false);
+  face('dropper_front_vertical', sq(5, 5, 10, 10), sq(4, 4, 11, 11).filter(([x, y]) => x === 4 || x === 11 || y === 4 || y === 11), true);
+  face('dispenser_front', ring(7.5, 7.5, 0, 2.6), ring(7.5, 7.5, 2.6, 3.8).concat([[3, 3], [12, 3], [2, 2], [13, 2], [3, 12], [12, 12], [2, 13], [13, 13]]), false);
+  face('dispenser_front_vertical', ring(7.5, 7.5, 0, 2.6), ring(7.5, 7.5, 2.6, 3.8), true);
 })();
 
 // ---- src/world/worldgen.js
@@ -8716,8 +8832,29 @@ class HushTE extends TileEntity {
   load(d) { this.wild = !!d.wild; }
 }
 
+// a hopper's five slots, and how long until it moves the next item
+class HopperTE extends TileEntity {
+  constructor(x, y, z) { super('hopper', x, y, z); this.items = new Array(5).fill(null); this.cool = 0; }
+  save() { return Object.assign(super.save(), { items: this.items.map((s) => s ? s.toJSON() : null), cool: this.cool }); }
+  load(d) { if (d.items) this.items = d.items.map((o) => o ? ItemStack.fromJSON(o) : null); while (this.items.length < 5) this.items.push(null); this.cool = d.cool || 0; }
+}
+// a dropper's or dispenser's nine slots
+class DispenserTE extends TileEntity {
+  constructor(x, y, z) { super('dispenser', x, y, z); this.items = new Array(9).fill(null); }
+  save() { return Object.assign(super.save(), { items: this.items.map((s) => s ? s.toJSON() : null) }); }
+  load(d) { if (d.items) this.items = d.items.map((o) => o ? ItemStack.fromJSON(o) : null); while (this.items.length < 9) this.items.push(null); }
+}
+
+// a gauge only needs to be ticked, to watch the container behind it
+class GaugeTE extends TileEntity {
+  constructor(x, y, z) { super('gauge', x, y, z); this.t = 0; }
+}
+
 function makeTileEntity(type, x, y, z) {
   switch (type) {
+    case 'gauge': return new GaugeTE(x, y, z);
+    case 'hopper': return new HopperTE(x, y, z);
+    case 'dispenser': return new DispenserTE(x, y, z);
     case 'sensor': case 'shrieker': return new HushTE(type, x, y, z);
     case 'enchanting': return new EnchantTE(x, y, z);
     case 'moving': return new MovingTE(x, y, z);
@@ -9834,7 +9971,7 @@ const PISTON_TF = [
 ];
 // what ember wire visibly links up with
 const WIRE_LINK = new Uint8Array(256);
-for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK, B.DETECTOR_RAIL]) WIRE_LINK[id] = 1;
+for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK, B.DETECTOR_RAIL, B.GAUGE]) WIRE_LINK[id] = 1;
 const FIXED_TINT = {
   spruce: [97, 153, 97], birch: [128, 167, 85], redwood: [86, 128, 70], lily: [32, 128, 48], white: [255, 255, 255],
 };
@@ -10061,6 +10198,16 @@ class Mesher {
 
   cross(pi, id, meta, x, y, z) {
     const xb = x * 16, zb = z * 16, yb = (this.sy * 16 + y) * 16;
+    // a stem holding its fruit: one bent plane, curving over towards it
+    if ((meta & 8) && (id === B.MELON_STEM || id === B.PUMPKIN_STEM)) {
+      const [dx, dz] = [[0, -1], [0, 1], [-1, 0], [1, 0]][(meta >> 4) & 3], L = this.atlas.layer('stem_attached'), light = this.lts[pi], buf = this.out[1];
+      const uv = [[0, 16], [16, 16], [16, 0], [0, 0]];
+      // the texture bends to its right: lay it out so that its right is towards the fruit
+      const p = dx ? [[xb + 8 - 8 * dx, yb, zb + 8], [xb + 8 + 8 * dx, yb, zb + 8], [xb + 8 + 8 * dx, yb + 16, zb + 8], [xb + 8 - 8 * dx, yb + 16, zb + 8]]
+        : [[xb + 8, yb, zb + 8 - 8 * dz], [xb + 8, yb, zb + 8 + 8 * dz], [xb + 8, yb + 16, zb + 8 + 8 * dz], [xb + 8, yb + 16, zb + 8 - 8 * dz]];
+      this.quad2(buf, p, uv, L, light, FIXED_TINT.white, 1);
+      return;
+    }
     const layer = this.atlas.face(id, meta, 2);
     const tint = BT.tint[id] ? this.tintFor(id, meta, x, z) : FIXED_TINT.white;
     let ox = 0, oz = 0, oy = 0;
@@ -10317,6 +10464,17 @@ class Mesher {
       const post = [[7, 13], [9, 13], [9, 8], [7, 8]], cap = [[7, 6], [9, 6], [9, 8], [7, 8]];
       const delay = (meta >> 2) & 3;
       for (const pz of [2, 6 + delay * 2]) this.lbox(xb, yb, zb, tf, [7, 2, pz, 9, 7, pz + 2], tl, light, W, [post, cap, post, post, post, post]);
+    }
+    // a gauge: two studs behind, lit while it gives power; one in front, lit when it subtracts
+    if (id === B.GAUGE) {
+      const f = meta & 3, on = ((meta >> 3) & 15) > 0, sub = (meta & 4) !== 0;
+      const tf = [(v) => v, (v) => [16 - v[0], v[1], 16 - v[2]], (v) => [v[2], v[1], 16 - v[0]], (v) => [16 - v[2], v[1], v[0]]][f];
+      const top = atlas.layer(on ? 'gauge_top_on' : 'gauge_top'), sideL = atlas.layer('stone_slab_side'), bot = atlas.layer('stone_slab_top');
+      this.lbox(xb, yb, zb, tf, [0, 0, 0, 16, 2, 16], [bot, top, sideL, sideL, sideL, sideL], light, W);
+      const post = [[7, 13], [9, 13], [9, 8], [7, 8]], cap = [[7, 6], [9, 6], [9, 8], [7, 8]];
+      const lit = atlas.layer('ember_torch_on'), dark = atlas.layer('ember_torch_off');
+      for (const px of [3, 11]) this.lbox(xb, yb, zb, tf, [px, 2, 11, px + 2, 7, 13], on ? lit : dark, light, W, [post, cap, post, post, post, post]);
+      this.lbox(xb, yb, zb, tf, [7, 2, 2, 9, 5, 4], sub ? lit : dark, light, W, [post, cap, post, post, post, post]);
     }
   }
   // rails: a flat (or sloping) double-sided track 1px above the ground
@@ -12236,25 +12394,41 @@ class Entity {
       else { if (this.fire % 20 === 0 && this.hurt) this.hurt(1, { type: 'fire' }); this.fire--; }
     }
     if (this.inLava && !this.fireImmune) { if (this.hurt) this.hurt(4, { type: 'lava' }); this.fire = Math.max(this.fire, 300); this.fallDistance *= 0.5; }
+    // walking through flames sets you alight; cactus spines prick (the player's own checks live in the game loop)
+    if (this.inFireBlock && !this.fireImmune && this.hurt) { this.hurt(1, { type: 'fire' }); if (!this.inWater) this.fire = Math.max(this.fire, 160); }
+    if (this.touchingCactus && this.hurt && this.type !== 'player') this.hurt(1, { type: 'cactus' });
     if (this.y < -64 && this.hurt) this.hurt(4, { type: 'void' });
   }
   updateFluids() {
     const w = this.world;
     const b = this.box;
+    // how far in from the top and bottom of the box the water has to reach (small things count as wet at a touch)
+    const ins = this.fluidInset === undefined ? 0.4 : this.fluidInset;
     const x0 = Math.floor(b.x0 + 0.001), x1 = Math.floor(b.x1 - 0.001), z0 = Math.floor(b.z0 + 0.001), z1 = Math.floor(b.z1 - 0.001);
-    const y0 = Math.floor(b.y0 + 0.4), y1 = Math.floor(b.y1 - 0.4);
-    let water = false, lava = false, web = false, quick = false;
+    const y0 = Math.floor(b.y0 + ins), y1 = Math.floor(b.y1 - Math.max(ins, 0.001));
+    const push = this.waterPush !== false && !this.flying;
+    let water = false, lava = false, web = false, quick = false, cactus = false, fire = false, fx = 0, fy = 0, fz = 0;
     for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) for (let y = Math.floor(b.y0); y <= Math.floor(b.y1 - 0.001); y++) {
       const id = w.getBlock(x, y, z);
       if (id === B.COBWEB) web = true;
-      if (id === B.QUICKSAND) quick = true;
+      else if (id === B.QUICKSAND) quick = true;
+      else if (id === B.FIRE) fire = true;
+      // pressed up against a cactus's spines (its body stops a sixteenth short of the block's edges)
+      else if (id === B.CACTUS && b.x1 > x + 0.0525 && b.x0 < x + 0.9475 && b.z1 > z + 0.0525 && b.z0 < z + 0.9475 && b.y0 < y + 0.9475) cactus = true;
       if (y < y0 || y > y1) continue;
       if (id === B.WATER) {
         const top = y + 1 - fluidHeightFrac(w.getMeta(x, y, z));
-        if (b.y0 + 0.4 <= y + 1 && b.y1 - 0.4 >= top - 0.4) water = true;
+        if (ins === 0 || (b.y0 + ins <= y + 1 && b.y1 - ins >= top - 0.4)) {
+          water = true;
+          if (push) { waterFlowVec(w, x, y, z, _flow); fx += _flow[0]; fy += _flow[1]; fz += _flow[2]; }
+        }
       } else if (id === B.LAVA) lava = true;
     }
     if (this.riding && this.riding.type === 'boat') water = false;
+    // carried along by the current
+    if (water && push && !this.riding && (fx || fy || fz)) { const l = Math.hypot(fx, fy, fz); this.vx += fx / l * 0.014; this.vy += fy / l * 0.014; this.vz += fz / l * 0.014; }
+    this.touchingCactus = cactus;
+    this.inFireBlock = fire;
     if (water && !this.inWater) { this.fallDistance = 0; if (this.onSplash) this.onSplash(); }
     this.inWater = water;
     this.inLava = lava;
@@ -12264,7 +12438,7 @@ class Entity {
     const ey = this.y + this.eye;
     const hid = w.getBlock(Math.floor(this.x), Math.floor(ey), Math.floor(this.z));
     if (hid === B.WATER) {
-      const fy = Math.floor(ey) + 1 - fluidHeightFrac(w.getMeta(Math.floor(this.x), Math.floor(ey), Math.floor(this.z))) - 0.11;
+      const fy = Math.floor(ey) + 1 - fluidHeightFrac(w.getMeta(Math.floor(this.x), Math.floor(ey), Math.floor(this.z))) + 0.11;
       this.headInWater = ey < fy;
     } else this.headInWater = false;
     if (water) this.fire = 0;
@@ -12364,6 +12538,34 @@ class Entity {
   }
   save() { return { type: this.type, x: this.x, y: this.y, z: this.z, vx: this.vx, vy: this.vy, vz: this.vz, yaw: this.yaw, age: this.age }; }
   load(d) { this.setPos(d.x, d.y, d.z); this.vx = d.vx || 0; this.vy = d.vy || 0; this.vz = d.vz || 0; this.yaw = d.yaw || 0; this.age = d.age || 0; }
+}
+
+// which way the water in a block runs: the classic flow vector, from higher levels towards lower
+// ones and over edges, and, where falling water runs down a wall, straight down
+const _flow = [0, 0, 0], _FLOW4 = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+function waterFlowVec(w, x, y, z, out) {
+  const eff = (xx, yy, zz) => { if (w.getBlock(xx, yy, zz) !== B.WATER) return -1; const m = w.getMeta(xx, yy, zz); return m >= 8 ? 0 : m; };
+  const m = w.getMeta(x, y, z), here = m >= 8 ? 0 : m;
+  let vx = 0, vy = 0, vz = 0;
+  for (const [dx, dz] of _FLOW4) {
+    let l = eff(x + dx, y, z + dz);
+    if (l < 0) {
+      if (BT.solid[w.getBlock(x + dx, y, z + dz)]) continue;
+      l = eff(x + dx, y - 1, z + dz);
+      if (l >= 0) { const k = l - (here - 8); vx += dx * k; vz += dz * k; }
+    } else { const k = l - here; vx += dx * k; vz += dz * k; }
+  }
+  if (m >= 8) {
+    for (const [dx, dz] of _FLOW4) {
+      if (BT.solid[w.getBlock(x + dx, y, z + dz)] || BT.solid[w.getBlock(x + dx, y + 1, z + dz)]) {
+        const l = Math.hypot(vx, vy, vz); if (l > 0) { vx /= l; vy /= l; vz /= l; }
+        vy -= 6; break;
+      }
+    }
+  }
+  const l = Math.hypot(vx, vy, vz);
+  if (l > 0) { out[0] = vx / l; out[1] = vy / l; out[2] = vz / l; } else { out[0] = out[1] = out[2] = 0; }
+  return out;
 }
 
 function fluidHeightFrac(meta) {
@@ -12580,6 +12782,7 @@ class Living extends Entity {
       if (Math.abs(this.vz) < 0.003) this.vz = 0;
       this.travel(strafe, forward);
       this.pushOutOfBlocks();
+      if (!this.dead) this.shoulderAside();
     }
     // limb animation
     this.prevLimbAmount = this.limbAmount;
@@ -12603,6 +12806,20 @@ class Living extends Entity {
     if (ef.regen && !this.undead && !this.dead && this.age % Math.max(1, 50 >> Brewing.amp(this, 'regen')) === 0) this.heal(1);
     for (const k in ef) { if (--ef[k] <= 0) { delete ef[k]; if (this.effectAmp) delete this.effectAmp[k]; } }
   }
+  // creatures standing in each other's way are eased apart (the classic gentle shove)
+  shoulderAside() {
+    if (this.noClip || this.noGravity || (this.flying && this.type === 'player')) return;
+    const b = this.box;
+    for (const e of this.world.entitiesInBox(b.x0 - 0.2, b.y0, b.z0 - 0.2, b.x1 + 0.2, b.y1, b.z1 + 0.2)) {
+      if (e === this || !(e instanceof Living) || e.dead || e.riding || e.noClip || e.noGravity || (e.type === 'player' && (e.flying || e.gameMode === 'spectator'))) continue;
+      let dx = e.x - this.x, dz = e.z - this.z, d = Math.max(Math.abs(dx), Math.abs(dz));
+      if (d < 0.01) continue;
+      d = Math.sqrt(d); dx /= d; dz /= d;
+      const k = Math.min(1, 1 / d) * 0.05;
+      this.vx -= dx * k; this.vz -= dz * k;
+      e.vx += dx * k; e.vz += dz * k;
+    }
+  }
 }
 
 // ---- src/entity/objects.js
@@ -12620,12 +12837,15 @@ class ItemEntity extends Entity {
     this.bobOffset = Math.random() * Math.PI * 2;
     this.spin = Math.random() * Math.PI * 2;
     this.lifetime = 6000;
+    this.hp = 5;
+    this.fluidInset = 0;
   }
   tick(game) {
     this.baseTick();
+    if (this.removed) return;
     if (this.pickupDelay > 0) this.pickupDelay--;
-    if (!this.inWater) this.vy -= 0.04;
-    else { this.vy += 0.008; this.vy *= 0.92; this.vx *= 0.95; this.vz *= 0.95; }
+    // an item sinks, and rolls along the bottom with the current
+    this.vy -= 0.04;
     this.noClip = this.pushOutOfBlocksItem();
     this.move(this.vx, this.vy, this.vz);
     let f = 0.98;
@@ -12633,6 +12853,12 @@ class ItemEntity extends Entity {
     this.vx *= f; this.vy *= 0.98; this.vz *= f;
     if (this.onGround) this.vy *= -0.5;
     if (this.inLava) { this.removed = true; game.audio.play('fizz', 0.4, 2 + Math.random() * 0.4, this.x, this.y, this.z); return; }
+    // flames and cactus spines wear it away in a few moments
+    if ((this.inFireBlock || this.touchingCactus) && --this.hp <= 0) {
+      this.removed = true;
+      if (this.inFireBlock) game.audio.play('fizz', 0.4, 2 + Math.random() * 0.4, this.x, this.y, this.z);
+      return;
+    }
     // merge with nearby identical stacks
     if (this.age % 25 === 1) {
       for (const e of this.world.entitiesInBox(this.x - 0.5, this.y - 0.5, this.z - 0.5, this.x + 0.5, this.y + 0.5, this.z + 0.5)) {
@@ -12667,9 +12893,12 @@ class XPOrb extends Entity {
     this.setPos(x, y, z);
     this.vx = (Math.random() * 0.2 - 0.1) * 2; this.vy = Math.random() * 0.2 * 2; this.vz = (Math.random() * 0.2 - 0.1) * 2;
     this.delay = 10;
+    this.hp = 5;
+    this.fluidInset = 0;
   }
   tick(game) {
     this.baseTick();
+    if (this.inLava || ((this.inFireBlock || this.touchingCactus) && --this.hp <= 0)) { this.removed = true; return; }
     if (this.delay > 0) this.delay--;
     this.vy -= 0.03;
     const p = game.player;
@@ -13132,6 +13361,7 @@ const Fishing = (() => {
 class Boat extends Entity {
   constructor(world, x, y, z, wood) {
     super(world);
+    this.waterPush = false;
     this.type = 'boat';
     this.wood = wood || 0;
     this.w = 1.5; this.h = 0.6;
@@ -13279,6 +13509,7 @@ class Boat extends Entity {
 class Minecart extends Entity {
   constructor(world, x, y, z, kind) {
     super(world);
+    this.waterPush = false;
     this.type = 'minecart';
     this.kind = kind || 0;             // 0 rideable, 1 chest
     this.w = 0.98; this.h = 0.7;
@@ -13758,7 +13989,7 @@ class Player extends Living {
   onLand(dist) {
     if (this.creative || this.flying) return;
     const below = this.world.getBlock(Math.floor(this.x), Math.floor(this.y - 0.2), Math.floor(this.z));
-    let d = Math.ceil(dist - 3);
+    let d = Math.ceil(dist - 3.001);
     if (below === B.HAY_BALE) d = Math.ceil(d * 0.2);
     if (this.inWater) d = 0;
     if (d > 0) {
@@ -14037,6 +14268,7 @@ const Recipes = (() => {
   shaped([B.WOOD_PLATE, 1], ['PP'], { P: B.PLANKS });
   shaped([B.EMBER_LAMP, 1], [' E ', 'EGE', ' E '], { E: I.ember_dust, G: B.GLASS });
   shaped([I.relay, 1], ['TET', 'SSS'], { T: B.EMBER_TORCH, E: I.ember_dust, S: [B.STONE, 0] });
+  shaped([I.gauge, 1], [' T ', 'TQT', 'SSS'], { T: B.EMBER_TORCH, Q: I.smoky_quartz, S: [B.STONE, 0] });
   shaped([B.NOTE_BLOCK, 1], ['PPP', 'PEP', 'PPP'], { P: B.PLANKS, E: I.ember_dust });
   shaped([B.PISTON, 1], ['PPP', 'CIC', 'CEC'], { P: B.PLANKS, C: B.COBBLESTONE, I: I.iron_ingot, E: I.ember_dust });
   shapeless([B.STICKY_PISTON, 1], [I.slimeball, B.PISTON]);
@@ -14163,6 +14395,12 @@ const Recipes = (() => {
   // what the Starwyrm calls down: crystals to call it back with, and starmetal
   shaped([I.star_crystal], ['GGG', 'GFG', 'GTG'], { G: B.GLASS, F: I.star_fragment, T: I.wailer_tear });
   shaped([I.starmetal_ingot], ['FFF', 'FFF', 'FFF'], { F: I.star_fragment });
+  // ---------------- farming and machines ----------------
+  shaped([B.HOPPER], ['I I', 'ICI', ' I '], { I: I.iron_ingot, C: B.CHEST });
+  shaped([B.DROPPER], ['CCC', 'C C', 'CEC'], { C: B.COBBLESTONE, E: I.ember_dust });
+  shaped([B.DISPENSER], ['CCC', 'CBC', 'CEC'], { C: B.COBBLESTONE, B: I.bow, E: I.ember_dust });
+  shapeless([I.melon_seeds], [I.melon_slice]);
+  shapeless([I.pumpkin_seeds, 4], [B.PUMPKIN]);
   // ---------------- the Drift Isles ----------------
   shapeless([I.dye, 2, 3], [B.MOONPETAL]);
   // ---------------- the Sift ----------------
@@ -14813,7 +15051,7 @@ const Behaviors = (() => {
         for (const [dx, dz] of H4) if (w.getBlock(x + dx, y - 1, z + dz) === B.WATER || w.getBlock(x + dx, y, z + dz) === B.WATER) return true;
         return false;
       }
-      case B.WHEAT: case B.CARROTS: case B.POTATOES: return below === B.FARMLAND;
+      case B.WHEAT: case B.CARROTS: case B.POTATOES: case B.MELON_STEM: case B.PUMPKIN_STEM: return below === B.FARMLAND;
       case B.BLOODCAP: return below === B.BONESAND;
       case B.LILY_PAD: return below === B.WATER || below === B.ICE;
       case B.TORCH: {
@@ -14832,7 +15070,7 @@ const Behaviors = (() => {
       case B.ROPE: { const a = w.getBlock(x, y + 1, z); return a === B.ROPE || BT.solid[a]; }
       case B.SIGN: return BT.solid[below];
       case B.EMBER_TORCH: case B.EMBER_TORCH_OFF: return canStay(w, x, y, z, B.TORCH, meta);
-      case B.EMBER_WIRE: case B.RELAY: case B.RELAY_ON: return isSolidTop(w, x, y - 1, z);
+      case B.EMBER_WIRE: case B.RELAY: case B.RELAY_ON: case B.GAUGE: return isSolidTop(w, x, y - 1, z);
       case B.RAIL: case B.BOOSTER_RAIL: case B.DETECTOR_RAIL: return Rails.canStay(w, x, y, z, id, meta);
       case B.STONE_PLATE: case B.WOOD_PLATE: return isSolidTop(w, x, y - 1, z) || below === B.FENCE || below === B.BRIMSTONE_FENCE;
       case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: {
@@ -14895,7 +15133,8 @@ const Behaviors = (() => {
         return m;
       }
       case B.FURNACE: case B.CHEST: case B.PUMPKIN: case B.JACK_O_LANTERN: return HFACE_OPP[pf];
-      case B.PISTON: case B.STICKY_PISTON: {
+      case B.HOPPER: return Machines.hopperFacing(f);
+      case B.PISTON: case B.STICKY_PISTON: case B.DROPPER: case B.DISPENSER: {
         if (p.pitch < -0.85) return 1;
         if (p.pitch > 0.85) return 0;
         return HFACE[HFACE_OPP[pf]];
@@ -14980,6 +15219,7 @@ const Behaviors = (() => {
     game.audio.playBlock(d.sound, 'place', x + 0.5, y + 0.5, z + 0.5);
     if (!player.creative) player.inventory.decrementHeld(1);
     game.onBlockPlaced(id, meta, x, y, z);
+    if ((id === B.PUMPKIN || id === B.JACK_O_LANTERN) && typeof Golems !== 'undefined') Golems.checkBuild(game, x, y, z);
     return true;
   }
   // items that place blocks (seeds, doors, beds, buckets...)
@@ -15040,15 +15280,16 @@ const Behaviors = (() => {
       if (!player.creative) player.inventory.decrementHeld(1);
       return true;
     }
-    if (def.places === 'wire' || def.places === 'relay') {
+    if (def.places === 'wire' || def.places === 'relay' || def.places === 'gauge') {
       let x = tx, y = ty, z = tz;
       if (BT.replaceable[target] && !BT.fluid[target]) { x = hit.x; y = hit.y; z = hit.z; }
       const cur = w.getBlock(x, y, z);
       if (!BT.replaceable[cur] || BT.fluid[cur] || cur === B.EMBER_WIRE) return false;
-      const bid = def.places === 'wire' ? B.EMBER_WIRE : B.RELAY;
+      const bid = def.places === 'wire' ? B.EMBER_WIRE : def.places === 'gauge' ? B.GAUGE : B.RELAY;
       if (!canStay(w, x, y, z, bid, 0)) return false;
-      w.setBlock(x, y, z, bid, bid === B.RELAY ? playerFacing(player) : 0);
-      game.audio.playBlock(bid === B.RELAY ? 'wood' : 'stone', 'place', x + 0.5, y + 0.5, z + 0.5);
+      w.setBlock(x, y, z, bid, bid !== B.EMBER_WIRE ? playerFacing(player) : 0);
+      if (bid === B.GAUGE) w.scheduleTick(x, y, z, 2, B.GAUGE);
+      game.audio.playBlock(bid !== B.EMBER_WIRE ? 'wood' : 'stone', 'place', x + 0.5, y + 0.5, z + 0.5);
       if (!player.creative) player.inventory.decrementHeld(1);
       return true;
     }
@@ -15168,6 +15409,7 @@ const Behaviors = (() => {
     else if (id === B.BRAMBLE) { if (m < 3) { w.setMeta(x, y, z, 3); used = true; } }
     else if (id === B.GLOW_VINE) { w.setBlock(x, y, z, B.GLOW_VINE_BERRIES, 0); used = true; }
     else if (id === B.STARVINE && !(m & 1)) { w.setMeta(x, y, z, 1); used = true; }
+    else if ((id === B.MELON_STEM || id === B.PUMPKIN_STEM) && (m & 7) < 7) { w.setMeta(x, y, z, Math.min(7, (m & 7) + 2 + Math.floor(Math.random() * 3))); used = true; }
     else if (id === B.GRASS) {
       used = true;
       for (let i = 0; i < 64; i++) {
@@ -15196,6 +15438,8 @@ const Behaviors = (() => {
     const id = w.getBlock(x, y, z), m = w.getMeta(x, y, z);
     switch (id) {
       case B.CRAFTING_TABLE: game.openScreen(new CraftingScreen(game, x, y, z)); return true;
+      case B.HOPPER: { const te = w.getTile(x, y, z); if (te) game.openScreen(new HopperScreen(game, te)); return true; }
+      case B.DROPPER: case B.DISPENSER: { const te = w.getTile(x, y, z); if (te) game.openScreen(new DispenserScreen(game, te, id === B.DROPPER ? 'Dropper' : 'Dispenser')); return true; }
       case B.FURNACE: case B.FURNACE_LIT: { const te = w.getTile(x, y, z); if (te) game.openScreen(new FurnaceScreen(game, te)); return true; }
       case B.CHEST: {
         const te = w.getTile(x, y, z);
@@ -15227,7 +15471,7 @@ const Behaviors = (() => {
       case B.RUNESTONE: game.useRunestone(x, y, z); return true;
       case B.ENCHANTING_TABLE: game.openScreen(new EnchantScreen(game, x, y, z)); return true;
       case B.BREWING_STAND: { const te = w.getTile(x, y, z); if (te) game.openScreen(new BrewingScreen(game, te)); return true; }
-      case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: case B.RELAY: case B.RELAY_ON: case B.NOTE_BLOCK:
+      case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: case B.RELAY: case B.RELAY_ON: case B.NOTE_BLOCK: case B.GAUGE:
         return Circuits.use(game, x, y, z, id);
       case B.GLOW_VINE_BERRIES:
         w.setBlock(x, y, z, B.GLOW_VINE, 0);
@@ -15356,6 +15600,11 @@ const Behaviors = (() => {
     if (typeof Circuits !== 'undefined' && Circuits.IS[id] && !w.menu) Circuits.changed(w, x, y, z);
     if (id === B.RAIL && !w.menu) Rails.neighbourChanged(w, x, y, z, id);
     if (id === B.FARMLAND && BT.solid[w.getBlock(x, y + 1, z)] && BT.opaque[w.getBlock(x, y + 1, z)]) w.setBlock(x, y, z, B.DIRT, 0);
+    // a stem whose fruit has been picked straightens up again
+    if ((id === B.MELON_STEM || id === B.PUMPKIN_STEM) && (meta & 8)) {
+      const [dx, dz] = H4[(meta >> 4) & 3];
+      if (w.getBlock(x + dx, y, z + dz) !== (id === B.MELON_STEM ? B.MELON : B.PUMPKIN)) w.setMeta(x, y, z, meta & 7, 4);
+    }
   }
 
   // ---------------------------------------------------------------- scheduled ticks
@@ -15368,6 +15617,7 @@ const Behaviors = (() => {
     if (BLOCKS[id].gravity) { fallCheck(w, x, y, z, id, m); return; }
     if (id === B.WATER || id === B.LAVA) { flow(w, x, y, z, id, m); return; }
     if (id === B.FIRE) { fireTick(w, x, y, z, m); return; }
+    if (id === B.DROPPER || id === B.DISPENSER) { if (w.game) Machines.fire(w.game, x, y, z, id); return; }
     if (id === B.WYRM_EGG) {
       if ((m & 3) !== 3 || !w.game) return;
       const g = w.game;
@@ -15484,15 +15734,18 @@ const Behaviors = (() => {
     w.setBlock(x, y, z, id, nl);
     w.scheduleTick(x, y, z, tickRate(id, w));
   }
+  // the open sides nearest to a way down (all of them, on flat ground with no drop in reach)
   function flowDirections(w, x, y, z, id) {
-    const cost = [1000, 1000, 1000, 1000];
+    const cost = [1000, 1000, 1000, 1000], open = [false, false, false, false];
+    let min = 1000;
     for (let i = 0; i < 4; i++) {
       const nx = x + H4[i][0], nz = z + H4[i][1];
       if (blocksFlow(w, nx, y, nz) || (w.getBlock(nx, y, nz) === id && w.getMeta(nx, y, nz) === 0)) continue;
+      open[i] = true;
       cost[i] = !blocksFlow(w, nx, y - 1, nz) ? 0 : slopeDistance(w, nx, y, nz, 1, i, id);
+      if (cost[i] < min) min = cost[i];
     }
-    const min = Math.min(...cost);
-    return cost.map((c) => c === min && c < 1000);
+    return cost.map((c, i) => open[i] && c === min);
   }
   function slopeDistance(w, x, y, z, depth, from, id) {
     let best = 1000;
@@ -15567,6 +15820,22 @@ const Behaviors = (() => {
         return;
       }
       case B.BLOODCAP: if (m < 3 && w.rng.nextInt(10) === 0) w.setMeta(x, y, z, m + 1, 4); return;
+      // stems grow like any crop; full grown, they set a melon or a pumpkin on the ground beside them
+      case B.MELON_STEM: case B.PUMPKIN_STEM: {
+        if (w.getLightLevel(x, y + 1, z) < 9) return;
+        const wet = w.getBlock(x, y - 1, z) === B.FARMLAND && w.getMeta(x, y - 1, z) > 0, chance = wet ? 5 : 12;
+        if ((m & 7) < 7) { if (w.rng.nextInt(chance) === 0) w.setMeta(x, y, z, (m & 7) + 1, 4); return; }
+        const fruit = id === B.MELON_STEM ? B.MELON : B.PUMPKIN;
+        for (const [dx, dz] of H4) if (w.getBlock(x + dx, y, z + dz) === fruit) return;
+        if (w.rng.nextInt(chance) !== 0) return;
+        const k = w.rng.nextInt(4), [dx, dz] = H4[k], below = w.getBlock(x + dx, y - 1, z + dz);
+        if (w.getBlock(x + dx, y, z + dz) === 0 && (below === B.FARMLAND || below === B.DIRT || below === B.GRASS || below === B.PODZOL)) {
+          w.setBlock(x + dx, y, z + dz, fruit, fruit === B.PUMPKIN ? w.rng.nextInt(4) : 0);
+          // the stem bends over to hold it
+          w.setMeta(x, y, z, 7 | 8 | (k << 4), 4);
+        }
+        return;
+      }
       // starvines lengthen slowly in the dark, and now and then a starfruit swells on one
       case B.STARVINE: {
         if (!(m & 1) && w.rng.nextInt(30) === 0) { w.setMeta(x, y, z, m | 1, 4); return; }
@@ -15896,11 +16165,11 @@ const Circuits = (() => {
   const ATT = CIRCUIT_ATT;
   const IS = new Uint8Array(256), SOURCE = new Uint8Array(256), MACHINE = new Uint8Array(256), CONNECT = new Uint8Array(256);
   for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE,
-    B.EMBER_LAMP, B.EMBER_LAMP_ON, B.RELAY, B.RELAY_ON, B.NOTE_BLOCK, B.EMBER_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT, B.BOOSTER_RAIL, B.DETECTOR_RAIL, B.HUSH_SENSOR]) IS[id] = 1;
-  for (const id of [B.EMBER_TORCH, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.RELAY_ON, B.EMBER_BLOCK, B.DETECTOR_RAIL, B.HUSH_SENSOR]) SOURCE[id] = 1;
-  for (const id of [B.EMBER_LAMP, B.EMBER_LAMP_ON, B.NOTE_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.RELAY, B.RELAY_ON, B.BOOSTER_RAIL]) MACHINE[id] = 1;
-  for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK, B.DETECTOR_RAIL, B.HUSH_SENSOR]) CONNECT[id] = 1;
-  for (const id of [B.PISTON, B.STICKY_PISTON, B.PISTON_HEAD]) { IS[id] = 1; MACHINE[id] = 1; }
+    B.EMBER_LAMP, B.EMBER_LAMP_ON, B.RELAY, B.RELAY_ON, B.NOTE_BLOCK, B.EMBER_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT, B.BOOSTER_RAIL, B.DETECTOR_RAIL, B.HUSH_SENSOR, B.GAUGE]) IS[id] = 1;
+  for (const id of [B.EMBER_TORCH, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.RELAY_ON, B.EMBER_BLOCK, B.DETECTOR_RAIL, B.HUSH_SENSOR, B.GAUGE]) SOURCE[id] = 1;
+  for (const id of [B.EMBER_LAMP, B.EMBER_LAMP_ON, B.NOTE_BLOCK, B.DOOR_WOOD, B.DOOR_IRON, B.TRAPDOOR, B.FENCE_GATE, B.TNT, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.RELAY, B.RELAY_ON, B.BOOSTER_RAIL, B.GAUGE]) MACHINE[id] = 1;
+  for (const id of [B.EMBER_WIRE, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.LEVER, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.EMBER_BLOCK, B.DETECTOR_RAIL, B.HUSH_SENSOR, B.GAUGE]) CONNECT[id] = 1;
+  for (const id of [B.PISTON, B.STICKY_PISTON, B.PISTON_HEAD, B.HOPPER, B.DROPPER, B.DISPENSER]) { IS[id] = 1; MACHINE[id] = 1; }
   // blocks a piston crushes (dropping them) rather than pushes
   const BREAKS = new Uint8Array(256);
   for (const id of [B.DOOR_WOOD, B.DOOR_IRON, B.BED, B.CACTUS, B.RELAY, B.RELAY_ON, B.LADDER, B.TRAPDOOR, B.LILY_PAD, B.COBWEB, B.PUMPKIN, B.JACK_O_LANTERN, B.MELON]) BREAKS[id] = 1;
@@ -15916,11 +16185,13 @@ const Circuits = (() => {
       case B.HUSH_SENSOR: return (meta & 1) ? 15 : 0;
       case B.EMBER_TORCH: { const a = TORCH_ATT[meta] || TORCH_ATT[0]; return (dx === a[0] && dy === a[1] && dz === a[2]) ? 0 : 15; }
       case B.RELAY_ON: { const f = HFACE_DIR[meta & 3]; return (dy === 0 && dx === f[0] && dz === f[1]) ? 15 : 0; }
+      case B.GAUGE: { const f = HFACE_DIR[meta & 3]; return (dy === 0 && dx === f[0] && dz === f[1]) ? (meta >> 3) & 15 : 0; }
     }
     return 0;
   }
   // power given to an opaque block by sources attached to it
   function strongPower(w, x, y, z) {
+    let best = 0;
     for (let f = 0; f < 6; f++) {
       const d = FACE_DIR[f], sx = x + d[0], sy = y + d[1], sz = z + d[2];
       const id = w.getBlock(sx, sy, sz);
@@ -15933,9 +16204,10 @@ const Circuits = (() => {
         case B.HUSH_SENSOR: if ((m & 1) && d[1] === 1) return 15; break;
         case B.EMBER_TORCH: if (d[1] === -1) return 15; break;
         case B.RELAY_ON: { const fd = HFACE_DIR[m & 3]; if (d[1] === 0 && fd[0] === -d[0] && fd[1] === -d[2]) return 15; break; }
+        case B.GAUGE: { const fd = HFACE_DIR[m & 3]; if (d[1] === 0 && fd[0] === -d[0] && fd[1] === -d[2]) best = Math.max(best, (m >> 3) & 15); break; }
       }
     }
-    return 0;
+    return best;
   }
   // which horizontal sides wire at (x,y,z) connects to: bit k for H[k]
   function wireConns(w, x, y, z) {
@@ -16111,6 +16383,15 @@ const Circuits = (() => {
         break;
       }
       case B.BOOSTER_RAIL: Rails.updateBooster(w, x, y, z); break;
+      case B.GAUGE: if (gaugeOutput(w, x, y, z, m) !== ((m >> 3) & 15)) w.scheduleTick(x, y, z, 2, id); break;
+      // power locks a hopper; a pulse fires a dropper or dispenser (once per pulse)
+      case B.HOPPER: { const p = machinePower(w, x, y, z) > 0; if (p !== !!(m & 8)) w.setMeta(x, y, z, p ? m | 8 : m & ~8, 4); break; }
+      case B.DROPPER: case B.DISPENSER: {
+        const p = machinePower(w, x, y, z) > 0, was = (m & 8) !== 0;
+        if (p && !was) { w.setMeta(x, y, z, m | 8, 4); w.scheduleTick(x, y, z, 4, id); }
+        else if (!p && was) w.setMeta(x, y, z, m & ~8, 4);
+        break;
+      }
       case B.TNT: if (machinePower(w, x, y, z) > 0 && g) { w.setBlock(x, y, z, 0, 0); g.spawnEntity(new TNTEntity(w, x + 0.5, y, z + 0.5, 80)); } break;
       case B.DOOR_WOOD: case B.DOOR_IRON: {
         const lower = (m & 8) ? y - 1 : y;
@@ -16210,6 +16491,46 @@ const Circuits = (() => {
     }
     game.audio.play('piston_in', 0.5, 0.65 + Math.random() * 0.25, x + 0.5, y + 0.5, z + 0.5);
   }
+  // ------------------------------------------------------------ gauges
+  // how full a container is, 0-15 (a single item anywhere reads 1); -1 where there is none
+  function fillLevel(w, x, y, z) {
+    const c = Machines.containerAt(w, x, y, z, 1);
+    if (!c) return -1;
+    let sum = 0;
+    for (const s of c.items) if (s) sum += s.count / maxStackOf(s.id);
+    return sum > 0 ? Math.floor(1 + sum / c.items.length * 14) : 0;
+  }
+  // a gauge reads from behind - a container (even through a solid block) or plain power - and
+  // from its sides; it passes the rear signal on if the sides are no stronger, or the difference
+  function gaugeOutput(w, x, y, z, m) {
+    const f = HFACE_DIR[m & 3], bx = x - f[0], bz = z - f[1];
+    let rear = fillLevel(w, bx, y, bz);
+    if (rear < 0) {
+      const id = w.getBlock(bx, y, bz), bm = w.getMeta(bx, y, bz);
+      if (id === B.EMBER_WIRE) rear = bm;
+      else if (SOURCE[id]) rear = sourcePower(id, bm, f[0], 0, f[1]);
+      else if (BT.opaque[id]) { const through = fillLevel(w, bx - f[0], y, bz - f[1]); rear = through >= 0 ? through : Math.max(strongPower(w, bx, y, bz), wireInto(w, bx, y, bz)); }
+      else rear = 0;
+    }
+    let side = 0;
+    for (const s of [[f[1], -f[0]], [-f[1], f[0]]]) {
+      const sx = x + s[0], sz = z + s[1], id = w.getBlock(sx, y, sz), sm = w.getMeta(sx, y, sz);
+      let v = 0;
+      if (id === B.EMBER_WIRE) v = sm;
+      else if (id === B.RELAY_ON || id === B.GAUGE || id === B.EMBER_BLOCK) v = sourcePower(id, sm, -s[0], 0, -s[1]);
+      if (v > side) side = v;
+    }
+    if (m & 4) return Math.max(0, rear - side);
+    return side > rear ? 0 : rear;
+  }
+  // a gauge keeps an eye on what is behind it (containers fill and empty without a whisper of power)
+  function tickGauge(game, te) {
+    if ((++te.t & 1) !== 0) return;
+    const w = game.world, x = te.x, y = te.y, z = te.z;
+    if (w.getBlock(x, y, z) !== B.GAUGE) return;
+    const m = w.getMeta(x, y, z);
+    if (gaugeOutput(w, x, y, z, m) !== ((m >> 3) & 15)) w.scheduleTick(x, y, z, 2, B.GAUGE);
+  }
   function relayInput(w, x, y, z, m) {
     const f = HFACE_DIR[m & 3];
     const bx = x - f[0], bz = z - f[1];
@@ -16255,6 +16576,11 @@ const Circuits = (() => {
         else if (!on && id === B.RELAY_ON) w.setBlock(x, y, z, B.RELAY, m);
         break;
       }
+      case B.GAUGE: {
+        const out = gaugeOutput(w, x, y, z, m);
+        if (out !== ((m >> 3) & 15)) w.setBlock(x, y, z, id, (m & 7) | (out << 3));
+        break;
+      }
       case B.STONE_BUTTON: case B.WOOD_BUTTON:
         if (m & 8) { w.setBlock(x, y, z, id, m & ~8); if (g) g.audio.play('click', 0.3, 0.5, x + 0.5, y + 0.5, z + 0.5); }
         break;
@@ -16293,6 +16619,12 @@ const Circuits = (() => {
       case B.RELAY: case B.RELAY_ON:
         w.setBlock(x, y, z, id, (m & 3) | ((((m >> 2) & 3) + 1) & 3) << 2);
         game.audio.play('click', 0.2, 0.9, x + 0.5, y + 0.2, z + 0.5);
+        return true;
+      // a gauge flips between comparing and subtracting (the front stud lights to subtract)
+      case B.GAUGE:
+        w.setBlock(x, y, z, id, m ^ 4);
+        w.scheduleTick(x, y, z, 2, id);
+        game.audio.play('click', 0.3, (m & 4) ? 0.5 : 0.55, x + 0.5, y + 0.2, z + 0.5);
         return true;
       case B.NOTE_BLOCK: {
         const pitch = ((m & 31) + 1) % 25;
@@ -16347,7 +16679,7 @@ const Circuits = (() => {
   }
 
   // ------------------------------------------------------------ hooks
-  for (const id of [B.EMBER_LAMP_ON, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.RELAY, B.RELAY_ON, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.PISTON_MOVING, B.HUSH_SENSOR]) BLOCKS[id].circuitTick = (w, x, y, z) => circuitTick(w, x, y, z, id);
+  for (const id of [B.EMBER_LAMP_ON, B.EMBER_TORCH, B.EMBER_TORCH_OFF, B.RELAY, B.RELAY_ON, B.STONE_BUTTON, B.WOOD_BUTTON, B.STONE_PLATE, B.WOOD_PLATE, B.PISTON_MOVING, B.HUSH_SENSOR, B.GAUGE]) BLOCKS[id].circuitTick = (w, x, y, z) => circuitTick(w, x, y, z, id);
   // meta-only changes (lever flips, wire levels) and neighbour edits nearby
   function blockChanged(w, x, y, z, oldId, newId) {
     if (w.menu) return;
@@ -16358,7 +16690,212 @@ const Circuits = (() => {
     }
   }
   BLOCKS[B.NOTE_BLOCK].onPunch = (w, x, y, z) => { if (w.game) playNote(w.game, x, y, z, w.getMeta(x, y, z) & 31); };
-  return { changed, blockChanged, use, tickPlates, machinePower, wireConns, playNote, IS };
+  return { changed, blockChanged, use, tickPlates, machinePower, wireConns, playNote, IS, tickGauge, fillLevel };
+})();
+
+// ---- src/world/machines.js
+// ---------------------------------------------------------------------------
+// Machines for moving things about. Hoppers pull items in from above (out of
+// a container, a chest minecart, or off the ground) and pass them on through
+// their spouts, one every eight ticks, unless ember power locks them.
+// Droppers and dispensers, given a pulse of power, push out one item from a
+// random slot: a dropper into whatever container it faces, or out onto the
+// ground; a dispenser uses it if it can (fires arrows and snowballs, pours and
+// fills buckets, scatters bone meal, lights fires, primes TNT, hatches spawn
+// eggs, fits armour onto whoever stands in front of it).
+// ---------------------------------------------------------------------------
+const Machines = (() => {
+  const ALL = (n) => { const a = []; for (let i = 0; i < n; i++) a.push(i); return a; };
+  const S27 = ALL(27), S9 = ALL(9), S5 = ALL(5);
+  // the inventory at a block, as seen from one of its faces (the side an item comes in or goes out by)
+  function containerAt(w, x, y, z, side) {
+    const id = w.getBlock(x, y, z);
+    const te = w.getTile(x, y, z);
+    const mark = () => w.markTileChanged(x, z);
+    if (te && te.items) {
+      if (id === B.CHEST) return { items: te.items, insert: () => S27, extract: () => S27, mark };
+      if (id === B.HOPPER) return { items: te.items, insert: () => S5, extract: () => S5, mark };
+      if (id === B.DROPPER || id === B.DISPENSER) return { items: te.items, insert: () => S9, extract: () => S9, mark };
+      if (id === B.FURNACE || id === B.FURNACE_LIT) {
+        // in at the top to be smelted, in at the sides as fuel; out at the bottom, done
+        return { items: te.items, insert: (st) => side === 1 ? [0] : side >= 2 ? (fuelValue(st.id, st.dmg) > 0 ? [1] : []) : [], extract: () => [2], mark };
+      }
+      if (id === B.BREWING_STAND) {
+        return { items: te.items, insert: (st) => side === 1 ? (Brewing.isIngredient(st) ? [3] : []) : (Brewing.isBottle(st) ? [0, 1, 2] : []), extract: () => te.brewTime > 0 ? [] : [0, 1, 2], mark };
+      }
+    }
+    // a chest riding a minecart through the spot
+    for (const e of w.entitiesInBox(x + 0.05, y, z + 0.05, x + 0.95, y + 1, z + 0.95, (e) => e.type === 'minecart' && !e.removed && e.items)) {
+      return { items: e.items, insert: () => S27, extract: () => S27, mark: () => {} };
+    }
+    return null;
+  }
+  // put a single item like st into one of the given slots
+  function putOne(c, slots, st) {
+    const max = maxStackOf(st.id);
+    for (const i of slots) { const s = c.items[i]; if (s && s.canStackWith(st) && s.count < max) { s.count++; return true; } }
+    for (const i of slots) if (!c.items[i]) { const n = new ItemStack(st.id, 1, st.dmg); if (st.tag) n.tag = JSON.parse(JSON.stringify(st.tag)); c.items[i] = n; return true; }
+    return false;
+  }
+  function takeOne(items, i) { const s = items[i]; s.count--; if (s.count <= 0) items[i] = null; }
+
+  // ---------------------------------------------------------------- hoppers
+  function tickHopper(game, te) {
+    if (te.cool > 0) { te.cool--; return; }
+    const w = game.world, { x, y, z } = te;
+    if (w.getBlock(x, y, z) !== B.HOPPER) return;
+    const m = w.getMeta(x, y, z);
+    if (m & 8) return;
+    let moved = false;
+    // out through the spout
+    const f = m & 7, d = FACE_DIR[f] || FACE_DIR[0];
+    const out = containerAt(w, x + d[0], y + d[1], z + d[2], f ^ 1);
+    if (out) for (let i = 0; i < 5; i++) {
+      const s = te.items[i]; if (!s) continue;
+      if (putOne(out, out.insert(s), s)) { takeOne(te.items, i); out.mark(); moved = true; break; }
+    }
+    // in from above
+    const self = { items: te.items };
+    if (te.items.some((s) => !s || s.count < maxStackOf(s.id))) {
+      const src = containerAt(w, x, y + 1, z, 0);
+      if (src) {
+        for (const i of src.extract()) {
+          const s = src.items[i]; if (!s) continue;
+          if (putOne(self, S5, s)) { takeOne(src.items, i); src.mark(); moved = true; break; }
+        }
+      } else if (!BT.opaque[w.getBlock(x, y + 1, z)]) {
+        for (const e of w.entitiesInBox(x, y + 0.6, z, x + 1, y + 1.9, z + 1, (e) => e.type === 'item' && !e.removed && e.stack)) {
+          let took = false;
+          while (e.stack.count > 0 && putOne(self, S5, e.stack)) { e.stack.count--; took = true; }
+          if (e.stack.count <= 0) e.removed = true;
+          if (took) { moved = true; break; }
+        }
+      }
+    }
+    if (moved) { te.cool = 8; w.markTileChanged(x, z); }
+  }
+
+  // ---------------------------------------------------------------- droppers and dispensers
+  function fire(game, x, y, z, id) {
+    const w = game.world, te = w.getTile(x, y, z);
+    if (!te || !te.items) return;
+    const m = w.getMeta(x, y, z), f = m & 7, d = FACE_DIR[f];
+    const full = []; te.items.forEach((s, i) => { if (s) full.push(i); });
+    if (!full.length) { game.audio.play('dispense_fail', 0.6, 1.2, x + 0.5, y + 0.5, z + 0.5); return; }
+    const slot = full[Math.floor(Math.random() * full.length)], st = te.items[slot];
+    const fx = x + 0.5 + d[0] * 0.7, fy = y + 0.5 + d[1] * 0.7, fz = z + 0.5 + d[2] * 0.7;
+    const tx = x + d[0], ty = y + d[1], tz = z + d[2];
+    if (id === B.DROPPER) {
+      const into = containerAt(w, tx, ty, tz, f ^ 1);
+      if (into) {
+        if (putOne(into, into.insert(st), st)) { takeOne(te.items, slot); into.mark(); w.markTileChanged(x, z); game.audio.play('dispense', 0.5, 1.1, x + 0.5, y + 0.5, z + 0.5); }
+        else game.audio.play('dispense_fail', 0.6, 1.2, x + 0.5, y + 0.5, z + 0.5);
+        return;
+      }
+    } else if (dispense(game, x, y, z, f, d, te, slot, st, fx, fy, fz, tx, ty, tz)) { w.markTileChanged(x, z); return; }
+    // nothing special to do with it: out it goes
+    const one = new ItemStack(st.id, 1, st.dmg); if (st.tag) one.tag = JSON.parse(JSON.stringify(st.tag));
+    const e = new ItemEntity(w, fx, fy - 0.12, fz, one);
+    const sp = 0.25 + Math.random() * 0.05;
+    e.vx = d[0] * sp + (Math.random() - 0.5) * 0.04; e.vy = d[1] * sp + 0.1; e.vz = d[2] * sp + (Math.random() - 0.5) * 0.04;
+    e.pickupDelay = 10;
+    game.spawnEntity(e);
+    takeOne(te.items, slot);
+    w.markTileChanged(x, z);
+    game.audio.play('dispense', 0.6, 1, x + 0.5, y + 0.5, z + 0.5);
+    if (game.settings.particles !== 'minimal') game.particles.smoke(fx, fy, fz, 3, false);
+  }
+  // a dispenser making use of what it holds; false to just throw the item out
+  function dispense(game, x, y, z, f, d, te, slot, st, fx, fy, fz, tx, ty, tz) {
+    const w = game.world, I = ITEM_IDS;
+    const yaw = Math.atan2(-d[0], -d[2]), pitch = d[1] > 0 ? Math.PI / 2 - 0.15 : d[1] < 0 ? -Math.PI / 2 + 0.15 : 0.08;
+    const shooter = { type: 'dispenser', x: fx, y: fy - 0.2, z: fz, eye: 0.2, yaw, pitch, creative: false };
+    const front = w.getBlock(tx, ty, tz), frontM = w.getMeta(tx, ty, tz);
+    const used = () => { takeOne(te.items, slot); return true; };
+    const sound = (n, v, p) => game.audio.play(n, v || 0.6, p || 1, x + 0.5, y + 0.5, z + 0.5);
+    switch (st.id) {
+      case I.arrow: {
+        const a = new Arrow(w, shooter, 1.1, 6); a.pickup = true; a.shooter = null;
+        game.spawnEntity(a); sound('bow', 0.8, 1.2); return used();
+      }
+      case I.snowball: case I.egg: {
+        const t = new Thrown(w, shooter, st.id === I.snowball ? 'snowball' : 'egg'); t.shooter = null;
+        game.spawnEntity(t); sound('bow', 0.5, 1.4); return used();
+      }
+      case I.fire_charge: {
+        if (typeof Fireball === 'undefined') return false;
+        game.spawnEntity(new Fireball(w, null, false, fx, fy - 0.15, fz, d[0], d[1], d[2])); sound('fire_charge', 0.7, 1.1); return used();
+      }
+      case I.water_bucket: case I.lava_bucket: {
+        if (front !== 0 && !BT.replaceable[front]) return false;
+        const fid = st.id === I.water_bucket ? B.WATER : B.LAVA;
+        if (fid === B.WATER && w.dim === 1) { sound('fizz', 0.5, 2); te.items[slot] = new ItemStack(I.bucket, 1, 0); return true; }
+        w.setBlock(tx, ty, tz, fid, 0); w.scheduleTick(tx, ty, tz, Behaviors.tickRate(fid, w));
+        te.items[slot] = new ItemStack(I.bucket, 1, 0);
+        sound(fid === B.WATER ? 'bucket_empty' : 'bucket_empty_lava', 0.8, 1); return true;
+      }
+      case I.bucket: {
+        if ((front !== B.WATER && front !== B.LAVA) || frontM !== 0) return false;
+        const fill = new ItemStack(front === B.WATER ? I.water_bucket : I.lava_bucket, 1, 0);
+        w.setBlock(tx, ty, tz, 0, 0);
+        takeOne(te.items, slot);
+        if (!te.items[slot]) te.items[slot] = fill;
+        else { const free = te.items.indexOf(null); if (free >= 0) te.items[free] = fill; else Behaviors.dropStack(game, fx, fy, fz, fill); }
+        sound('bucket_fill', 0.8, 1); return true;
+      }
+      case I.glass_bottle: {
+        if (front !== B.WATER) return false;
+        takeOne(te.items, slot);
+        const water = new ItemStack(I.potion, 1, 0), free = te.items.indexOf(null);
+        if (free >= 0) te.items[free] = water; else Behaviors.dropStack(game, fx, fy, fz, water);
+        sound('bucket_fill', 0.5, 1.4); return true;
+      }
+      case I.dye: {
+        if (st.dmg !== 0) return false;
+        if (!Behaviors.boneMeal(game, { creative: true }, tx, ty, tz)) { sound('dispense_fail', 0.6, 1.2); return true; }
+        return used();
+      }
+      case I.flint_and_steel: {
+        if (front === B.TNT) { w.setBlock(tx, ty, tz, 0, 0); game.spawnEntity(new TNTEntity(w, tx + 0.5, ty, tz + 0.5, 80)); }
+        else if (front === 0) { w.setBlock(tx, ty, tz, B.FIRE, 0); w.scheduleTick(tx, ty, tz, 30); }
+        else return false;
+        st.dmg++; if (st.dmg >= maxDamageOf(st.id)) te.items[slot] = null;
+        sound('ignite', 0.8, 1); return true;
+      }
+      case I.spawn_egg: {
+        const t = MOB_TYPES[st.dmg]; if (!t) return false;
+        game.spawnMob(t.key, tx + 0.5, ty + (BT.solid[front] ? 1 : 0), tz + 0.5, { fromEgg: true });
+        return used();
+      }
+      case I.shears: {
+        const sheep = w.entitiesInBox(tx, ty, tz, tx + 1, ty + 1, tz + 1, (e) => e.type === 'sheep' && !e.dead && !e.sheared && !e.baby)[0];
+        if (!sheep || !sheep.interact({ creative: true }, st)) return false;
+        st.dmg++; if (st.dmg >= maxDamageOf(st.id)) te.items[slot] = null;
+        return true;
+      }
+    }
+    if (st.id === B.TNT) {
+      game.spawnEntity(new TNTEntity(w, tx + 0.5, ty, tz + 0.5, 80));
+      game.audio.play('fuse', 1, 1, tx + 0.5, ty + 0.5, tz + 0.5);
+      return used();
+    }
+    // armour, onto whoever is standing in front
+    const ad = armorOf(st.id);
+    if (ad) {
+      const p = game.player;
+      if (p && !p.dead && p.box.intersects(new AABB(tx, ty, tz, tx + 1, ty + 1, tz + 1)) && !p.inventory.armor.items[ad.slot]) {
+        p.inventory.armor.items[ad.slot] = st.copy(); p.inventory.armor.items[ad.slot].count = 1;
+        takeOne(te.items, slot);
+        sound('click', 0.6, 0.8);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // what a block placed by a player faces: hoppers point their spout at what they were placed against
+  function hopperFacing(face) { return face >= 2 ? (face ^ 1) : 0; }
+  return { containerAt, putOne, tickHopper, fire, hopperFacing };
 })();
 
 // ---- src/world/rails.js
@@ -18718,31 +19255,144 @@ const Skins = (() => {
   };
   for (const m in ARMOR_COLORS) { S['armor_' + m] = armorSkin(m, ARMOR_COLORS[m]); S['legs_' + m] = legSkin(m, ARMOR_COLORS[m]); }
 
+  // ------------------------------------------------------------ golems
+  // the iron keeper: riveted plates of pale iron, ivy climbing over a shoulder and an arm,
+  // amber eyes glowing under a heavy brow (a 128x64 skin)
+  S.iron_keeper = (() => {
+    const s = new Skin(128, 64), r = rng('iron_keeper');
+    const P = ['#d3cdc2', '#c9c2b6', '#bdb6a9', '#c5beb2', '#d9d4ca'].map(C);
+    const seam = C('#958e82'), dark = C('#827b70'), rivet = C('#efebe3'), shadow = C('#6f695f');
+    const iron = (k) => vary(r, P[r.nextInt(P.length)], 0.05).map((v) => v * (k || 1));
+    // head 8x10x8
+    s.box(0, 0, 8, 10, 8, (f, x, y, fw, fh) => {
+      if (f === 'front') {
+        if (y === 4 && (x === 1 || x === 2 || x === 5 || x === 6)) return x === 2 || x === 5 ? C('#ffcf5a') : C('#f29a24');
+        if (y === 5 && (x === 1 || x === 2 || x === 5 || x === 6)) return C('#3a3129');
+        if (y === 3 && x >= 1 && x <= 6) return vary(r, shadow, 0.05);
+        if (y === 8 && x >= 2 && x <= 5) return vary(r, seam, 0.05);
+        if (y === 7 && (x === 0 || x === 7)) return rivet;
+        return iron(y < 3 ? 1.03 : 1);
+      }
+      if ((f === 'left' || f === 'right') && x === Math.floor(fw / 2) && y === 5) return rivet;
+      if (f !== 'top' && f !== 'bottom' && y === fh - 1) return vary(r, seam, 0.05);
+      if (f === 'back' && (x === 3 || x === 4) && y > 1) return vary(r, seam, 0.04);
+      return iron(f === 'top' ? 1.05 : f === 'bottom' ? 0.8 : 1);
+    });
+    // the brow 8x2x2
+    s.box(32, 0, 8, 2, 2, (f, x) => (f === 'front' && (x === 0 || x === 7)) ? rivet : iron(0.9));
+    // torso 18x13x11: a chest of two plates
+    s.box(0, 18, 18, 13, 11, (f, x, y, fw, fh) => {
+      if (f === 'front') {
+        if ((x === 1 || x === 16) && (y === 1 || y === 11)) return rivet;
+        if (x === 0 || x === 17 || y === 0 || y === 12) return vary(r, seam, 0.05);
+        if (x === 8 || x === 9) return vary(r, x === 8 ? seam : dark, 0.05);
+        return iron(y < 4 ? 1.04 : 1);
+      }
+      if (f === 'top') return iron(1.06);
+      if (f === 'bottom') return iron(0.75);
+      if (y === 6) return vary(r, seam, 0.05);
+      if (f === 'back' && (x === 2 || x === fw - 3) && (y === 2 || y === 10)) return rivet;
+      return iron();
+    });
+    // waist 10x4x6
+    s.box(0, 42, 10, 4, 6, (f, x, y) => (f === 'front' && y === 1 && (x === 1 || x === 8)) ? rivet : iron(0.88));
+    // arms 4x30x6: banded at the elbow and wrist, big flat hands
+    s.box(64, 0, 4, 30, 6, (f, x, y, fw, fh) => {
+      if (f === 'bottom') return iron(0.7);
+      if (f === 'top') return iron(1.05);
+      if (y === 9 || y === 19) return vary(r, C('#e2ddd4'), 0.04);
+      if (y === 10 || y === 20) return vary(r, dark, 0.05);
+      if (y >= 25 && f === 'front' && (x === 1 || x === 2) && y < 29) return vary(r, seam, 0.05);
+      return iron(y >= 24 ? 0.94 : 1);
+    });
+    // legs 6x15x5: a knee plate, heavy feet
+    s.box(88, 0, 6, 15, 5, (f, x, y, fw, fh) => {
+      if (f === 'bottom') return vary(r, shadow, 0.05);
+      if (f === 'top') return iron(0.9);
+      if (y === 6) return vary(r, seam, 0.05);
+      if (f === 'front' && y === 4 && (x === 1 || x === 4)) return rivet;
+      return iron(y >= fh - 3 ? 0.88 : 1);
+    });
+    // ivy: over the left shoulder and down the chest, and twining round the right forearm
+    const ivy = [C('#4a7a26'), C('#3a661e'), C('#5c9030'), C('#6aa238')];
+    const vine = (x0, y0, x1, y1, n, bias) => {
+      let x = x0, y = y0;
+      for (let i = 0; i < n; i++) {
+        s.set(x, y, vary(r, ivy[r.nextInt(2)], 0.1));
+        if (r.nextInt(3) === 0) { const lx = x + (r.nextInt(2) ? 1 : -1); if (lx >= x0 - 3 && lx <= x1) s.set(lx, y, vary(r, ivy[2 + r.nextInt(2)], 0.1)); }
+        y++; if (r.nextInt(3) === 0) x = Math.max(x0 - 2, Math.min(x1, x + bias));
+        if (y > y1) break;
+      }
+    };
+    vine(11 + 13, 18 + 11, 11 + 17, 18 + 23, 13, 1);      // the chest front, its left side (the viewer's right)
+    vine(11 + 18 + 2, 18 + 11, 11 + 18 + 9, 18 + 23, 10, 1); // and round its left side
+    for (let k = 0; k < 9; k++) s.set(11 + r.nextInt(5), 18 + 5 + r.nextInt(6), vary(r, ivy[r.nextInt(4)], 0.1)); // over the shoulder (top face: its left is the low side)
+    vine(64 + 6 + 1, 6 + 12, 64 + 6 + 3, 6 + 24, 12, 1);  // the arm's front
+    return s;
+  })();
+  // the snowkin: a pumpkin head, two snowballs and coal buttons (a 64x64 skin)
+  S.snowkin = (() => {
+    const s = new Skin(64, 64), r = rng('snowkin');
+    const O = ['#e3902a', '#d8841f', '#ec9c34'].map(C), rib = C('#b8661a'), cut = C('#2c1606');
+    s.box(0, 0, 8, 8, 8, (f, x, y) => {
+      if (f === 'top') { if ((x === 3 || x === 4) && (y === 3 || y === 4)) return vary(r, C('#5a4a1e'), 0.08); return vary(r, (x + y) % 3 === 0 ? rib : O[r.nextInt(3)], 0.05); }
+      if (f === 'front') {
+        if ((y === 2 && (x === 2 || x === 5)) || (y === 3 && (x >= 1 && x <= 2 || x >= 5 && x <= 6))) return cut;
+        if ((y === 5 && x >= 1 && x <= 6 && x !== 3) || (y === 6 && x >= 2 && x <= 5)) return cut;
+      }
+      return vary(r, x % 3 === 0 ? rib : O[r.nextInt(3)], 0.05);
+    });
+    const SN = ['#f7faff', '#eff4fc', '#e6eef9', '#dde7f5'].map(C);
+    const snow = (k) => vary(r, SN[r.nextInt(SN.length)], 0.02).map((v) => Math.min(255, v * (k || 1)));
+    s.box(0, 16, 10, 10, 10, (f, x, y) => {
+      if (f === 'front' && (x === 4 || x === 5) && (y === 2 || y === 3 || y === 6 || y === 7)) return (x === 4 && (y === 2 || y === 6)) ? C('#4a4a50') : C('#222226');
+      return snow(f === 'bottom' ? 0.9 : 1);
+    });
+    s.box(0, 36, 12, 12, 12, (f, x, y, fw, fh) => snow(f === 'bottom' ? 0.82 : y === fh - 1 ? 0.92 : 1));
+    s.box(32, 0, 10, 2, 2, () => vary(r, r.nextInt(3) ? C('#6e4c28') : C('#553a1c'), 0.08));
+    return s;
+  })();
+
   // ------------------------------------------------------------ atlas
-  const SLOT_W = 64, SLOT_H = 32, COLS = 8;
+  // skins are packed on a grid of 64x32 cells; a bigger skin (a golem's, say) takes a block of cells
+  const SLOT_W = 64, SLOT_H = 32, COLS = 8, ROWS = 16;
   const names = Object.keys(S);
-  const ROWS = Math.ceil((names.length + 4) / COLS);
-  const AW = SLOT_W * COLS, AH = 512;
+  const AW = SLOT_W * COLS, AH = SLOT_H * ROWS;
   const atlas = new Uint8ClampedArray(AW * AH * 4);
-  const slots = {};
+  const slots = {}, used = new Uint8Array(COLS * ROWS);
+  function place(skin) {
+    const cw = Math.ceil(skin.w / SLOT_W), ch = Math.ceil(skin.h / SLOT_H);
+    for (let r = 0; r + ch <= ROWS; r++) for (let c = 0; c + cw <= COLS; c++) {
+      let free = true;
+      for (let j = 0; j < ch && free; j++) for (let i = 0; i < cw && free; i++) if (used[(r + j) * COLS + c + i]) free = false;
+      if (!free) continue;
+      for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++) used[(r + j) * COLS + c + i] = 1;
+      return r * COLS + c;
+    }
+    console.warn('Skin atlas full');
+    return 0;
+  }
   function blit(name, skin, idx) {
     const ox = (idx % COLS) * SLOT_W, oy = Math.floor(idx / COLS) * SLOT_H;
-    for (let y = 0; y < skin.h && y < SLOT_H; y++) for (let x = 0; x < skin.w && x < SLOT_W; x++) {
+    for (let y = 0; y < skin.h && oy + y < AH; y++) for (let x = 0; x < skin.w && ox + x < AW; x++) {
       const si = (y * skin.w + x) * 4, di = ((oy + y) * AW + ox + x) * 4;
       atlas[di] = skin.d[si]; atlas[di + 1] = skin.d[si + 1]; atlas[di + 2] = skin.d[si + 2]; atlas[di + 3] = skin.d[si + 3];
     }
     slots[name] = { u: ox / AW, v: oy / AH, du: 1 / AW, dv: 1 / AH, idx };
   }
-  names.forEach((n, i) => blit(n, S[n], i));
-  void ROWS;
+  // the big ones first, so they find room
+  names.slice().sort((a, b) => S[b].w * S[b].h - S[a].w * S[a].h).forEach((n) => blit(n, S[n], place(S[n])));
   // custom player skin slot (loaded from a PNG)
-  const customIdx = names.length;
+  const customIdx = place(new Skin());
   function setCustom(imgData) {
     const s = new Skin();
     for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) { const i = (y * imgData.width + x) * 4; s.set(x, y, [imgData.data[i], imgData.data[i + 1], imgData.data[i + 2]], imgData.data[i + 3]); }
     blit('custom', s, customIdx);
   }
-  return { S, slots, atlas, AW, AH, setCustom, names };
+  // the rows below the skins are free for other art (paintings, sign glyphs)
+  let lastRow = 0; for (let i = 0; i < used.length; i++) if (used[i]) lastRow = Math.floor(i / COLS);
+  const top = (lastRow + 1) * SLOT_H;
+  return { S, slots, atlas, AW, AH, setCustom, names, top };
 })();
 
 // ---- src/render/paintings.js
@@ -19209,7 +19859,7 @@ const Paintings = (() => {
       atlas[di] = img.d[si]; atlas[di + 1] = img.d[si + 1]; atlas[di + 2] = img.d[si + 2]; atlas[di + 3] = img.d[si + 3];
     }
   };
-  const top = Math.ceil((Skins.names.length + 1) / 8) * 32;
+  const top = Skins.top;
   // font for sign text: white glyphs in 8x8 cells, 16 per row
   const glyphs = {};
   const chars = Object.keys(GLYPHS);
@@ -19501,6 +20151,24 @@ const MODELS = (() => {
     glider: {
       wingR: { pivot: [1, 24, 2.3], boxes: [bx([-1, -20, 0], [10, 20, 2], [22, 0])] },
       wingL: { pivot: [-1, 24, 2.3], boxes: [bx([-9, -20, 0], [10, 20, 2], [22, 0], { mirror: true })] },
+    },
+    // the iron keeper (a 128x64 skin): stumpy legs, a barrel chest, a heavy-browed head
+    // sunk forward between the shoulders, and long arms that hang almost to the ground
+    iron_keeper: {
+      body: { pivot: [0, 15, 0], boxes: [bx([-5, 0, -3], [10, 4, 6], [0, 42]), bx([-9, 4, -5.5], [18, 13, 11], [0, 18])] },
+      head: { pivot: [0, 31, -1.5], boxes: [bx([-4, 0, -5.5], [8, 10, 8], [0, 0]), bx([-4, 6.5, -7.5], [8, 2, 2], [32, 0])] },
+      rarm: { pivot: [11, 30, 0], boxes: [bx([-2, -27, -3], [4, 30, 6], [64, 0])] },
+      larm: { pivot: [-11, 30, 0], boxes: [bx([-2, -27, -3], [4, 30, 6], [64, 0], { mirror: true })] },
+      rleg: { pivot: [4.5, 15, 0], boxes: [bx([-3, -15, -2.5], [6, 15, 5], [88, 0])] },
+      lleg: { pivot: [-4.5, 15, 0], boxes: [bx([-3, -15, -2.5], [6, 15, 5], [88, 0], { mirror: true })] },
+    },
+    // the snowkin (a 64x64 skin): two snowballs, a pumpkin for a head, stick arms
+    snowkin: {
+      base: { pivot: [0, 0, 0], boxes: [bx([-6, 0, -6], [12, 12, 12], [0, 36])] },
+      upper: { pivot: [0, 11, 0], boxes: [bx([-5, 0, -5], [10, 10, 10], [0, 16])] },
+      head: { pivot: [0, 20, 0], boxes: [bx([-4, 0, -4], [8, 8, 8], [0, 0])] },
+      rarm: { pivot: [4, 18, 0], rot0: [0, 0, 0.45], boxes: [bx([0, -1, -1], [10, 2, 2], [32, 0])] },
+      larm: { pivot: [-4, 18, 0], rot0: [0, 0, -0.45], boxes: [bx([-10, -1, -1], [10, 2, 2], [32, 0], { mirror: true })] },
     },
   };
 })();
@@ -21239,6 +21907,26 @@ const SOUND_DEFS = (() => {
     return render(0.9, (t) => { const f = 900 + Math.sin(t * 40) * 120 + t * 300; ph += 2 * Math.PI * f / DSP.SR; return Math.sin(ph) * env(t, 0.02, 0.35) * 0.6 + Math.sin(2 * Math.PI * 1760 * t) * env(t, 0.1, 0.3) * 0.2 * (t > 0.1 ? 1 : 0); });
   };
   S.wyrmling_hurt = () => { let ph = 0; return render(0.4, (t) => { const f = 1400 - t * 1500; ph += 2 * Math.PI * f / DSP.SR; return Math.sin(ph) * env(t, 0.005, 0.12); }); };
+  // a dropper or dispenser: the clack of its mechanism (higher and thinner when it is empty)
+  S.dispense = () => { const ck = [[0, 1800, 0.6, 0.012], [0.03, 1200, 0.5, 0.02], [0.05, 2600, 0.3, 0.008]]; const lp = new Biquad('lp', 600, 0.8); return render(0.3, (t) => ring(ck, t) + lp.p(noise()) * env(t, 0.002, 0.03) * 1.5); };
+  S.dispense_fail = () => { const ck = [[0, 2400, 0.6, 0.008], [0.05, 2600, 0.4, 0.006]]; return render(0.25, (t) => ring(ck, t)); };
+  // ----- golems -----
+  // the iron keeper: a deep, ringing footfall; the clang of a struck bell-iron body; a groaning collapse
+  S.keeper_step = () => { const lp = new Biquad('lp', 260, 0.9); const ck = [[0.01, 196, 0.25, 0.05], [0.012, 523, 0.12, 0.03]]; return render(0.45, (t) => lp.p(noise()) * env(t, 0.004, 0.08) * 1.8 + ring(ck, t)); };
+  S.keeper_hurt = () => { const ck = [[0, 220, 0.5, 0.18], [0, 547, 0.35, 0.12], [0, 1130, 0.2, 0.06], [0.004, 1687, 0.1, 0.04]]; const lp = new Biquad('lp', 900, 0.8); return render(1.2, (t) => ring(ck, t) + lp.p(noise()) * env(t, 0.002, 0.04)); };
+  S.keeper_death = () => {
+    const ck = []; for (let i = 0; i < 9; i++) ck.push([i * 0.09 + rnd() * 0.03, 110 + rnd() * 500, 0.35, 0.15 + rnd() * 0.15]);
+    const lp = new Biquad('lp', 400, 0.8);
+    return render(2.2, (t) => ring(ck, t) + lp.p(noise()) * env(t, 0.3, 0.7) * 0.8 + Math.sin(2 * Math.PI * (80 - t * 25) * t) * env(t, 0.05, 1) * 0.4);
+  };
+  S.keeper_attack = () => { const lp = new Biquad('lp', 500, 0.9); return render(0.5, (t) => { lp.set(300 + t * 1600, 0.9); return lp.p(noise()) * env(t, 0.06, 0.12) * 1.4; }); };
+  S.keeper_wake = () => {
+    const ck = [[0, 147, 0.4, 0.4], [0.18, 220, 0.4, 0.35], [0.36, 294, 0.45, 0.5], [0.36, 587, 0.15, 0.4]];
+    const lp = new Biquad('lp', 300, 0.8);
+    return render(2.2, (t) => ring(ck, t) + lp.p(noise()) * env(t, 0.02, 0.4) * 0.6);
+  };
+  // the snowkin: a soft crunch of packed snow
+  S.snowkin_hurt = () => { const bp = new Biquad('bp', 1800, 1.2); return render(0.3, (t) => bp.p(noise()) * env(t, 0.003, 0.07) * (0.6 + 0.4 * Math.sin(t * 300))); };
   // ----- the Drift Isles -----
   // an orrery sentinel: the dry tick of its clockwork as it turns
   S.orrery_tick = () => { const ck = []; for (let i = 0; i < 8; i++) ck.push([i * 0.11 + rnd() * 0.01, 2400 + (i % 2) * 700, 0.4, 0.004]); return render(1, (t) => ring(ck, t)); };
@@ -23805,6 +24493,41 @@ class ChestScreen extends ContainerScreen {
   }
 }
 
+// a hopper's five slots
+class HopperScreen extends ContainerScreen {
+  constructor(game, te) {
+    super(game, 176, 133);
+    this.te = te;
+    this.inv = new Inventory(5, te.items);
+    this.inv.listeners.push(() => this.game.world.markTileChanged(te.x, te.z));
+    for (let i = 0; i < 5; i++) this.slots.push(new Slot(this.inv, i, 44 + i * 18, 20, { group: 'box' }));
+    this.addPlayerSlots(51);
+  }
+  quickTargets(s) {
+    if (s.group === 'box') return { slots: this.slots.filter((x) => x.group === 'hotbar' || x.group === 'main'), reverse: true };
+    return { slots: this.slots.filter((x) => x.group === 'box') };
+  }
+  drawForeground(gui) { this.label(gui, 'Hopper', 8, 6); this.label(gui, 'Inventory', 8, this.ph - 96 + 2); }
+  tick() { const te = this.te; if (this.game.world.getTile(te.x, te.y, te.z) !== te || this.player.distanceSq(te.x + 0.5, te.y + 0.5, te.z + 0.5) > 64) this.game.closeScreen(); }
+}
+// a dropper's or dispenser's nine slots, three by three
+class DispenserScreen extends ContainerScreen {
+  constructor(game, te, title) {
+    super(game, 176, 166);
+    this.te = te; this.title = title;
+    this.inv = new Inventory(9, te.items);
+    this.inv.listeners.push(() => this.game.world.markTileChanged(te.x, te.z));
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) this.slots.push(new Slot(this.inv, r * 3 + c, 62 + c * 18, 17 + r * 18, { group: 'box' }));
+    this.addPlayerSlots(84);
+  }
+  quickTargets(s) {
+    if (s.group === 'box') return { slots: this.slots.filter((x) => x.group === 'hotbar' || x.group === 'main'), reverse: true };
+    return { slots: this.slots.filter((x) => x.group === 'box') };
+  }
+  drawForeground(gui) { this.label(gui, this.title, 8, 6); this.label(gui, 'Inventory', 8, this.ph - 96 + 2); }
+  tick() { const te = this.te; if (this.game.world.getTile(te.x, te.y, te.z) !== te || this.player.distanceSq(te.x + 0.5, te.y + 0.5, te.z + 0.5) > 64) this.game.closeScreen(); }
+}
+
 // a chest riding on a minecart
 class CartChestScreen extends ChestScreen {
   constructor(game, cart) {
@@ -23847,14 +24570,14 @@ const CREATIVE_TABS = (() => {
   T.push({ name: 'Combat', icon: [I.gold_sword, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].map((m) => [I[m + '_sword'], 0]), [I.bow, 0], [I.arrow, 0],
     ...['leather', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ARMOR_SLOTS.map((s) => [I[m + '_' + s], 0])), [I.silent_boots, 0], [I.snowball, 0], [I.egg, 0]] });
   T.push({ name: 'Ember Circuits', icon: [I.ember_dust, 0], list: [[I.ember_dust, 0], blk(B.EMBER_TORCH), blk(B.LEVER), blk(B.STONE_BUTTON), blk(B.WOOD_BUTTON), blk(B.STONE_PLATE), blk(B.WOOD_PLATE),
-    [I.relay, 0], blk(B.PISTON), blk(B.STICKY_PISTON), blk(B.EMBER_LAMP), blk(B.NOTE_BLOCK), blk(B.EMBER_BLOCK), blk(B.HUSH_SENSOR), blk(B.TNT), [I.door_wood, 0], [I.door_iron, 0], blk(B.TRAPDOOR), blk(B.FENCE_GATE), blk(B.DETECTOR_RAIL)] });
+    [I.relay, 0], [I.gauge, 0], blk(B.PISTON), blk(B.STICKY_PISTON), blk(B.HOPPER), blk(B.DROPPER), blk(B.DISPENSER), blk(B.EMBER_LAMP), blk(B.NOTE_BLOCK), blk(B.EMBER_BLOCK), blk(B.HUSH_SENSOR), blk(B.TNT), [I.door_wood, 0], [I.door_iron, 0], blk(B.TRAPDOOR), blk(B.FENCE_GATE), blk(B.DETECTOR_RAIL)] });
   T.push({ name: 'Transportation', icon: [B.BOOSTER_RAIL, 0], list: [blk(B.RAIL), blk(B.BOOSTER_RAIL), blk(B.DETECTOR_RAIL), [I.minecart, 0], [I.chest_minecart, 0], ...WOOD.map((w, i) => [I.boat, i])] });
   T.push({ name: 'Brewing', icon: [I.potion, 10], list: [blk(B.BREWING_STAND), [I.glass_bottle, 0], ...POTION_VARIANTS.map((d) => [I.potion, d]), ...POTION_VARIANTS.map((d) => [I.splash_potion, d]),
     ...items(['bloodcap', 'sugar', 'glistering_melon', 'spider_eye', 'fermented_spider_eye', 'wailer_tear', 'flare_powder', 'magma_cream', 'glimmerfin', 'pufferfish', 'slimeball', 'ember_dust', 'sunstone_dust', 'gunpowder'])] });
   T.push({ name: 'Foodstuffs', icon: [I.apple, 0], list: items(['apple', 'golden_apple', 'bread', 'porkchop', 'cooked_porkchop', 'beef', 'steak', 'chicken', 'cooked_chicken', 'mutton', 'cooked_mutton', 'venison', 'cooked_venison', 'jerky',
     'fish', 'cooked_fish', 'salmon', 'cooked_salmon', 'sunfish', 'pufferfish', 'glimmerfin', 'carrot', 'potato', 'baked_potato', 'poison_potato', 'cookie', 'melon_slice', 'mushroom_stew', 'glow_berries', 'pumpkin_pie', 'berry_pie', 'berries', 'glowberry', 'starfruit', 'rotten_flesh', 'spider_eye']) });
   T.push({ name: 'Materials', icon: [I.stick, 0], list: [...items(['coal']), [I.coal, 1], ...items(['diamond', 'iron_ingot', 'gold_ingot', 'gold_nugget', 'cobalt_ingot', 'starmetal_ingot', 'jade', 'ember_dust', 'sulfur', 'lumite_shard', 'salt',
-    'stick', 'bowl', 'string', 'cattail_fiber', 'feather', 'flint', 'gunpowder', 'leather', 'bone', 'clay_ball', 'brick', 'paper', 'book', 'slimeball', 'wheat', 'seeds', 'sugar', 'sugar_cane', 'wisp_essence',
+    'stick', 'bowl', 'string', 'cattail_fiber', 'feather', 'flint', 'gunpowder', 'leather', 'bone', 'clay_ball', 'brick', 'paper', 'book', 'slimeball', 'wheat', 'seeds', 'melon_seeds', 'pumpkin_seeds', 'sugar', 'sugar_cane', 'wisp_essence',
       'sunstone_dust', 'smoky_quartz', 'brimstone_brick', 'wailer_tear', 'flare_rod', 'flare_powder', 'magma_cream', 'fire_charge', 'seeker_eye', 'hush_shard', 'echo_heart', 'sift_scale']),
     ...[...Array(16).keys()].map((d) => [I.dye, d])] });
   T.push({ name: 'Creatures', icon: [I.spawn_egg, 1], list: [] });   // filled when mobs load
@@ -24249,6 +24972,9 @@ const MILESTONES = [
   { id: 'sift', name: 'Where Lost Things Go', desc: 'Step through a city gate into the Sift', icon: () => [B.SIFT_SAND, 0] },
   { id: 'relic', name: 'Finders Keepers', desc: 'Come upon a relic half-buried in the Sift', icon: () => [B.SILTSTONE_BRICKS, 2] },
   { id: 'letter', name: 'Return to Sender', desc: 'Read a lost letter', icon: () => [ITEM_IDS.lost_letter, 0] },
+  { id: 'keeper', name: 'Ironclad Friend', desc: 'Raise an iron keeper from iron and a pumpkin', icon: () => [B.IRON_BLOCK, 0] },
+  { id: 'snowkin', name: 'Cold Company', desc: 'Raise a snowkin from snow and a pumpkin', icon: () => [B.SNOW, 0] },
+  { id: 'family', name: 'Growing Village', desc: 'See a villager child born', icon: () => [ITEM_IDS.bread, 0] },
 ];
 const BIOME_DESCRIPTIONS = {
   ocean: 'Endless water. Sunken ruins rest on the sea floor.', deep_ocean: 'The water grows dark and cold.', plains: 'Rolling grass, wildflowers and the occasional lonely oak.',
@@ -25401,6 +26127,7 @@ class Mob extends Living {
     this.flipDeath = Math.random() < 0.5;
     this.idleTime = 0;
     this.swims = true;
+    this.air = 300;
   }
   get game() { return this.world.game; }
   get baby() { return this.growAge < 0; }
@@ -25517,6 +26244,7 @@ class Mob extends Living {
       if ((this.inWater || this.inLava) && this.swims && Math.random() < 0.8) this.jumping = true;
       if (!this.path && this.aiSpeed === 0 && this.lookTimer > 0) this.yaw = approachAngle(this.yaw, this.headYawTarget === undefined ? this.yaw : this.headYawTarget, 10 * DEG);
       this.updateLook();
+      this.breathe();
     }
     this.livingTick();
     if (!this.dead && this.category !== 'ambient') Hush.step(game, this);
@@ -25536,6 +26264,18 @@ class Mob extends Living {
   }
   aiTick() {}
   mobTick() {}
+  // a long fall hurts (fliers, floaters and the sure-footed excepted)
+  onLand(dist) {
+    if (this.noFallDamage || this.noGravity || this.inWater || this.dead) return;
+    const d = Math.ceil(dist - 3.001);
+    if (d > 0) this.hurt(d, { type: 'fall' });
+  }
+  // held under water too long, it drowns
+  breathe() {
+    if (this.dead || this.noDrown || this.noGravity || this.category === 'water') return;
+    if (this.headInWater) { if (--this.air <= -20) { this.air = 0; this.hurt(2, { type: 'drown' }); } }
+    else this.air = 300;
+  }
   ambient(game) {
     if (Math.random() * 1000 < this.ambientTimer++) {
       this.ambientTimer = -this.talkInterval;
@@ -25716,7 +26456,7 @@ class Monster extends Mob {
     if (this.pathDone && Math.random() < 1 / 120) this.wander(10, 4, 1.0, (x, y, z) => this.pathWeight(x, y, z));
     this.idleLook(game); this.keepWatching();
   }
-  onRevenge(e) { if ((e.type === 'player' && e.survivalLike) || e.type === 'wolf') { this.target = e; this.unseen = 0; } }
+  onRevenge(e) { if ((e.type === 'player' && e.survivalLike) || e.type === 'wolf' || e.category === 'golem') { this.target = e; this.unseen = 0; } }
   maybeEquip() {
     const d = this.world.difficulty;
     if (Math.random() < [0, 0.01, 0.025, 0.05][d]) {
@@ -25977,6 +26717,7 @@ class Boomcap extends Monster {
 class Slime extends Monster {
   constructor(world) {
     super(world, 'slime');
+    this.noFallDamage = true;
     this.size = 1; this.squish = 0; this.psquish = 0; this.squishTarget = 0; this.jumpDelay = 0;
     this.wasOnGround = false; this.slimeYaw = Math.random() * TAU;
     this.setSize(1 << Math.floor(Math.random() * 3));
@@ -26713,6 +27454,7 @@ class Villager extends Mob {
     this.customer = null; this.flee = 0;
     this.opensDoors = true; this.doors = [];
     this.xpValue = 0; this.talkInterval = 80;
+    this.food = 0; this.breedCool = 0; this.mate = null; this.mateT = 0; this.roomT = 0;
   }
   onSpawn(fresh, extra) {
     if (!fresh) return;
@@ -26763,6 +27505,21 @@ class Villager extends Mob {
     if (this.customer) { this.lookAtEntity(this.customer, 2); this.clearPath(); return; }
     // keep away from the undead
     if (this.flee > 0) { this.flee--; if (this.pathDone) this.wander(8, 3, 1.25); return; }
+    // courting: walk up to the other, stand together a while, and a child is born
+    if (this.mate) {
+      const m = this.mate;
+      if (m.dead || m.removed || m.mate !== this || this.distSqTo(m) > 16 * 16) { this.mate = null; this.mateT = 0; }
+      else {
+        this.lookAtEntity(m, 2);
+        if (this.distSqTo(m) > 2.5 * 2.5) { if (--this.repath <= 0 || this.pathDone) { this.repath = 10; if (!this.navigateTo(m.x, m.y, m.z, 0.8, 16)) this.steerTo(m.x, m.y, m.z, 0.8); } }
+        else {
+          this.clearPath();
+          if (++this.mateT % 20 === 0) game.particles.hearts(this.x, this.y + this.h, this.z, 1);
+          if (this.mateT >= 100) this.haveChild(game);
+        }
+        return;
+      }
+    }
     if (this.age % 10 === 0) {
       for (const e of w.entitiesInBox(this.x - 8, this.y - 3, this.z - 8, this.x + 8, this.y + 3, this.z + 8)) {
         if (!e.dead && (e.type === 'zombie' || e.type === 'mummy' || e.type === 'wraith')) {
@@ -26792,9 +27549,53 @@ class Villager extends Mob {
     }
     this.idleLook(game); this.keepWatching();
   }
-  onRevenge(e) { this.flee = 60; this.clearPath(); if (e) { const dx = this.x - e.x, dz = this.z - e.z, d = Math.sqrt(dx * dx + dz * dz) || 1; this.navigateTo(this.x + dx / d * 8, this.y, this.z + dz / d * 8, 1.25, 12); } }
+  onRevenge(e) {
+    this.flee = 60; this.clearPath(); this.mate = null;
+    if (e) { const dx = this.x - e.x, dz = this.z - e.z, d = Math.sqrt(dx * dx + dz * dz) || 1; this.navigateTo(this.x + dx / d * 8, this.y, this.z + dz / d * 8, 1.25, 12); }
+    // the village's keepers saw that
+    if (e && e.type === 'player' && e.survivalLike) {
+      for (const k of this.world.entitiesInBox(this.x - 16, this.y - 6, this.z - 16, this.x + 16, this.y + 6, this.z + 16)) if (k.type === 'iron_keeper' && !k.dead && !k.playerMade && k.canSee(e)) k.setTarget(e);
+    }
+  }
+  // food off the ground: bread, carrots, potatoes. Well fed, a villager is willing to raise a family
+  gather(game) {
+    if (this.baby || this.food >= 24) return;
+    for (const e of this.world.entitiesInBox(this.x - 1, this.y - 0.5, this.z - 1, this.x + 1, this.y + 1.5, this.z + 1, (e) => e.type === 'item' && !e.removed && e.pickupDelay <= 0)) {
+      const v = villagerFood(e.stack.id);
+      if (!v) continue;
+      const take = Math.min(e.stack.count, Math.ceil((24 - this.food) / v));
+      this.food += take * v; e.stack.count -= take;
+      if (e.stack.count <= 0) e.removed = true;
+      game.audio.play('pop', 0.2, 1.4 + Math.random() * 0.4, this.x, this.y + 1, this.z);
+      if (this.food >= 24) break;
+    }
+  }
+  willing() { return !this.baby && !this.dead && this.food >= 12 && this.breedCool <= 0 && !this.mate && !this.customer && this.flee <= 0; }
+  // two willing villagers close together, with a home to spare in the village: they court
+  tryBreed() {
+    if (!this.willing() || this.roomT > 0) return;
+    const w = this.world;
+    const m = w.entitiesInBox(this.x - 8, this.y - 3, this.z - 8, this.x + 8, this.y + 3, this.z + 8).find((e) => e !== this && e.type === 'villager' && e.willing());
+    if (!m) return;
+    if (!Golems.villageRoom(w, this.x, this.y, this.z)) { this.roomT = 400; return; }
+    this.mate = m; m.mate = this; this.mateT = m.mateT = 0;
+  }
+  haveChild(game) {
+    const m = this.mate;
+    this.mate = null; this.mateT = 0;
+    if (!m) return;
+    m.mate = null; m.mateT = 0;
+    this.food -= 12; m.food -= 12; this.breedCool = m.breedCool = 6000;
+    const c = game.spawnMob('villager', (this.x + m.x) / 2, Math.max(this.y, m.y), (this.z + m.z) / 2, { baby: true, home: this.home || m.home });
+    if (c) { c.persistent = true; game.particles.hearts(c.x, c.y + 0.8, c.z, 6); if (game.player && c.distSqTo(game.player) < 32 * 32) game.achieve('family'); }
+    game.audio.play('villager_yes', 0.8, this.soundPitch(), this.x, this.y + this.eye, this.z);
+  }
   mobTick(game) {
     const w = this.world;
+    if (this.breedCool > 0) this.breedCool--;
+    if (this.roomT > 0) this.roomT--;
+    if (this.age % 10 === 3) this.gather(game);
+    if (this.age % 20 === 7) this.tryBreed();
     // new trades arrive with a sparkle
     if (this.unlockIn > 0 && --this.unlockIn === 0) {
       if (this.unlockTier()) game.particles.happy(this.x, this.y + this.h, this.z);
@@ -26845,6 +27646,8 @@ class Villager extends Mob {
     const d = super.save();
     d.prof = this.prof; d.home = this.home; d.tier = this.tier;
     if (this.unlockIn) d.unlockIn = this.unlockIn;
+    if (this.food) d.food = this.food;
+    if (this.breedCool) d.breedCool = this.breedCool;
     if (this.offers) d.offers = this.offers.map((o) => ({ buy: o.buy.toJSON(), buy2: o.buy2 ? o.buy2.toJSON() : null, sell: o.sell.toJSON(), uses: o.uses, max: o.max }));
     return d;
   }
@@ -26852,8 +27655,17 @@ class Villager extends Mob {
     super.load(d);
     if (d.prof && VILLAGER_PROFS[d.prof]) this.prof = d.prof;
     this.home = d.home || null; this.tier = d.tier || 0; this.unlockIn = d.unlockIn || 0;
+    this.food = d.food || 0; this.breedCool = d.breedCool || 0;
     if (d.offers) this.offers = d.offers.map((o) => ({ buy: ItemStack.fromJSON(o.buy), buy2: o.buy2 ? ItemStack.fromJSON(o.buy2) : null, sell: ItemStack.fromJSON(o.sell), uses: o.uses || 0, max: o.max || 7 })).filter((o) => o.buy && o.sell);
   }
+}
+
+// how filling a villager finds a thing lying on the ground (three loaves, or a dozen carrots or potatoes, make them willing)
+function villagerFood(id) {
+  const I = ITEM_IDS;
+  if (id === I.bread) return 4;
+  if (id === I.carrot || id === I.potato || id === I.baked_potato) return 1;
+  return 0;
 }
 
 // tamed wolves defend their owner and join in when the owner attacks
@@ -27089,7 +27901,7 @@ class Wisp extends Mob {
 class Stranger extends Mob {
   constructor(world) {
     super(world, 'stranger');
-    this.category = 'special';
+    this.category = 'special'; this.noFallDamage = true; this.noDrown = true;
     this.maxHealth = this.health = 20;
     this.w = 0.6; this.h = 1.8; this.eye = 1.62;
     this.seen = 0; this.life = 600 + this.rnd(600);
@@ -29414,7 +30226,7 @@ const GLEANINGS = () => [[ITEM_IDS.gold_nugget, 1, 4], [ITEM_IDS.string, 1, 3], 
 class Gleaner extends Mob {
   constructor(world) {
     super(world, 'gleaner');
-    this.category = 'creature';
+    this.category = 'creature'; this.noFallDamage = true;
     this.maxHealth = this.health = 8;
     this.w = 0.5; this.h = 0.9; this.eye = 0.75;
     this.baseSpeed = 0.32;
@@ -29522,6 +30334,7 @@ MOB_CLASSES.gleaner = Gleaner;
 class Sifter extends Monster {
   constructor(world) {
     super(world, 'sifter');
+    this.noFallDamage = true; this.noDrown = true;
     this.maxHealth = this.health = 16;
     this.w = 0.8; this.h = 0.7; this.eye = 0.45;
     this.baseSpeed = 0.2; this.damage = 4;
@@ -29661,6 +30474,334 @@ MobSpawner.prototype.tickSift = function (rd, area) {
   }
 };
 
+// ---- src/entity/golems.js
+// ---------------------------------------------------------------------------
+// Golems. The iron keeper walks the lanes of a village and stands between its
+// folk and the dark, flinging monsters into the air. A village raises keepers
+// of its own wherever enough villagers live together - which is how an iron
+// farm is made - and anyone can raise one by hand: four blocks of iron in a T,
+// with a pumpkin set on top. The snowkin is two blocks of snow and a pumpkin;
+// it pelts monsters with snowballs, leaves snow wherever it walks, and melts
+// away in hot lands and in the rain.
+// ---------------------------------------------------------------------------
+MOB_TYPES.push(
+  { key: 'iron_keeper', name: 'Iron Keeper', egg: ['#d6d0c5', '#4c7a28'], cat: 'golem', lore: 'A hulking guardian of riveted iron that walks the lanes of a village and flings monsters into the air. Villages raise their own wherever enough folk live together; you can raise one yourself from four blocks of iron in a T, with a pumpkin on top.' },
+  { key: 'snowkin', name: 'Snowkin', egg: ['#f4f8ff', '#e08a24'], cat: 'golem', lore: 'Two blocks of snow and a pumpkin, brought to life. It pelts monsters with snowballs and leaves snow wherever it walks - but it melts in hot lands and in the rain.' },
+);
+MOB_TYPES.forEach((m, i) => { if (m) { m.index = i; MOB_INDEX[m.key] = m; } });
+
+// a triangle wave, for the stomping walk and the overhead blow
+function golemWave(t, p) { return (Math.abs(((t % p) + p) % p - p * 0.5) - p * 0.25) / (p * 0.25); }
+
+class IronKeeper extends Mob {
+  constructor(world) {
+    super(world, 'iron_keeper');
+    this.category = 'golem'; this.persistent = true;
+    this.maxHealth = this.health = 100;
+    this.w = 1.4; this.h = 2.7; this.eye = 2.3;
+    this.baseSpeed = 0.25;
+    this.playerMade = false;
+    this.home = null;            // the middle of the village it watches over
+    this.blowT = 0;              // the overhead blow, coming down
+    this.flowerT = 0; this.flowerFor = null;
+    this.xpValue = 0; this.swims = false; this.noFallDamage = true; this.noDrown = true;
+    this.pathNodes = 300; this.stepAt = 0;
+  }
+  // nothing knocks it back, it cannot drown, and a fall does it no harm
+  knockback() {}
+  hurt(amount, src) {
+    if (src && (src.type === 'fall' || src.type === 'drown' || src.type === 'suffocate')) return false;
+    return super.hurt(amount, src);
+  }
+  setTarget(e) { this.target = e; this.unseen = 0; if (!e) this.clearPath(); }
+  // monsters, but not the boomcaps (it lets those be)
+  isFoe(e) { return !!e && e !== this && !e.dead && !e.removed && !!e.hurt && !!e.hostile && e.type !== 'boomcap' && e.category !== 'golem'; }
+  findFoe() {
+    const r = 16;
+    let best = null, bd = r * r;
+    for (const e of this.world.entitiesInBox(this.x - r, this.y - 6, this.z - r, this.x + r, this.y + 6, this.z + r)) {
+      if (!this.isFoe(e)) continue;
+      const d = this.distSqTo(e);
+      if (d < bd && this.canSee(e)) { bd = d; best = e; }
+    }
+    return best;
+  }
+  // it answers a blow - unless a player who raised it struck it; and it remembers who harms its villagers
+  onRevenge(e) {
+    if (!e || e === this || e.dead) return;
+    if (e.type === 'player') { if (this.playerMade || !e.survivalLike) return; }
+    else if (e.category === 'golem' || e.type === 'villager') return;
+    this.setTarget(e);
+  }
+  aiTick(game) {
+    const w = this.world;
+    const t0 = this.target;
+    if (t0 && (t0.dead || t0.removed || this.distSqTo(t0) > 32 * 32 || (t0.type === 'player' && (!t0.survivalLike || this.playerMade)))) this.setTarget(null);
+    if (this.target && !this.canSee(this.target) && ++this.unseen > 100) this.setTarget(null);
+    if (!this.target && ++this.targetSearch % 10 === 0) { const f = this.findFoe(); if (f) this.setTarget(f); }
+    const t = this.target;
+    if (t) {
+      this.flowerT = 0;
+      const d2 = this.chase(1.0);
+      if (this.attackTimer <= 0 && d2 <= this.meleeReach(t) && this.canSee(t)) this.strike(game, t);
+      return;
+    }
+    // holding out a flower to a villager
+    if (this.flowerT > 0) {
+      this.clearPath();
+      if (this.flowerFor && !this.flowerFor.dead) this.lookAtEntity(this.flowerFor, 2);
+      return;
+    }
+    // it keeps to its village
+    if (this.home && this.pathDone) {
+      const hx = this.home[0] + 0.5, hz = this.home[1] + 0.5, d2 = (this.x - hx) ** 2 + (this.z - hz) ** 2;
+      if (d2 > 24 * 24 && Math.random() < 0.05) { this.navigateTo(hx, this.home[2] !== undefined ? this.home[2] : this.y, hz, 0.6, 40); return; }
+    }
+    if (this.pathDone && Math.random() < 1 / 160) this.wander(10, 4, 0.6, (x, y, z) => (this.home ? -Math.hypot(x - this.home[0], z - this.home[1]) / 8 : 0));
+    // now and then it offers a flower to a villager standing near
+    if (this.pathDone && Math.random() < 1 / 2400) {
+      const v = w.entitiesInBox(this.x - 6, this.y - 2, this.z - 6, this.x + 6, this.y + 3, this.z + 6).find((e) => e.type === 'villager' && !e.dead);
+      if (v) { this.flowerT = 400; this.flowerFor = v; }
+    }
+    this.idleLook(game); this.keepWatching();
+  }
+  // the overhead blow: hard enough to send a zombie flying
+  strike(game, t) {
+    this.attackTimer = 20; this.blowT = 10;
+    game.audio.play('keeper_attack', 1, 0.9 + Math.random() * 0.2, this.x, this.y + 1.5, this.z);
+    if (this.attackEntity(t, 7 + this.rnd(15))) t.vy += 0.4;
+  }
+  mobTick(game) {
+    if (this.blowT > 0) this.blowT--;
+    if (this.flowerT > 0 && --this.flowerT === 0) this.flowerFor = null;
+    // heavy, ringing footfalls
+    if (this.onGround && this.limbAmount > 0.2) {
+      const s = Math.floor(this.limbSwing / 6.5);
+      if (s !== this.stepAt) { this.stepAt = s; game.audio.play('keeper_step', 0.55, 0.9 + Math.random() * 0.15, this.x, this.y, this.z); }
+    }
+  }
+  saySound() { return null; }
+  hurtSound() { return 'keeper_hurt'; }
+  deathSound() { return 'keeper_death'; }
+  dropLoot() {
+    this.drop(B.FLOWER, this.rnd(3), 0);
+    this.drop(ITEM_IDS.iron_ingot, 3 + this.rnd(3), 0);
+  }
+  render(er, rx, ry, rz, partial) {
+    const [sky, blk] = er.lightAt(this.x, this.y + 1.5, this.z);
+    const pose = this.quadPose(partial);
+    const swing = this.limbSwing - this.limbAmount * (1 - partial);
+    const amt = clamp(this.prevLimbAmount + (this.limbAmount - this.prevLimbAmount) * partial, 0, 1);
+    const wv = golemWave(swing, 13);
+    const p = { head: pose.head, rleg: [1.5 * wv * amt, 0, 0], lleg: [-1.5 * wv * amt, 0, 0], rarm: [(0.2 - 1.5 * wv) * amt, 0, 0], larm: [(0.2 + 1.5 * wv) * amt, 0, 0] };
+    if (this.blowT > 0) { const a = 2.0 - 1.5 * golemWave(this.blowT - partial, 10); p.rarm = [a, 0, 0]; p.larm = [a, 0, 0]; }
+    else if (this.flowerT > 0) { p.rarm = [0.8 - 0.025 * golemWave(this.flowerT - partial, 70), 0, 0]; p.larm = [0, 0, 0]; }
+    const base = er.baseMatrix(this, rx, ry, rz, partial);
+    er.drawModel(MODELS.iron_keeper, 'iron_keeper', base, p, er.entColor(this), sky, blk);
+    // the flower, held up in the right hand
+    if (this.flowerT > 0 && !this.dead) {
+      const A = MODELS.iron_keeper.rarm.pivot, a = p.rarm[0];
+      let m = M3.mul(base, M3.trans(A[0], A[1], A[2]));
+      m = M3.mul(m, M3.rx(a));
+      m = M3.mul(m, M3.trans(0, -26, -3));
+      m = M3.mul(m, M3.rx(-a));
+      m = M3.mul(m, M3.scale(12, 12, 12));
+      m = M3.mul(m, M3.trans(-0.5, 0, 0));
+      er.drawItem(new ItemStack(B.FLOWER, 1, 0), m, sky, blk);
+    }
+  }
+  save() { const d = super.save(); d.playerMade = this.playerMade || undefined; if (this.home) d.home = this.home; return d; }
+  load(d) { super.load(d); this.playerMade = !!d.playerMade; this.home = d.home || null; this.persistent = true; }
+}
+
+class Snowkin extends Mob {
+  constructor(world) {
+    super(world, 'snowkin');
+    this.category = 'golem'; this.persistent = true;
+    this.maxHealth = this.health = 4;
+    this.w = 0.7; this.h = 1.9; this.eye = 1.7;
+    this.baseSpeed = 0.2;
+    this.xpValue = 0; this.noDrown = true;
+    this.throwT = 0; this.seeT = 0;
+  }
+  setTarget(e) { this.target = e; this.unseen = 0; if (!e) this.clearPath(); }
+  findFoe() {
+    const r = 10;
+    let best = null, bd = r * r;
+    for (const e of this.world.entitiesInBox(this.x - r, this.y - 4, this.z - r, this.x + r, this.y + 4, this.z + r)) {
+      if (e.dead || e.removed || !e.hurt || !e.hostile || e.category === 'golem') continue;
+      const d = this.distSqTo(e);
+      if (d < bd && this.canSee(e)) { bd = d; best = e; }
+    }
+    return best;
+  }
+  onRevenge(e) { if (e && e !== this && !e.dead && e.type !== 'player' && e.hostile) this.setTarget(e); }
+  aiTick(game) {
+    const t0 = this.target;
+    if (t0 && (t0.dead || t0.removed || this.distSqTo(t0) > 16 * 16)) this.setTarget(null);
+    if (!this.target && ++this.targetSearch % 10 === 0) { const f = this.findFoe(); if (f) this.setTarget(f); }
+    const t = this.target;
+    if (t) {
+      this.lookAtEntity(t, 2);
+      const d2 = this.distSqTo(t), see = this.canSee(t);
+      this.seeT = see ? this.seeT + 1 : 0;
+      if (d2 <= 100 && this.seeT >= 20) { this.clearPath(); this.stopMoving(); }
+      else if (--this.repath <= 0 || this.pathDone) { this.repath = 10; if (!this.navigateTo(t.x, t.y, t.z, 1.25, 24)) this.steerTo(t.x, t.y, t.z, 1.25); }
+      if (--this.throwT <= 0 && see && d2 <= 100) { this.throwT = 20; this.throwAt(game, t); }
+      return;
+    }
+    if (this.pathDone && Math.random() < 1 / 120) this.wander(8, 3, 1.0);
+    this.idleLook(game); this.keepWatching();
+  }
+  // a snowball, lobbed a little high so that it drops onto its mark
+  throwAt(game, t) {
+    const w = this.world, sb = new Thrown(w, this, 'snowball');
+    const sx = this.x, sy = this.y + this.eye - 0.1, sz = this.z;
+    sb.setPos(sx, sy, sz);
+    const dx = t.x - sx, dz = t.z - sz, dy = t.y + (t.eye || t.h * 0.85) - 1.1 - sy;
+    const lift = Math.sqrt(dx * dx + dz * dz) * 0.2;
+    let vx = dx, vy = dy + lift, vz = dz;
+    const l = Math.hypot(vx, vy, vz) || 1, sp = 1.6, spread = 12 * 0.0075;
+    vx = vx / l + (Math.random() * 2 - 1) * spread; vy = vy / l + (Math.random() * 2 - 1) * spread; vz = vz / l + (Math.random() * 2 - 1) * spread;
+    sb.vx = vx * sp; sb.vy = vy * sp; sb.vz = vz * sp;
+    game.spawnEntity(sb);
+    this.swing();
+    game.audio.play('bow', 0.5, 1 / (Math.random() * 0.4 + 0.8), this.x, this.y + 1.5, this.z);
+  }
+  temperature() {
+    const w = this.world;
+    if (w.dim === 1) return 2;
+    if (w.dim !== 0) return 0.5;
+    const b = BIOMES[w.biomeAt(Math.floor(this.x), Math.floor(this.z))];
+    return b ? b.temp : 0.5;
+  }
+  mobTick(game) {
+    const w = this.world, temp = this.temperature();
+    // the wet and the heat wear it away
+    if (this.age % 10 === 0) {
+      if (this.inWater || w.isRainingAt(Math.floor(this.x), Math.floor(this.y + 1), Math.floor(this.z))) this.hurt(1, { type: 'drown' });
+      else if (temp > 1) this.hurt(1, { type: 'melt' });
+    }
+    // and in the cold it leaves a trail of snow
+    if (temp < 0.8 && !this.dead) {
+      for (let l = 0; l < 4; l++) {
+        const x = Math.floor(this.x + ((l % 2) * 2 - 1) * 0.25), y = Math.floor(this.y), z = Math.floor(this.z + ((Math.floor(l / 2) % 2) * 2 - 1) * 0.25);
+        if (w.getBlock(x, y, z) === 0 && Behaviors.canStay(w, x, y, z, B.SNOW_LAYER, 0) && BT.opaque[w.getBlock(x, y - 1, z)]) w.setBlock(x, y, z, B.SNOW_LAYER, 0);
+      }
+    }
+  }
+  saySound() { return null; }
+  hurtSound() { return 'snowkin_hurt'; }
+  deathSound() { return 'snowkin_hurt'; }
+  dropLoot() { this.drop(ITEM_IDS.snowball, this.rnd(16), 0); }
+  render(er, rx, ry, rz, partial) {
+    const [sky, blk] = er.lightAt(this.x, this.y + 1, this.z);
+    const pose = this.quadPose(partial);
+    const hy = pose.head[1];
+    // the body turns a little after the head, the arms swing with it
+    const p = { head: pose.head, upper: [0, hy * 0.25, 0], rarm: [0, hy, 0], larm: [0, hy, 0] };
+    er.drawModel(MODELS.snowkin, 'snowkin', er.baseMatrix(this, rx, ry, rz, partial), p, er.entColor(this), sky, blk);
+  }
+}
+MOB_CLASSES.iron_keeper = IronKeeper;
+MOB_CLASSES.snowkin = Snowkin;
+
+const Golems = {
+  // a village raises an iron keeper now and then, wherever enough villagers have gathered
+  // (each cluster of three or more, within sixteen blocks of each other, counts as a village)
+  tickVillages(game) {
+    const w = game.world;
+    if (!w || w.menu || w.dim !== 0 || w.time % 100 !== 37) return;
+    const folk = w.entities.filter((e) => e.type === 'villager' && !e.dead && !e.removed);
+    if (folk.length < 3) return;
+    const seen = new Set();
+    for (const v of folk) {
+      if (seen.has(v)) continue;
+      const near = folk.filter((o) => Math.abs(o.x - v.x) <= 16 && Math.abs(o.z - v.z) <= 16 && Math.abs(o.y - v.y) <= 8);
+      for (const o of near) seen.add(o);
+      if (near.length < 3) continue;
+      let cx = 0, cy = 0, cz = 0;
+      for (const o of near) { cx += o.x; cy += o.y; cz += o.z; }
+      cx /= near.length; cy /= near.length; cz /= near.length;
+      const keepers = w.entities.filter((e) => e.type === 'iron_keeper' && !e.dead && !e.removed && (e.x - cx) ** 2 + (e.z - cz) ** 2 < 32 * 32).length;
+      if (keepers >= 1 + Math.floor(near.length / 8)) continue;
+      if (Math.random() >= 1 / 50) continue;
+      this.raiseKeeper(game, cx, cy, cz);
+    }
+  },
+  raiseKeeper(game, cx, cy, cz) {
+    const w = game.world;
+    for (let i = 0; i < 10; i++) {
+      const x = Math.floor(cx + (Math.random() * 2 - 1) * 8), z = Math.floor(cz + (Math.random() * 2 - 1) * 8);
+      for (let y = Math.floor(cy) + 6; y >= Math.floor(cy) - 6; y--) {
+        if (!this.roomAt(w, x, y, z)) continue;
+        const k = game.spawnMob('iron_keeper', x + 0.5, y, z + 0.5);
+        if (k) k.home = [Math.floor(cx), Math.floor(cz), Math.floor(cy)];
+        return k;
+      }
+    }
+    return null;
+  },
+  // firm ground underfoot and a clear space three blocks high and three across
+  roomAt(w, x, y, z) {
+    if (y < 1 || y >= CH_H - 3 || !w.isLoaded(x - 1, z - 1) || !w.isLoaded(x + 1, z + 1)) return false;
+    const below = w.getBlock(x, y - 1, z);
+    if (!BT.solid[below] || !BT.opaque[below]) return false;
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (let dy = 0; dy < 3; dy++) {
+      const id = w.getBlock(x + dx, y + dy, z + dz);
+      if (BT.solid[id] || BT.fluid[id]) return false;
+    }
+    return true;
+  },
+  // homes for villagers near a spot: each bed is one, and so is every other door
+  villageRoom(w, x, y, z) {
+    let beds = 0, doors = 0, folk = 0;
+    const X = Math.floor(x), Y = Math.floor(y), Z = Math.floor(z);
+    for (let dx = -16; dx <= 16; dx++) for (let dz = -16; dz <= 16; dz++) {
+      if (!w.isLoaded(X + dx, Z + dz)) continue;
+      for (let dy = -8; dy <= 8; dy++) {
+        const id = w.getBlock(X + dx, Y + dy, Z + dz);
+        if (id === B.BED) { if (w.getMeta(X + dx, Y + dy, Z + dz) & 4) beds++; }
+        else if (id === B.DOOR_WOOD && !(w.getMeta(X + dx, Y + dy, Z + dz) & 8)) doors++;
+      }
+    }
+    for (const e of w.entitiesInBox(X - 16, Y - 8, Z - 16, X + 17, Y + 9, Z + 17)) if (e.type === 'villager' && !e.dead) folk++;
+    return folk < beds + Math.floor(doors / 2);
+  },
+  // a pumpkin set on a body of iron or of snow: it wakes
+  checkBuild(game, x, y, z) {
+    const w = game.world, at = (xx, yy, zz) => w.getBlock(xx, yy, zz);
+    const clear = (xx, yy, zz) => { const id = at(xx, yy, zz); return id === 0 || (BT.replaceable[id] && !BT.fluid[id]); };
+    if (at(x, y - 1, z) === B.SNOW && at(x, y - 2, z) === B.SNOW) {
+      for (let k = 0; k < 3; k++) this.crumble(game, x, y - k, z);
+      const s = game.spawnMob('snowkin', x + 0.5, y - 2 + 0.05, z + 0.5);
+      if (s) { s.persistent = true; game.achieve('snowkin'); }
+      return true;
+    }
+    if (at(x, y - 1, z) !== B.IRON_BLOCK || at(x, y - 2, z) !== B.IRON_BLOCK) return false;
+    for (const [ax, az] of [[1, 0], [0, 1]]) {
+      if (at(x + ax, y - 1, z + az) !== B.IRON_BLOCK || at(x - ax, y - 1, z - az) !== B.IRON_BLOCK) continue;
+      if (!clear(x + ax, y - 2, z + az) || !clear(x - ax, y - 2, z - az) || !clear(x + ax, y, z + az) || !clear(x - ax, y, z - az)) continue;
+      for (const [bx, by, bz] of [[x, y, z], [x, y - 1, z], [x + ax, y - 1, z + az], [x - ax, y - 1, z - az], [x, y - 2, z]]) this.crumble(game, bx, by, bz);
+      const k = game.spawnMob('iron_keeper', x + 0.5, y - 2 + 0.05, z + 0.5);
+      if (k) {
+        k.playerMade = true; k.persistent = true;
+        // facing the way its arms were not: out of the T
+        k.yaw = k.bodyYaw = k.pbodyYaw = k.headYaw = k.pheadYaw = k.pyaw = ax ? 0 : Math.PI / 2;
+        game.audio.play('keeper_wake', 1, 1, x + 0.5, y - 1, z + 0.5);
+        game.achieve('keeper');
+      }
+      return true;
+    }
+    return false;
+  },
+  crumble(game, x, y, z) {
+    const w = game.world, id = w.getBlock(x, y, z), m = w.getMeta(x, y, z);
+    w.setBlock(x, y, z, 0, 0);
+    if (id && game.particles) game.particles.breakBlock(x, y, z, id, m);
+  },
+};
+
 // ---- src/main.js
 // ---------------------------------------------------------------------------
 // Blocklands: the game shell. Main loop, camera, world lifecycle & saving,
@@ -29673,7 +30814,7 @@ const MENU_SEEDS = [1337, 20111118, 404, 8675309, 31415, 777, 2468, 99, 12345, 4
 // blocks that receive random ticks
 const RANDOM_TICK = new Uint8Array(256);
 for (const id of [B.GRASS, B.MYCELIUM, B.SAPLING, B.WHEAT, B.CARROTS, B.POTATOES, B.FARMLAND, B.SUGAR_CANE, B.CACTUS, B.LEAVES, B.ICE, B.SNOW_LAYER,
-  B.EMBER_ORE_LIT, B.BRAMBLE, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.GLOWSHROOM, B.FIRE, B.WATER, B.BLOODCAP, B.PORTAL, B.GLOW_VINE, B.GLOW_VINE_BERRIES, B.STARVINE]) if (id !== undefined) RANDOM_TICK[id] = 1;
+  B.EMBER_ORE_LIT, B.BRAMBLE, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.GLOWSHROOM, B.FIRE, B.WATER, B.BLOODCAP, B.PORTAL, B.GLOW_VINE, B.GLOW_VINE_BERRIES, B.STARVINE, B.MELON_STEM, B.PUMPKIN_STEM]) if (id !== undefined) RANDOM_TICK[id] = 1;
 
 // ore values for the prospector's rod
 const PROSPECT = (() => {
@@ -30421,6 +31562,7 @@ class Game {
     Circuits.tickPlates(this);
     Hush.tick(this);
     Wyrm.tick(this);
+    Golems.tickVillages(this);
     w.updateStreaming(p.x, p.z, this.settings.renderDistance);
     // held item name popup
     const h = p.inventory.held();
@@ -30625,6 +31767,8 @@ class Game {
       for (const te of c.tiles.values()) {
         if (te.type === 'furnace') this.tickFurnace(te, c);
         else if (te.type === 'brewing') Brewing.tick(this, te, c);
+        else if (te.type === 'hopper') Machines.tickHopper(this, te);
+        else if (te.type === 'gauge') Circuits.tickGauge(this, te);
         else if (te.type === 'enchanting') this.tickEnchantTable(te);
         else if (te.type === 'spawner') { const dx = te.x + 0.5 - p.x, dy = te.y + 0.5 - p.y, dz = te.z + 0.5 - p.z; if (dx * dx + dy * dy + dz * dz < 256) this.tickSpawner(te); }
       }

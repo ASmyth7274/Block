@@ -828,6 +828,32 @@ defBlock(176, 'starvine', Object.assign({}, glowVineBase, {
   name: 'Starvine', tex: (m) => (m & 1) ? 'starvine_fruit' : 'starvine', light: 6, itemSprite: 'starvine',
   drops: (m) => (m & 1) ? [[ITEM_IDS.starfruit, 1, 0]] : [],
 }));
+// --- farming and machines ---------------------------------------------------------
+// melon and pumpkin stems grow on farmland, and once full grown set a fruit on the ground beside them
+const stemBase = Object.assign({}, plantBase, { render: R.CROSS, itemMetaMask: 0, select: (m) => [0.375, 0, 0.375, 0.625, 0.125 + Math.min(7, m & 7) * 0.1, 0.625] });
+defBlock(177, 'melon_stem', Object.assign({}, stemBase, { name: 'Melon Stem', tex: (m) => 'stem_' + Math.min(3, (m & 7) >> 1), itemSprite: 'melon_seeds', drops: (m, rng) => [[ITEM_IDS.melon_seeds, (m & 7) >= 7 ? 1 + rng.nextInt(2) : 1, 0]] }));
+defBlock(178, 'pumpkin_stem', Object.assign({}, stemBase, { name: 'Pumpkin Stem', tex: (m) => 'stem_' + Math.min(3, (m & 7) >> 1), itemSprite: 'pumpkin_seeds', drops: (m, rng) => [[ITEM_IDS.pumpkin_seeds, (m & 7) >= 7 ? 1 + rng.nextInt(2) : 1, 0]] }));
+// an ember gauge: reads how full the container behind it is (or the power behind it), and compares it
+// with what comes in from the sides. Bits 0-1: facing; bit 2: subtract mode; bits 3-6: the output level
+defBlock(182, 'gauge', Object.assign({}, circuitBase, {
+  name: 'Ember Gauge', render: R.CIRCUIT, tex: 'gauge_top', sound: 'wood', itemSprite: 'item_gauge', select: () => box16(0, 0, 0, 16, 2, 16),
+  collide: () => [box16(0, 0, 0, 16, 2, 16)], solid: true, tileEntity: 'gauge', drops: () => [[ITEM_IDS.gauge, 1, 0]],
+}));
+// a hopper: a funnel with a little inventory that pulls in from above and passes things on
+// through its spout. Bits 0-2: the way the spout points (down or a side); bit 3: locked by power
+const HOPPER_SPOUT = { 0: [6, 0, 6, 10, 4, 10], 2: [6, 4, 0, 10, 8, 4], 3: [6, 4, 12, 10, 8, 16], 4: [0, 4, 6, 4, 8, 10], 5: [12, 4, 6, 16, 8, 10] };
+const HOPPER_FLOOR_TEX = ['hopper_outside', 'hopper_inside', 'hopper_outside', 'hopper_outside', 'hopper_outside', 'hopper_outside'];
+defBlock(179, 'hopper', {
+  name: 'Hopper', render: R.MODEL, tex: 'hopper_outside', opaque: false, opacity: 0, hardness: 3, resistance: 24, tool: 'pickaxe', needsTool: true, sound: 'metal',
+  itemMetaMask: 0, itemSprite: 'item_hopper', tileEntity: 'hopper',
+  model: (m) => [{ b: [0, 10, 0, 16, 11, 16], tex: HOPPER_FLOOR_TEX }, { b: [0, 11, 0, 16, 16, 2] }, { b: [0, 11, 14, 16, 16, 16] }, { b: [0, 11, 2, 2, 16, 14] }, { b: [14, 11, 2, 16, 16, 14] },
+    { b: [4, 4, 4, 12, 10, 12] }, { b: HOPPER_SPOUT[m & 7] || HOPPER_SPOUT[0] }],
+  collide: () => [[0, 0.625, 0, 1, 1, 1], [0.25, 0.25, 0.25, 0.75, 0.625, 0.75]], select: () => [0, 0.25, 0, 1, 1, 1],
+});
+// droppers and dispensers: bits 0-2 the way they face (any of six); bit 3 set while powered
+const machineTex = (front, frontV) => (m, f) => f === (m & 7) ? ((m & 7) <= 1 ? frontV : front) : f <= 1 ? 'furnace_top' : ((m & 7) <= 1 ? 'furnace_top' : 'furnace_side');
+defBlock(180, 'dropper', { name: 'Dropper', tex: machineTex('dropper_front', 'dropper_front_vertical'), hardness: 3.5, tool: 'pickaxe', needsTool: true, itemMetaMask: 0, tileEntity: 'dispenser' });
+defBlock(181, 'dispenser', { name: 'Dispenser', tex: machineTex('dispenser_front', 'dispenser_front_vertical'), hardness: 3.5, tool: 'pickaxe', needsTool: true, itemMetaMask: 0, tileEntity: 'dispenser' });
 // infested bricks: something lives inside
 defBlock(151, 'infested_bricks', {
   name: (m) => ['Stone Bricks', 'Mossy Stone Bricks', 'Cracked Stone Bricks', 'Chiseled Stone Bricks'][m & 3],

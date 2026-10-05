@@ -785,29 +785,142 @@ const Skins = (() => {
   };
   for (const m in ARMOR_COLORS) { S['armor_' + m] = armorSkin(m, ARMOR_COLORS[m]); S['legs_' + m] = legSkin(m, ARMOR_COLORS[m]); }
 
+  // ------------------------------------------------------------ golems
+  // the iron keeper: riveted plates of pale iron, ivy climbing over a shoulder and an arm,
+  // amber eyes glowing under a heavy brow (a 128x64 skin)
+  S.iron_keeper = (() => {
+    const s = new Skin(128, 64), r = rng('iron_keeper');
+    const P = ['#d3cdc2', '#c9c2b6', '#bdb6a9', '#c5beb2', '#d9d4ca'].map(C);
+    const seam = C('#958e82'), dark = C('#827b70'), rivet = C('#efebe3'), shadow = C('#6f695f');
+    const iron = (k) => vary(r, P[r.nextInt(P.length)], 0.05).map((v) => v * (k || 1));
+    // head 8x10x8
+    s.box(0, 0, 8, 10, 8, (f, x, y, fw, fh) => {
+      if (f === 'front') {
+        if (y === 4 && (x === 1 || x === 2 || x === 5 || x === 6)) return x === 2 || x === 5 ? C('#ffcf5a') : C('#f29a24');
+        if (y === 5 && (x === 1 || x === 2 || x === 5 || x === 6)) return C('#3a3129');
+        if (y === 3 && x >= 1 && x <= 6) return vary(r, shadow, 0.05);
+        if (y === 8 && x >= 2 && x <= 5) return vary(r, seam, 0.05);
+        if (y === 7 && (x === 0 || x === 7)) return rivet;
+        return iron(y < 3 ? 1.03 : 1);
+      }
+      if ((f === 'left' || f === 'right') && x === Math.floor(fw / 2) && y === 5) return rivet;
+      if (f !== 'top' && f !== 'bottom' && y === fh - 1) return vary(r, seam, 0.05);
+      if (f === 'back' && (x === 3 || x === 4) && y > 1) return vary(r, seam, 0.04);
+      return iron(f === 'top' ? 1.05 : f === 'bottom' ? 0.8 : 1);
+    });
+    // the brow 8x2x2
+    s.box(32, 0, 8, 2, 2, (f, x) => (f === 'front' && (x === 0 || x === 7)) ? rivet : iron(0.9));
+    // torso 18x13x11: a chest of two plates
+    s.box(0, 18, 18, 13, 11, (f, x, y, fw, fh) => {
+      if (f === 'front') {
+        if ((x === 1 || x === 16) && (y === 1 || y === 11)) return rivet;
+        if (x === 0 || x === 17 || y === 0 || y === 12) return vary(r, seam, 0.05);
+        if (x === 8 || x === 9) return vary(r, x === 8 ? seam : dark, 0.05);
+        return iron(y < 4 ? 1.04 : 1);
+      }
+      if (f === 'top') return iron(1.06);
+      if (f === 'bottom') return iron(0.75);
+      if (y === 6) return vary(r, seam, 0.05);
+      if (f === 'back' && (x === 2 || x === fw - 3) && (y === 2 || y === 10)) return rivet;
+      return iron();
+    });
+    // waist 10x4x6
+    s.box(0, 42, 10, 4, 6, (f, x, y) => (f === 'front' && y === 1 && (x === 1 || x === 8)) ? rivet : iron(0.88));
+    // arms 4x30x6: banded at the elbow and wrist, big flat hands
+    s.box(64, 0, 4, 30, 6, (f, x, y, fw, fh) => {
+      if (f === 'bottom') return iron(0.7);
+      if (f === 'top') return iron(1.05);
+      if (y === 9 || y === 19) return vary(r, C('#e2ddd4'), 0.04);
+      if (y === 10 || y === 20) return vary(r, dark, 0.05);
+      if (y >= 25 && f === 'front' && (x === 1 || x === 2) && y < 29) return vary(r, seam, 0.05);
+      return iron(y >= 24 ? 0.94 : 1);
+    });
+    // legs 6x15x5: a knee plate, heavy feet
+    s.box(88, 0, 6, 15, 5, (f, x, y, fw, fh) => {
+      if (f === 'bottom') return vary(r, shadow, 0.05);
+      if (f === 'top') return iron(0.9);
+      if (y === 6) return vary(r, seam, 0.05);
+      if (f === 'front' && y === 4 && (x === 1 || x === 4)) return rivet;
+      return iron(y >= fh - 3 ? 0.88 : 1);
+    });
+    // ivy: over the left shoulder and down the chest, and twining round the right forearm
+    const ivy = [C('#4a7a26'), C('#3a661e'), C('#5c9030'), C('#6aa238')];
+    const vine = (x0, y0, x1, y1, n, bias) => {
+      let x = x0, y = y0;
+      for (let i = 0; i < n; i++) {
+        s.set(x, y, vary(r, ivy[r.nextInt(2)], 0.1));
+        if (r.nextInt(3) === 0) { const lx = x + (r.nextInt(2) ? 1 : -1); if (lx >= x0 - 3 && lx <= x1) s.set(lx, y, vary(r, ivy[2 + r.nextInt(2)], 0.1)); }
+        y++; if (r.nextInt(3) === 0) x = Math.max(x0 - 2, Math.min(x1, x + bias));
+        if (y > y1) break;
+      }
+    };
+    vine(11 + 13, 18 + 11, 11 + 17, 18 + 23, 13, 1);      // the chest front, its left side (the viewer's right)
+    vine(11 + 18 + 2, 18 + 11, 11 + 18 + 9, 18 + 23, 10, 1); // and round its left side
+    for (let k = 0; k < 9; k++) s.set(11 + r.nextInt(5), 18 + 5 + r.nextInt(6), vary(r, ivy[r.nextInt(4)], 0.1)); // over the shoulder (top face: its left is the low side)
+    vine(64 + 6 + 1, 6 + 12, 64 + 6 + 3, 6 + 24, 12, 1);  // the arm's front
+    return s;
+  })();
+  // the snowkin: a pumpkin head, two snowballs and coal buttons (a 64x64 skin)
+  S.snowkin = (() => {
+    const s = new Skin(64, 64), r = rng('snowkin');
+    const O = ['#e3902a', '#d8841f', '#ec9c34'].map(C), rib = C('#b8661a'), cut = C('#2c1606');
+    s.box(0, 0, 8, 8, 8, (f, x, y) => {
+      if (f === 'top') { if ((x === 3 || x === 4) && (y === 3 || y === 4)) return vary(r, C('#5a4a1e'), 0.08); return vary(r, (x + y) % 3 === 0 ? rib : O[r.nextInt(3)], 0.05); }
+      if (f === 'front') {
+        if ((y === 2 && (x === 2 || x === 5)) || (y === 3 && (x >= 1 && x <= 2 || x >= 5 && x <= 6))) return cut;
+        if ((y === 5 && x >= 1 && x <= 6 && x !== 3) || (y === 6 && x >= 2 && x <= 5)) return cut;
+      }
+      return vary(r, x % 3 === 0 ? rib : O[r.nextInt(3)], 0.05);
+    });
+    const SN = ['#f7faff', '#eff4fc', '#e6eef9', '#dde7f5'].map(C);
+    const snow = (k) => vary(r, SN[r.nextInt(SN.length)], 0.02).map((v) => Math.min(255, v * (k || 1)));
+    s.box(0, 16, 10, 10, 10, (f, x, y) => {
+      if (f === 'front' && (x === 4 || x === 5) && (y === 2 || y === 3 || y === 6 || y === 7)) return (x === 4 && (y === 2 || y === 6)) ? C('#4a4a50') : C('#222226');
+      return snow(f === 'bottom' ? 0.9 : 1);
+    });
+    s.box(0, 36, 12, 12, 12, (f, x, y, fw, fh) => snow(f === 'bottom' ? 0.82 : y === fh - 1 ? 0.92 : 1));
+    s.box(32, 0, 10, 2, 2, () => vary(r, r.nextInt(3) ? C('#6e4c28') : C('#553a1c'), 0.08));
+    return s;
+  })();
+
   // ------------------------------------------------------------ atlas
-  const SLOT_W = 64, SLOT_H = 32, COLS = 8;
+  // skins are packed on a grid of 64x32 cells; a bigger skin (a golem's, say) takes a block of cells
+  const SLOT_W = 64, SLOT_H = 32, COLS = 8, ROWS = 16;
   const names = Object.keys(S);
-  const ROWS = Math.ceil((names.length + 4) / COLS);
-  const AW = SLOT_W * COLS, AH = 512;
+  const AW = SLOT_W * COLS, AH = SLOT_H * ROWS;
   const atlas = new Uint8ClampedArray(AW * AH * 4);
-  const slots = {};
+  const slots = {}, used = new Uint8Array(COLS * ROWS);
+  function place(skin) {
+    const cw = Math.ceil(skin.w / SLOT_W), ch = Math.ceil(skin.h / SLOT_H);
+    for (let r = 0; r + ch <= ROWS; r++) for (let c = 0; c + cw <= COLS; c++) {
+      let free = true;
+      for (let j = 0; j < ch && free; j++) for (let i = 0; i < cw && free; i++) if (used[(r + j) * COLS + c + i]) free = false;
+      if (!free) continue;
+      for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++) used[(r + j) * COLS + c + i] = 1;
+      return r * COLS + c;
+    }
+    console.warn('Skin atlas full');
+    return 0;
+  }
   function blit(name, skin, idx) {
     const ox = (idx % COLS) * SLOT_W, oy = Math.floor(idx / COLS) * SLOT_H;
-    for (let y = 0; y < skin.h && y < SLOT_H; y++) for (let x = 0; x < skin.w && x < SLOT_W; x++) {
+    for (let y = 0; y < skin.h && oy + y < AH; y++) for (let x = 0; x < skin.w && ox + x < AW; x++) {
       const si = (y * skin.w + x) * 4, di = ((oy + y) * AW + ox + x) * 4;
       atlas[di] = skin.d[si]; atlas[di + 1] = skin.d[si + 1]; atlas[di + 2] = skin.d[si + 2]; atlas[di + 3] = skin.d[si + 3];
     }
     slots[name] = { u: ox / AW, v: oy / AH, du: 1 / AW, dv: 1 / AH, idx };
   }
-  names.forEach((n, i) => blit(n, S[n], i));
-  void ROWS;
+  // the big ones first, so they find room
+  names.slice().sort((a, b) => S[b].w * S[b].h - S[a].w * S[a].h).forEach((n) => blit(n, S[n], place(S[n])));
   // custom player skin slot (loaded from a PNG)
-  const customIdx = names.length;
+  const customIdx = place(new Skin());
   function setCustom(imgData) {
     const s = new Skin();
     for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) { const i = (y * imgData.width + x) * 4; s.set(x, y, [imgData.data[i], imgData.data[i + 1], imgData.data[i + 2]], imgData.data[i + 3]); }
     blit('custom', s, customIdx);
   }
-  return { S, slots, atlas, AW, AH, setCustom, names };
+  // the rows below the skins are free for other art (paintings, sign glyphs)
+  let lastRow = 0; for (let i = 0; i < used.length; i++) if (used[i]) lastRow = Math.floor(i / COLS);
+  const top = (lastRow + 1) * SLOT_H;
+  return { S, slots, atlas, AW, AH, setCustom, names, top };
 })();

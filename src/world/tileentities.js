@@ -79,8 +79,29 @@ class HushTE extends TileEntity {
   load(d) { this.wild = !!d.wild; }
 }
 
+// a hopper's five slots, and how long until it moves the next item
+class HopperTE extends TileEntity {
+  constructor(x, y, z) { super('hopper', x, y, z); this.items = new Array(5).fill(null); this.cool = 0; }
+  save() { return Object.assign(super.save(), { items: this.items.map((s) => s ? s.toJSON() : null), cool: this.cool }); }
+  load(d) { if (d.items) this.items = d.items.map((o) => o ? ItemStack.fromJSON(o) : null); while (this.items.length < 5) this.items.push(null); this.cool = d.cool || 0; }
+}
+// a dropper's or dispenser's nine slots
+class DispenserTE extends TileEntity {
+  constructor(x, y, z) { super('dispenser', x, y, z); this.items = new Array(9).fill(null); }
+  save() { return Object.assign(super.save(), { items: this.items.map((s) => s ? s.toJSON() : null) }); }
+  load(d) { if (d.items) this.items = d.items.map((o) => o ? ItemStack.fromJSON(o) : null); while (this.items.length < 9) this.items.push(null); }
+}
+
+// a gauge only needs to be ticked, to watch the container behind it
+class GaugeTE extends TileEntity {
+  constructor(x, y, z) { super('gauge', x, y, z); this.t = 0; }
+}
+
 function makeTileEntity(type, x, y, z) {
   switch (type) {
+    case 'gauge': return new GaugeTE(x, y, z);
+    case 'hopper': return new HopperTE(x, y, z);
+    case 'dispenser': return new DispenserTE(x, y, z);
     case 'sensor': case 'shrieker': return new HushTE(type, x, y, z);
     case 'enchanting': return new EnchantTE(x, y, z);
     case 'moving': return new MovingTE(x, y, z);

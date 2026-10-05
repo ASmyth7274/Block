@@ -48,7 +48,7 @@ const Behaviors = (() => {
         for (const [dx, dz] of H4) if (w.getBlock(x + dx, y - 1, z + dz) === B.WATER || w.getBlock(x + dx, y, z + dz) === B.WATER) return true;
         return false;
       }
-      case B.WHEAT: case B.CARROTS: case B.POTATOES: return below === B.FARMLAND;
+      case B.WHEAT: case B.CARROTS: case B.POTATOES: case B.MELON_STEM: case B.PUMPKIN_STEM: return below === B.FARMLAND;
       case B.BLOODCAP: return below === B.BONESAND;
       case B.LILY_PAD: return below === B.WATER || below === B.ICE;
       case B.TORCH: {
@@ -67,7 +67,7 @@ const Behaviors = (() => {
       case B.ROPE: { const a = w.getBlock(x, y + 1, z); return a === B.ROPE || BT.solid[a]; }
       case B.SIGN: return BT.solid[below];
       case B.EMBER_TORCH: case B.EMBER_TORCH_OFF: return canStay(w, x, y, z, B.TORCH, meta);
-      case B.EMBER_WIRE: case B.RELAY: case B.RELAY_ON: return isSolidTop(w, x, y - 1, z);
+      case B.EMBER_WIRE: case B.RELAY: case B.RELAY_ON: case B.GAUGE: return isSolidTop(w, x, y - 1, z);
       case B.RAIL: case B.BOOSTER_RAIL: case B.DETECTOR_RAIL: return Rails.canStay(w, x, y, z, id, meta);
       case B.STONE_PLATE: case B.WOOD_PLATE: return isSolidTop(w, x, y - 1, z) || below === B.FENCE || below === B.BRIMSTONE_FENCE;
       case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: {
@@ -130,7 +130,8 @@ const Behaviors = (() => {
         return m;
       }
       case B.FURNACE: case B.CHEST: case B.PUMPKIN: case B.JACK_O_LANTERN: return HFACE_OPP[pf];
-      case B.PISTON: case B.STICKY_PISTON: {
+      case B.HOPPER: return Machines.hopperFacing(f);
+      case B.PISTON: case B.STICKY_PISTON: case B.DROPPER: case B.DISPENSER: {
         if (p.pitch < -0.85) return 1;
         if (p.pitch > 0.85) return 0;
         return HFACE[HFACE_OPP[pf]];
@@ -215,6 +216,7 @@ const Behaviors = (() => {
     game.audio.playBlock(d.sound, 'place', x + 0.5, y + 0.5, z + 0.5);
     if (!player.creative) player.inventory.decrementHeld(1);
     game.onBlockPlaced(id, meta, x, y, z);
+    if ((id === B.PUMPKIN || id === B.JACK_O_LANTERN) && typeof Golems !== 'undefined') Golems.checkBuild(game, x, y, z);
     return true;
   }
   // items that place blocks (seeds, doors, beds, buckets...)
@@ -275,15 +277,16 @@ const Behaviors = (() => {
       if (!player.creative) player.inventory.decrementHeld(1);
       return true;
     }
-    if (def.places === 'wire' || def.places === 'relay') {
+    if (def.places === 'wire' || def.places === 'relay' || def.places === 'gauge') {
       let x = tx, y = ty, z = tz;
       if (BT.replaceable[target] && !BT.fluid[target]) { x = hit.x; y = hit.y; z = hit.z; }
       const cur = w.getBlock(x, y, z);
       if (!BT.replaceable[cur] || BT.fluid[cur] || cur === B.EMBER_WIRE) return false;
-      const bid = def.places === 'wire' ? B.EMBER_WIRE : B.RELAY;
+      const bid = def.places === 'wire' ? B.EMBER_WIRE : def.places === 'gauge' ? B.GAUGE : B.RELAY;
       if (!canStay(w, x, y, z, bid, 0)) return false;
-      w.setBlock(x, y, z, bid, bid === B.RELAY ? playerFacing(player) : 0);
-      game.audio.playBlock(bid === B.RELAY ? 'wood' : 'stone', 'place', x + 0.5, y + 0.5, z + 0.5);
+      w.setBlock(x, y, z, bid, bid !== B.EMBER_WIRE ? playerFacing(player) : 0);
+      if (bid === B.GAUGE) w.scheduleTick(x, y, z, 2, B.GAUGE);
+      game.audio.playBlock(bid !== B.EMBER_WIRE ? 'wood' : 'stone', 'place', x + 0.5, y + 0.5, z + 0.5);
       if (!player.creative) player.inventory.decrementHeld(1);
       return true;
     }
@@ -403,6 +406,7 @@ const Behaviors = (() => {
     else if (id === B.BRAMBLE) { if (m < 3) { w.setMeta(x, y, z, 3); used = true; } }
     else if (id === B.GLOW_VINE) { w.setBlock(x, y, z, B.GLOW_VINE_BERRIES, 0); used = true; }
     else if (id === B.STARVINE && !(m & 1)) { w.setMeta(x, y, z, 1); used = true; }
+    else if ((id === B.MELON_STEM || id === B.PUMPKIN_STEM) && (m & 7) < 7) { w.setMeta(x, y, z, Math.min(7, (m & 7) + 2 + Math.floor(Math.random() * 3))); used = true; }
     else if (id === B.GRASS) {
       used = true;
       for (let i = 0; i < 64; i++) {
@@ -431,6 +435,8 @@ const Behaviors = (() => {
     const id = w.getBlock(x, y, z), m = w.getMeta(x, y, z);
     switch (id) {
       case B.CRAFTING_TABLE: game.openScreen(new CraftingScreen(game, x, y, z)); return true;
+      case B.HOPPER: { const te = w.getTile(x, y, z); if (te) game.openScreen(new HopperScreen(game, te)); return true; }
+      case B.DROPPER: case B.DISPENSER: { const te = w.getTile(x, y, z); if (te) game.openScreen(new DispenserScreen(game, te, id === B.DROPPER ? 'Dropper' : 'Dispenser')); return true; }
       case B.FURNACE: case B.FURNACE_LIT: { const te = w.getTile(x, y, z); if (te) game.openScreen(new FurnaceScreen(game, te)); return true; }
       case B.CHEST: {
         const te = w.getTile(x, y, z);
@@ -462,7 +468,7 @@ const Behaviors = (() => {
       case B.RUNESTONE: game.useRunestone(x, y, z); return true;
       case B.ENCHANTING_TABLE: game.openScreen(new EnchantScreen(game, x, y, z)); return true;
       case B.BREWING_STAND: { const te = w.getTile(x, y, z); if (te) game.openScreen(new BrewingScreen(game, te)); return true; }
-      case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: case B.RELAY: case B.RELAY_ON: case B.NOTE_BLOCK:
+      case B.LEVER: case B.STONE_BUTTON: case B.WOOD_BUTTON: case B.RELAY: case B.RELAY_ON: case B.NOTE_BLOCK: case B.GAUGE:
         return Circuits.use(game, x, y, z, id);
       case B.GLOW_VINE_BERRIES:
         w.setBlock(x, y, z, B.GLOW_VINE, 0);
@@ -591,6 +597,11 @@ const Behaviors = (() => {
     if (typeof Circuits !== 'undefined' && Circuits.IS[id] && !w.menu) Circuits.changed(w, x, y, z);
     if (id === B.RAIL && !w.menu) Rails.neighbourChanged(w, x, y, z, id);
     if (id === B.FARMLAND && BT.solid[w.getBlock(x, y + 1, z)] && BT.opaque[w.getBlock(x, y + 1, z)]) w.setBlock(x, y, z, B.DIRT, 0);
+    // a stem whose fruit has been picked straightens up again
+    if ((id === B.MELON_STEM || id === B.PUMPKIN_STEM) && (meta & 8)) {
+      const [dx, dz] = H4[(meta >> 4) & 3];
+      if (w.getBlock(x + dx, y, z + dz) !== (id === B.MELON_STEM ? B.MELON : B.PUMPKIN)) w.setMeta(x, y, z, meta & 7, 4);
+    }
   }
 
   // ---------------------------------------------------------------- scheduled ticks
@@ -603,6 +614,7 @@ const Behaviors = (() => {
     if (BLOCKS[id].gravity) { fallCheck(w, x, y, z, id, m); return; }
     if (id === B.WATER || id === B.LAVA) { flow(w, x, y, z, id, m); return; }
     if (id === B.FIRE) { fireTick(w, x, y, z, m); return; }
+    if (id === B.DROPPER || id === B.DISPENSER) { if (w.game) Machines.fire(w.game, x, y, z, id); return; }
     if (id === B.WYRM_EGG) {
       if ((m & 3) !== 3 || !w.game) return;
       const g = w.game;
@@ -719,15 +731,18 @@ const Behaviors = (() => {
     w.setBlock(x, y, z, id, nl);
     w.scheduleTick(x, y, z, tickRate(id, w));
   }
+  // the open sides nearest to a way down (all of them, on flat ground with no drop in reach)
   function flowDirections(w, x, y, z, id) {
-    const cost = [1000, 1000, 1000, 1000];
+    const cost = [1000, 1000, 1000, 1000], open = [false, false, false, false];
+    let min = 1000;
     for (let i = 0; i < 4; i++) {
       const nx = x + H4[i][0], nz = z + H4[i][1];
       if (blocksFlow(w, nx, y, nz) || (w.getBlock(nx, y, nz) === id && w.getMeta(nx, y, nz) === 0)) continue;
+      open[i] = true;
       cost[i] = !blocksFlow(w, nx, y - 1, nz) ? 0 : slopeDistance(w, nx, y, nz, 1, i, id);
+      if (cost[i] < min) min = cost[i];
     }
-    const min = Math.min(...cost);
-    return cost.map((c) => c === min && c < 1000);
+    return cost.map((c, i) => open[i] && c === min);
   }
   function slopeDistance(w, x, y, z, depth, from, id) {
     let best = 1000;
@@ -802,6 +817,22 @@ const Behaviors = (() => {
         return;
       }
       case B.BLOODCAP: if (m < 3 && w.rng.nextInt(10) === 0) w.setMeta(x, y, z, m + 1, 4); return;
+      // stems grow like any crop; full grown, they set a melon or a pumpkin on the ground beside them
+      case B.MELON_STEM: case B.PUMPKIN_STEM: {
+        if (w.getLightLevel(x, y + 1, z) < 9) return;
+        const wet = w.getBlock(x, y - 1, z) === B.FARMLAND && w.getMeta(x, y - 1, z) > 0, chance = wet ? 5 : 12;
+        if ((m & 7) < 7) { if (w.rng.nextInt(chance) === 0) w.setMeta(x, y, z, (m & 7) + 1, 4); return; }
+        const fruit = id === B.MELON_STEM ? B.MELON : B.PUMPKIN;
+        for (const [dx, dz] of H4) if (w.getBlock(x + dx, y, z + dz) === fruit) return;
+        if (w.rng.nextInt(chance) !== 0) return;
+        const k = w.rng.nextInt(4), [dx, dz] = H4[k], below = w.getBlock(x + dx, y - 1, z + dz);
+        if (w.getBlock(x + dx, y, z + dz) === 0 && (below === B.FARMLAND || below === B.DIRT || below === B.GRASS || below === B.PODZOL)) {
+          w.setBlock(x + dx, y, z + dz, fruit, fruit === B.PUMPKIN ? w.rng.nextInt(4) : 0);
+          // the stem bends over to hold it
+          w.setMeta(x, y, z, 7 | 8 | (k << 4), 4);
+        }
+        return;
+      }
       // starvines lengthen slowly in the dark, and now and then a starfruit swells on one
       case B.STARVINE: {
         if (!(m & 1) && w.rng.nextInt(30) === 0) { w.setMeta(x, y, z, m | 1, 4); return; }

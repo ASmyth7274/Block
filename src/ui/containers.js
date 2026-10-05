@@ -539,6 +539,41 @@ class ChestScreen extends ContainerScreen {
   }
 }
 
+// a hopper's five slots
+class HopperScreen extends ContainerScreen {
+  constructor(game, te) {
+    super(game, 176, 133);
+    this.te = te;
+    this.inv = new Inventory(5, te.items);
+    this.inv.listeners.push(() => this.game.world.markTileChanged(te.x, te.z));
+    for (let i = 0; i < 5; i++) this.slots.push(new Slot(this.inv, i, 44 + i * 18, 20, { group: 'box' }));
+    this.addPlayerSlots(51);
+  }
+  quickTargets(s) {
+    if (s.group === 'box') return { slots: this.slots.filter((x) => x.group === 'hotbar' || x.group === 'main'), reverse: true };
+    return { slots: this.slots.filter((x) => x.group === 'box') };
+  }
+  drawForeground(gui) { this.label(gui, 'Hopper', 8, 6); this.label(gui, 'Inventory', 8, this.ph - 96 + 2); }
+  tick() { const te = this.te; if (this.game.world.getTile(te.x, te.y, te.z) !== te || this.player.distanceSq(te.x + 0.5, te.y + 0.5, te.z + 0.5) > 64) this.game.closeScreen(); }
+}
+// a dropper's or dispenser's nine slots, three by three
+class DispenserScreen extends ContainerScreen {
+  constructor(game, te, title) {
+    super(game, 176, 166);
+    this.te = te; this.title = title;
+    this.inv = new Inventory(9, te.items);
+    this.inv.listeners.push(() => this.game.world.markTileChanged(te.x, te.z));
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) this.slots.push(new Slot(this.inv, r * 3 + c, 62 + c * 18, 17 + r * 18, { group: 'box' }));
+    this.addPlayerSlots(84);
+  }
+  quickTargets(s) {
+    if (s.group === 'box') return { slots: this.slots.filter((x) => x.group === 'hotbar' || x.group === 'main'), reverse: true };
+    return { slots: this.slots.filter((x) => x.group === 'box') };
+  }
+  drawForeground(gui) { this.label(gui, this.title, 8, 6); this.label(gui, 'Inventory', 8, this.ph - 96 + 2); }
+  tick() { const te = this.te; if (this.game.world.getTile(te.x, te.y, te.z) !== te || this.player.distanceSq(te.x + 0.5, te.y + 0.5, te.z + 0.5) > 64) this.game.closeScreen(); }
+}
+
 // a chest riding on a minecart
 class CartChestScreen extends ChestScreen {
   constructor(game, cart) {
@@ -581,14 +616,14 @@ const CREATIVE_TABS = (() => {
   T.push({ name: 'Combat', icon: [I.gold_sword, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].map((m) => [I[m + '_sword'], 0]), [I.bow, 0], [I.arrow, 0],
     ...['leather', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ARMOR_SLOTS.map((s) => [I[m + '_' + s], 0])), [I.silent_boots, 0], [I.snowball, 0], [I.egg, 0]] });
   T.push({ name: 'Ember Circuits', icon: [I.ember_dust, 0], list: [[I.ember_dust, 0], blk(B.EMBER_TORCH), blk(B.LEVER), blk(B.STONE_BUTTON), blk(B.WOOD_BUTTON), blk(B.STONE_PLATE), blk(B.WOOD_PLATE),
-    [I.relay, 0], blk(B.PISTON), blk(B.STICKY_PISTON), blk(B.EMBER_LAMP), blk(B.NOTE_BLOCK), blk(B.EMBER_BLOCK), blk(B.HUSH_SENSOR), blk(B.TNT), [I.door_wood, 0], [I.door_iron, 0], blk(B.TRAPDOOR), blk(B.FENCE_GATE), blk(B.DETECTOR_RAIL)] });
+    [I.relay, 0], [I.gauge, 0], blk(B.PISTON), blk(B.STICKY_PISTON), blk(B.HOPPER), blk(B.DROPPER), blk(B.DISPENSER), blk(B.EMBER_LAMP), blk(B.NOTE_BLOCK), blk(B.EMBER_BLOCK), blk(B.HUSH_SENSOR), blk(B.TNT), [I.door_wood, 0], [I.door_iron, 0], blk(B.TRAPDOOR), blk(B.FENCE_GATE), blk(B.DETECTOR_RAIL)] });
   T.push({ name: 'Transportation', icon: [B.BOOSTER_RAIL, 0], list: [blk(B.RAIL), blk(B.BOOSTER_RAIL), blk(B.DETECTOR_RAIL), [I.minecart, 0], [I.chest_minecart, 0], ...WOOD.map((w, i) => [I.boat, i])] });
   T.push({ name: 'Brewing', icon: [I.potion, 10], list: [blk(B.BREWING_STAND), [I.glass_bottle, 0], ...POTION_VARIANTS.map((d) => [I.potion, d]), ...POTION_VARIANTS.map((d) => [I.splash_potion, d]),
     ...items(['bloodcap', 'sugar', 'glistering_melon', 'spider_eye', 'fermented_spider_eye', 'wailer_tear', 'flare_powder', 'magma_cream', 'glimmerfin', 'pufferfish', 'slimeball', 'ember_dust', 'sunstone_dust', 'gunpowder'])] });
   T.push({ name: 'Foodstuffs', icon: [I.apple, 0], list: items(['apple', 'golden_apple', 'bread', 'porkchop', 'cooked_porkchop', 'beef', 'steak', 'chicken', 'cooked_chicken', 'mutton', 'cooked_mutton', 'venison', 'cooked_venison', 'jerky',
     'fish', 'cooked_fish', 'salmon', 'cooked_salmon', 'sunfish', 'pufferfish', 'glimmerfin', 'carrot', 'potato', 'baked_potato', 'poison_potato', 'cookie', 'melon_slice', 'mushroom_stew', 'glow_berries', 'pumpkin_pie', 'berry_pie', 'berries', 'glowberry', 'starfruit', 'rotten_flesh', 'spider_eye']) });
   T.push({ name: 'Materials', icon: [I.stick, 0], list: [...items(['coal']), [I.coal, 1], ...items(['diamond', 'iron_ingot', 'gold_ingot', 'gold_nugget', 'cobalt_ingot', 'starmetal_ingot', 'jade', 'ember_dust', 'sulfur', 'lumite_shard', 'salt',
-    'stick', 'bowl', 'string', 'cattail_fiber', 'feather', 'flint', 'gunpowder', 'leather', 'bone', 'clay_ball', 'brick', 'paper', 'book', 'slimeball', 'wheat', 'seeds', 'sugar', 'sugar_cane', 'wisp_essence',
+    'stick', 'bowl', 'string', 'cattail_fiber', 'feather', 'flint', 'gunpowder', 'leather', 'bone', 'clay_ball', 'brick', 'paper', 'book', 'slimeball', 'wheat', 'seeds', 'melon_seeds', 'pumpkin_seeds', 'sugar', 'sugar_cane', 'wisp_essence',
       'sunstone_dust', 'smoky_quartz', 'brimstone_brick', 'wailer_tear', 'flare_rod', 'flare_powder', 'magma_cream', 'fire_charge', 'seeker_eye', 'hush_shard', 'echo_heart', 'sift_scale']),
     ...[...Array(16).keys()].map((d) => [I.dye, d])] });
   T.push({ name: 'Creatures', icon: [I.spawn_egg, 1], list: [] });   // filled when mobs load

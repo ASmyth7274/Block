@@ -63,6 +63,9 @@ const MILESTONES = [
   { id: 'sift', name: 'Where Lost Things Go', desc: 'Step through a city gate into the Sift', icon: () => [B.SIFT_SAND, 0] },
   { id: 'relic', name: 'Finders Keepers', desc: 'Come upon a relic half-buried in the Sift', icon: () => [B.SILTSTONE_BRICKS, 2] },
   { id: 'letter', name: 'Return to Sender', desc: 'Read a lost letter', icon: () => [ITEM_IDS.lost_letter, 0] },
+  { id: 'keeper', name: 'Ironclad Friend', desc: 'Raise an iron keeper from iron and a pumpkin', icon: () => [B.IRON_BLOCK, 0] },
+  { id: 'snowkin', name: 'Cold Company', desc: 'Raise a snowkin from snow and a pumpkin', icon: () => [B.SNOW, 0] },
+  { id: 'family', name: 'Growing Village', desc: 'See a villager child born', icon: () => [ITEM_IDS.bread, 0] },
 ];
 const BIOME_DESCRIPTIONS = {
   ocean: 'Endless water. Sunken ruins rest on the sea floor.', deep_ocean: 'The water grows dark and cold.', plains: 'Rolling grass, wildflowers and the occasional lonely oak.',

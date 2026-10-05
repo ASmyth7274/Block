@@ -121,25 +121,41 @@ class Entity {
       else { if (this.fire % 20 === 0 && this.hurt) this.hurt(1, { type: 'fire' }); this.fire--; }
     }
     if (this.inLava && !this.fireImmune) { if (this.hurt) this.hurt(4, { type: 'lava' }); this.fire = Math.max(this.fire, 300); this.fallDistance *= 0.5; }
+    // walking through flames sets you alight; cactus spines prick (the player's own checks live in the game loop)
+    if (this.inFireBlock && !this.fireImmune && this.hurt) { this.hurt(1, { type: 'fire' }); if (!this.inWater) this.fire = Math.max(this.fire, 160); }
+    if (this.touchingCactus && this.hurt && this.type !== 'player') this.hurt(1, { type: 'cactus' });
     if (this.y < -64 && this.hurt) this.hurt(4, { type: 'void' });
   }
   updateFluids() {
     const w = this.world;
     const b = this.box;
+    // how far in from the top and bottom of the box the water has to reach (small things count as wet at a touch)
+    const ins = this.fluidInset === undefined ? 0.4 : this.fluidInset;
     const x0 = Math.floor(b.x0 + 0.001), x1 = Math.floor(b.x1 - 0.001), z0 = Math.floor(b.z0 + 0.001), z1 = Math.floor(b.z1 - 0.001);
-    const y0 = Math.floor(b.y0 + 0.4), y1 = Math.floor(b.y1 - 0.4);
-    let water = false, lava = false, web = false, quick = false;
+    const y0 = Math.floor(b.y0 + ins), y1 = Math.floor(b.y1 - Math.max(ins, 0.001));
+    const push = this.waterPush !== false && !this.flying;
+    let water = false, lava = false, web = false, quick = false, cactus = false, fire = false, fx = 0, fy = 0, fz = 0;
     for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) for (let y = Math.floor(b.y0); y <= Math.floor(b.y1 - 0.001); y++) {
       const id = w.getBlock(x, y, z);
       if (id === B.COBWEB) web = true;
-      if (id === B.QUICKSAND) quick = true;
+      else if (id === B.QUICKSAND) quick = true;
+      else if (id === B.FIRE) fire = true;
+      // pressed up against a cactus's spines (its body stops a sixteenth short of the block's edges)
+      else if (id === B.CACTUS && b.x1 > x + 0.0525 && b.x0 < x + 0.9475 && b.z1 > z + 0.0525 && b.z0 < z + 0.9475 && b.y0 < y + 0.9475) cactus = true;
       if (y < y0 || y > y1) continue;
       if (id === B.WATER) {
         const top = y + 1 - fluidHeightFrac(w.getMeta(x, y, z));
-        if (b.y0 + 0.4 <= y + 1 && b.y1 - 0.4 >= top - 0.4) water = true;
+        if (ins === 0 || (b.y0 + ins <= y + 1 && b.y1 - ins >= top - 0.4)) {
+          water = true;
+          if (push) { waterFlowVec(w, x, y, z, _flow); fx += _flow[0]; fy += _flow[1]; fz += _flow[2]; }
+        }
       } else if (id === B.LAVA) lava = true;
     }
     if (this.riding && this.riding.type === 'boat') water = false;
+    // carried along by the current
+    if (water && push && !this.riding && (fx || fy || fz)) { const l = Math.hypot(fx, fy, fz); this.vx += fx / l * 0.014; this.vy += fy / l * 0.014; this.vz += fz / l * 0.014; }
+    this.touchingCactus = cactus;
+    this.inFireBlock = fire;
     if (water && !this.inWater) { this.fallDistance = 0; if (this.onSplash) this.onSplash(); }
     this.inWater = water;
     this.inLava = lava;
@@ -149,7 +165,7 @@ class Entity {
     const ey = this.y + this.eye;
     const hid = w.getBlock(Math.floor(this.x), Math.floor(ey), Math.floor(this.z));
     if (hid === B.WATER) {
-      const fy = Math.floor(ey) + 1 - fluidHeightFrac(w.getMeta(Math.floor(this.x), Math.floor(ey), Math.floor(this.z))) - 0.11;
+      const fy = Math.floor(ey) + 1 - fluidHeightFrac(w.getMeta(Math.floor(this.x), Math.floor(ey), Math.floor(this.z))) + 0.11;
       this.headInWater = ey < fy;
     } else this.headInWater = false;
     if (water) this.fire = 0;
@@ -249,6 +265,34 @@ class Entity {
   }
   save() { return { type: this.type, x: this.x, y: this.y, z: this.z, vx: this.vx, vy: this.vy, vz: this.vz, yaw: this.yaw, age: this.age }; }
   load(d) { this.setPos(d.x, d.y, d.z); this.vx = d.vx || 0; this.vy = d.vy || 0; this.vz = d.vz || 0; this.yaw = d.yaw || 0; this.age = d.age || 0; }
+}
+
+// which way the water in a block runs: the classic flow vector, from higher levels towards lower
+// ones and over edges, and, where falling water runs down a wall, straight down
+const _flow = [0, 0, 0], _FLOW4 = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+function waterFlowVec(w, x, y, z, out) {
+  const eff = (xx, yy, zz) => { if (w.getBlock(xx, yy, zz) !== B.WATER) return -1; const m = w.getMeta(xx, yy, zz); return m >= 8 ? 0 : m; };
+  const m = w.getMeta(x, y, z), here = m >= 8 ? 0 : m;
+  let vx = 0, vy = 0, vz = 0;
+  for (const [dx, dz] of _FLOW4) {
+    let l = eff(x + dx, y, z + dz);
+    if (l < 0) {
+      if (BT.solid[w.getBlock(x + dx, y, z + dz)]) continue;
+      l = eff(x + dx, y - 1, z + dz);
+      if (l >= 0) { const k = l - (here - 8); vx += dx * k; vz += dz * k; }
+    } else { const k = l - here; vx += dx * k; vz += dz * k; }
+  }
+  if (m >= 8) {
+    for (const [dx, dz] of _FLOW4) {
+      if (BT.solid[w.getBlock(x + dx, y, z + dz)] || BT.solid[w.getBlock(x + dx, y + 1, z + dz)]) {
+        const l = Math.hypot(vx, vy, vz); if (l > 0) { vx /= l; vy /= l; vz /= l; }
+        vy -= 6; break;
+      }
+    }
+  }
+  const l = Math.hypot(vx, vy, vz);
+  if (l > 0) { out[0] = vx / l; out[1] = vy / l; out[2] = vz / l; } else { out[0] = out[1] = out[2] = 0; }
+  return out;
 }
 
 function fluidHeightFrac(meta) {
@@ -465,6 +509,7 @@ class Living extends Entity {
       if (Math.abs(this.vz) < 0.003) this.vz = 0;
       this.travel(strafe, forward);
       this.pushOutOfBlocks();
+      if (!this.dead) this.shoulderAside();
     }
     // limb animation
     this.prevLimbAmount = this.limbAmount;
@@ -487,5 +532,19 @@ class Living extends Entity {
     if (ef.poison && !this.undead && !this.dead && this.age % Math.max(1, 25 >> Brewing.amp(this, 'poison')) === 0 && this.health > 1) this.hurt(1, { type: 'magic' });
     if (ef.regen && !this.undead && !this.dead && this.age % Math.max(1, 50 >> Brewing.amp(this, 'regen')) === 0) this.heal(1);
     for (const k in ef) { if (--ef[k] <= 0) { delete ef[k]; if (this.effectAmp) delete this.effectAmp[k]; } }
+  }
+  // creatures standing in each other's way are eased apart (the classic gentle shove)
+  shoulderAside() {
+    if (this.noClip || this.noGravity || (this.flying && this.type === 'player')) return;
+    const b = this.box;
+    for (const e of this.world.entitiesInBox(b.x0 - 0.2, b.y0, b.z0 - 0.2, b.x1 + 0.2, b.y1, b.z1 + 0.2)) {
+      if (e === this || !(e instanceof Living) || e.dead || e.riding || e.noClip || e.noGravity || (e.type === 'player' && (e.flying || e.gameMode === 'spectator'))) continue;
+      let dx = e.x - this.x, dz = e.z - this.z, d = Math.max(Math.abs(dx), Math.abs(dz));
+      if (d < 0.01) continue;
+      d = Math.sqrt(d); dx /= d; dz /= d;
+      const k = Math.min(1, 1 / d) * 0.05;
+      this.vx -= dx * k; this.vz -= dz * k;
+      e.vx += dx * k; e.vz += dz * k;
+    }
   }
 }

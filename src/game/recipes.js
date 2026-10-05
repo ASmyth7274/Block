@@ -82,6 +82,7 @@ const Recipes = (() => {
   shaped([B.WOOD_PLATE, 1], ['PP'], { P: B.PLANKS });
   shaped([B.EMBER_LAMP, 1], [' E ', 'EGE', ' E '], { E: I.ember_dust, G: B.GLASS });
   shaped([I.relay, 1], ['TET', 'SSS'], { T: B.EMBER_TORCH, E: I.ember_dust, S: [B.STONE, 0] });
+  shaped([I.gauge, 1], [' T ', 'TQT', 'SSS'], { T: B.EMBER_TORCH, Q: I.smoky_quartz, S: [B.STONE, 0] });
   shaped([B.NOTE_BLOCK, 1], ['PPP', 'PEP', 'PPP'], { P: B.PLANKS, E: I.ember_dust });
   shaped([B.PISTON, 1], ['PPP', 'CIC', 'CEC'], { P: B.PLANKS, C: B.COBBLESTONE, I: I.iron_ingot, E: I.ember_dust });
   shapeless([B.STICKY_PISTON, 1], [I.slimeball, B.PISTON]);
@@ -208,6 +209,12 @@ const Recipes = (() => {
   // what the Starwyrm calls down: crystals to call it back with, and starmetal
   shaped([I.star_crystal], ['GGG', 'GFG', 'GTG'], { G: B.GLASS, F: I.star_fragment, T: I.wailer_tear });
   shaped([I.starmetal_ingot], ['FFF', 'FFF', 'FFF'], { F: I.star_fragment });
+  // ---------------- farming and machines ----------------
+  shaped([B.HOPPER], ['I I', 'ICI', ' I '], { I: I.iron_ingot, C: B.CHEST });
+  shaped([B.DROPPER], ['CCC', 'C C', 'CEC'], { C: B.COBBLESTONE, E: I.ember_dust });
+  shaped([B.DISPENSER], ['CCC', 'CBC', 'CEC'], { C: B.COBBLESTONE, B: I.bow, E: I.ember_dust });
+  shapeless([I.melon_seeds], [I.melon_slice]);
+  shapeless([I.pumpkin_seeds, 4], [B.PUMPKIN]);
   // ---------------- the Drift Isles ----------------
   shapeless([I.dye, 2, 3], [B.MOONPETAL]);
   // ---------------- the Sift ----------------
