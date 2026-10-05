@@ -10,7 +10,7 @@ const MENU_SEEDS = [1337, 20111118, 404, 8675309, 31415, 777, 2468, 99, 12345, 4
 // blocks that receive random ticks
 const RANDOM_TICK = new Uint8Array(256);
 for (const id of [B.GRASS, B.MYCELIUM, B.SAPLING, B.WHEAT, B.CARROTS, B.POTATOES, B.FARMLAND, B.SUGAR_CANE, B.CACTUS, B.LEAVES, B.ICE, B.SNOW_LAYER,
-  B.EMBER_ORE_LIT, B.BRAMBLE, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.GLOWSHROOM, B.FIRE, B.WATER, B.BLOODCAP, B.PORTAL, B.GLOW_VINE, B.GLOW_VINE_BERRIES]) if (id !== undefined) RANDOM_TICK[id] = 1;
+  B.EMBER_ORE_LIT, B.BRAMBLE, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.GLOWSHROOM, B.FIRE, B.WATER, B.BLOODCAP, B.PORTAL, B.GLOW_VINE, B.GLOW_VINE_BERRIES, B.STARVINE]) if (id !== undefined) RANDOM_TICK[id] = 1;
 
 // ore values for the prospector's rod
 const PROSPECT = (() => {
@@ -753,8 +753,7 @@ class Game {
     if (w.time % 40 === 9) {
       if (!w.dim) { this.checkVillages(); this.checkVaults(); this.checkCities(); } else if (w.dim === 1) this.checkFortress();
       else if (w.dim === DIM_SIFT) this.checkRelics();
-      // until the Starwyrm guards it, the Star Well stands open as the way home
-      else if (w.dim === 2 && typeof Wyrm === 'undefined') Isles.setWell(w, true);
+      else if (w.dim === DIM_ISLES) this.checkObservatory();
     }
     Circuits.tickPlates(this);
     Hush.tick(this);
@@ -768,6 +767,7 @@ class Game {
     let fm = 1;
     if (p.flying) fm *= 1.1;
     if (p.sprinting) fm *= 1.15;
+    if (p.gliding) fm *= 1.05 + Math.min(0.2, Math.hypot(p.vx, p.vy, p.vz) * 0.12);
     if (p.effects.slow) fm *= 0.9;
     if (p.useItem && p.useItem.id === ITEM_IDS.bow) { let f = (p.useMax - p.useTime) / 20; f = f > 1 ? 1 : f * f; fm *= 1 - f * 0.15; }
     this.fovMod += (fm - this.fovMod) * 0.5;
@@ -1075,6 +1075,8 @@ class Game {
     a.loop('under_drone', w.dim === 1 ? 0.3 * this.settings.sound : 0);
     // the Far Isles: a cold breath of air and, now and then, the stars ringing
     a.loop('isles_air', w.dim === 2 ? 0.32 * this.settings.sound : 0);
+    // the rush of air past a glider
+    a.loop('glide_wind', p && p.gliding ? Math.min(1, Math.hypot(p.vx, p.vy, p.vz) * 0.9) * 0.8 * this.settings.sound : 0);
     // the Sift: wind over the dunes, and now and then a bell, very far away
     a.loop('sift_wind', w.dim === DIM_SIFT ? 0.4 * this.settings.sound : 0);
     // the deep caves have air of their own
@@ -1716,6 +1718,16 @@ class Game {
     this.hud.toast('Relic found', name, new ItemStack(B.SILTSTONE_BRICKS, 1, 2), '#d8d0f0');
     this.audio.play('discover', 0.7, 0.75);
     this.achieve('relic');
+  }
+  // coming upon one of the old observatories out on the Drift Isles
+  checkObservatory() {
+    const p = this.player, g = this.world.localGen;
+    if (p.achievements.observatory || !g.column || !g.isleKind) return;
+    const col = g.column(Math.floor(p.x), Math.floor(p.z)), d = col && col[2];
+    if (!d || g.isleKind(d) !== 'observatory' || (d.x - p.x) ** 2 + (d.z - p.z) ** 2 > 18 * 18) return;
+    this.hud.toast('Discovered', 'An old observatory', new ItemStack(ITEM_IDS.orrery_gear, 1, 0), '#d8d0f0');
+    this.audio.play('discover', 0.7, 0.9);
+    this.achieve('observatory');
   }
   // coming down into a forgotten city
   checkCities() {

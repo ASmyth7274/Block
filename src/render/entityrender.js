@@ -701,6 +701,17 @@ class EntityRenderer {
     pose.larm = [la, lay, laz];
     return pose;
   }
+  // a drift glider on someone's back: folded, or spread wide in flight
+  drawGlider(e, base, partial, col, sky, blk, stack) {
+    const t = (e.glideAnim === undefined ? 0 : e.glideAnim);
+    const open = e.gliding ? 1 : 0;
+    e.glideAnim = t + (open - t) * 0.15;
+    const k = e.glideAnim, flutter = e.gliding ? Math.sin((e.age + partial) * 0.6) * 0.04 : 0;
+    const pose = { wingR: [0.25 - k * 0.05 + flutter, 0, -0.18 + k * 1.38], wingL: [0.25 - k * 0.05 + flutter, 0, 0.18 - k * 1.38] };
+    const n0 = this.skinBatch.n;
+    this.drawModel(MODELS.glider, 'glider', base, pose, col, sky, blk);
+    if (Enchant.has(stack)) this.glintCopy(this.skinBatch, n0, this.skinBatch.n, 20);
+  }
   baseMatrix(e, rx, ry, rz, partial, scale) {
     const bodyYaw = e.pbodyYaw + wrapRadians(e.bodyYaw - e.pbodyYaw) * partial;
     let m = M3.trans(rx, ry, rz);
@@ -728,7 +739,14 @@ class EntityRenderer {
     const [sky, blk] = this.lightAt(e.x, e.y + e.h * 0.6, e.z);
     const model = kind === 'skeleton' ? MODELS.skeleton : kind === 'wraith' ? MODELS.wraith : MODELS.biped;
     const pose = this.bipedPose(e, partial, kind);
-    const base = this.baseMatrix(e, rx, ry + (opts.yOff || 0) - (e.sneaking ? 0.2 : 0), rz, partial, opts.scale);
+    let base = this.baseMatrix(e, rx, ry + (opts.yOff || 0) - (e.sneaking ? 0.2 : 0), rz, partial, opts.scale);
+    // gliding: laid out flat along the line of flight, arms a little out from the sides
+    if (e.gliding) {
+      const pitch = (e.ppitch === undefined ? e.pitch : e.ppitch + (e.pitch - e.ppitch) * partial);
+      base = M3.mul(M3.mul(M3.mul(base, M3.trans(0, 14, 0)), M3.rx(-Math.PI / 2 + pitch)), M3.trans(0, -14, 0));
+      pose.rarm = [0, 0, 0.35]; pose.larm = [0, 0, -0.35]; pose.rleg = [0, 0, 0.05]; pose.lleg = [0, 0, -0.05];
+      if (pose.head) pose.head = [Math.PI / 2 - 0.3, 0, 0];
+    }
     const col = this.entColor(e);
     if (opts.alpha) col[3] = opts.alpha;
     const lsky = opts.glow ? -1 : sky, lblk = opts.glow ? 0 : blk;
@@ -738,6 +756,7 @@ class EntityRenderer {
       const armor = e.inventory ? e.inventory.armor.items : e.armorItems;
       for (let i = 0; i < 4; i++) {
         const a = armor[i]; if (!a) continue;
+        if (ITEMS[a.id] && ITEMS[a.id].glider) { this.drawGlider(e, base, partial, col, lsky, lblk, a); continue; }
         const ad = armorOf(a.id); if (!ad) continue;
         const parts = [['head', 'hat'], ['body', 'rarm', 'larm'], ['body', 'rleg', 'lleg'], ['rleg', 'lleg']][i];
         const sk = (i === 2 ? 'legs_' : 'armor_') + ad.mat;

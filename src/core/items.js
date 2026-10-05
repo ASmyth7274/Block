@@ -179,8 +179,8 @@ defItem('sunfish', { name: 'Sunfish', food: { hunger: 1, sat: 0.2 } });
 defItem('pufferfish', { name: 'Pufferfish', food: { hunger: 1, sat: 0.2, poisonChance: 1, poisonTicks: 300, hungerChance: 1, hungerTicks: 300 } });
 defItem('glimmerfin', { name: 'Glimmerfin', food: { hunger: 2, sat: 0.4, nightVision: 900 } });
 defItem('message_bottle', { name: 'Message in a Bottle', maxStack: 1, rare: true });
-defItem('boat', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Boat', tex: (d) => 'boat_' + (WOOD[d] || 'oak'), maxStack: 1, variants: [0, 1, 2, 3, 4, 5] });
-defItem('sign', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Sign', tex: (d) => 'sign_' + (WOOD[d] || 'oak'), maxStack: 16, variants: [0, 1, 2, 3, 4, 5], fuel: 200, places: 'sign' });
+defItem('boat', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Boat', tex: (d) => 'boat_' + (WOOD[d] || 'oak'), maxStack: 1, variants: [0, 1, 2, 3, 4, 5, 6] });
+defItem('sign', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Sign', tex: (d) => 'sign_' + (WOOD[d] || 'oak'), maxStack: 16, variants: [0, 1, 2, 3, 4, 5, 6], fuel: 200, places: 'sign' });
 defItem('painting', { name: 'Painting' });
 defItem('relay', { name: 'Ember Relay', tex: 'item_relay', places: 'relay' });
 defItem('minecart', { name: 'Minecart', maxStack: 1 });
@@ -215,6 +215,7 @@ const POTIONS = [
   { key: 'invisibility', name: 'Invisibility', effect: 'invisible', dur: 3600, color: '#7f8392' },
   { key: 'water_breathing', name: 'Water Breathing', effect: 'waterBreathing', dur: 3600, color: '#2e5299' },
   { key: 'leaping', name: 'Leaping', effect: 'jump', dur: 3600, color: '#22ff4c', strong: true },
+  { key: 'featherfall', name: 'Featherfall', effect: 'featherfall', dur: 1800, color: '#e4dcff' },
 ];
 const EFFECTS = {
   speed: { name: 'Speed', color: '#7cafc6' }, slow: { name: 'Slowness', color: '#5a6c81', bad: true }, strength: { name: 'Strength', color: '#932423' },
@@ -222,6 +223,7 @@ const EFFECTS = {
   fireRes: { name: 'Fire Resistance', color: '#e49a3a' }, nightVision: { name: 'Night Vision', color: '#1f1fa1' }, invisible: { name: 'Invisibility', color: '#7f8392' },
   waterBreathing: { name: 'Water Breathing', color: '#2e5299' }, jump: { name: 'Jump Boost', color: '#22ff4c' }, hunger: { name: 'Hunger', color: '#587653', bad: true },
   haste: { name: 'Haste', color: '#d9c043' }, darkness: { name: 'Darkness', color: '#292721', bad: true },
+  featherfall: { name: 'Featherfall', color: '#e4dcff' }, drift: { name: 'Drift', color: '#b48cff', bad: true },
 };
 function potionOf(d) { return POTIONS[d & 63] || POTIONS[0]; }
 function potionName(d, splash) {
@@ -259,6 +261,13 @@ defItem('echo_fork', { name: 'Echo Fork', maxDamage: 48, handheld: true });
 // ---- the Starwyrm's isle ----  (items are numbered in the order they are defined: always add new ones at the end)
 // a shard of a fallen star, still warm: the Starwyrm calls them down from the sky
 defItem('star_fragment', { name: 'Star Fragment', rare: true });
+// ---- the Drift Isles ----
+// a pale fruit of the glimmerwood: one bite and you fall like a feather for a while
+defItem('starfruit', { name: 'Starfruit', food: { hunger: 4, sat: 4.8, featherfall: 600 } });
+// silk and starmetal ribs, worn on the back: jump as you fall and it opens, and you glide
+defItem('drift_glider', { name: 'Drift Glider', maxDamage: 432, armor: { slot: 1, points: 0, mat: 'glider' }, glider: true, rare: true });
+// what is left of an orrery sentinel: a brass gear still turning slowly by itself
+defItem('orrery_gear', { name: 'Orrery Gear' });
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -24,7 +24,10 @@ const Behaviors = (() => {
     const below = w.getBlock(x, y - 1, z);
     switch (id) {
       case B.SAPLING: case B.TALL_GRASS: case B.FLOWER: case B.BRAMBLE:
-        return below === B.GRASS || below === B.DIRT || below === B.PODZOL || below === B.FARMLAND || below === B.MYCELIUM || (id === B.FLOWER && meta === 7 && below === B.ASH);
+        return below === B.GRASS || below === B.DIRT || below === B.PODZOL || below === B.FARMLAND || below === B.MYCELIUM || (id === B.FLOWER && meta === 7 && below === B.ASH)
+          || (id === B.SAPLING && (below === B.STAR_MOSS || below === B.STARSTONE));
+      case B.MOONPETAL: case B.DRIFT_GRASS: return below === B.STAR_MOSS || below === B.STARSTONE || below === B.GRASS || below === B.DIRT || below === B.PODZOL;
+      case B.STARVINE: { const a = w.getBlock(x, y + 1, z); return a === B.STARVINE || a === B.GLIMMER_LEAVES || a === B.LEAVES || (BT.solid[a] && BT.opaque[a]); }
       case B.DEAD_BUSH: return below === B.SAND || below === B.TERRACOTTA || below === B.DIRT || below === B.ASH || below === B.SALT || below === B.PODZOL || below === B.GRASS;
       case B.MUSHROOM_BROWN: case B.MUSHROOM_RED: case B.GLOWSHROOM:
         return BT.opaque[below] && (below === B.MYCELIUM || below === B.PODZOL || w.getLightLevel(x, y, z) < 13 || id === B.GLOWSHROOM);
@@ -399,6 +402,7 @@ const Behaviors = (() => {
     else if (id === B.WHEAT || id === B.CARROTS || id === B.POTATOES) { if (m < 7) { w.setMeta(x, y, z, Math.min(7, m + 2 + Math.floor(Math.random() * 3))); used = true; } }
     else if (id === B.BRAMBLE) { if (m < 3) { w.setMeta(x, y, z, 3); used = true; } }
     else if (id === B.GLOW_VINE) { w.setBlock(x, y, z, B.GLOW_VINE_BERRIES, 0); used = true; }
+    else if (id === B.STARVINE && !(m & 1)) { w.setMeta(x, y, z, 1); used = true; }
     else if (id === B.GRASS) {
       used = true;
       for (let i = 0; i < 64; i++) {
@@ -463,6 +467,12 @@ const Behaviors = (() => {
       case B.GLOW_VINE_BERRIES:
         w.setBlock(x, y, z, B.GLOW_VINE, 0);
         dropStack(game, x + 0.5, y + 0.3, z + 0.5, new ItemStack(I.glowberry, 1, 0));
+        game.audio.playBlock('grass', 'break', x + 0.5, y + 0.5, z + 0.5);
+        return true;
+      case B.STARVINE:
+        if (!(m & 1)) return false;
+        w.setMeta(x, y, z, m & ~1);
+        dropStack(game, x + 0.5, y + 0.3, z + 0.5, new ItemStack(I.starfruit, 1, 0));
         game.audio.playBlock('grass', 'break', x + 0.5, y + 0.5, z + 0.5);
         return true;
       case B.GATE_KEYSTONE: return Hush.useKeystone(game, player, x, y, z);
@@ -767,6 +777,14 @@ const Behaviors = (() => {
         return;
       }
       case B.BLOODCAP: if (m < 3 && w.rng.nextInt(10) === 0) w.setMeta(x, y, z, m + 1, 4); return;
+      // starvines lengthen slowly in the dark, and now and then a starfruit swells on one
+      case B.STARVINE: {
+        if (!(m & 1) && w.rng.nextInt(30) === 0) { w.setMeta(x, y, z, m | 1, 4); return; }
+        if (w.getBlock(x, y - 1, z) !== 0 || w.rng.nextInt(12) !== 0) return;
+        let n = 1; while (n < 16 && w.getBlock(x, y + n, z) === B.STARVINE) n++;
+        if (n < 16) w.setBlock(x, y - 1, z, B.STARVINE, 0);
+        return;
+      }
       // glow vines creep slowly downward; now and then the new growth bears berries
       case B.GLOW_VINE: case B.GLOW_VINE_BERRIES: {
         if (w.getBlock(x, y - 1, z) !== 0 || w.rng.nextInt(8) !== 0) return;
@@ -852,7 +870,7 @@ const Behaviors = (() => {
   // ---------------------------------------------------------------- growing trees from saplings
   function growTree(w, x, y, z, m) {
     const kind = LEAF_KINDS[m & 7] || 'oak';
-    const map = { oak: Math.random() < 0.1 ? 'big_oak' : 'oak', spruce: 'spruce', birch: 'birch', jungle: 'jungle', maple: 'maple', redwood: 'small_redwood', gold_maple: 'gold_maple' };
+    const map = { oak: Math.random() < 0.1 ? 'big_oak' : 'oak', spruce: 'spruce', birch: 'birch', jungle: 'jungle', maple: 'maple', redwood: 'small_redwood', gold_maple: 'gold_maple', glimmer: 'glimmer' };
     const t = map[kind];
     // check headroom
     for (let dy = 1; dy < 6; dy++) if (BT.opaque[w.getBlock(x, y + dy, z)]) return false;

@@ -45,9 +45,18 @@ class Player extends Living {
     this.invulnerable = m === 'creative';
   }
 
+  // wearing a drift glider that still holds together?
+  canGlide() { const c = this.inventory.armor.items[1]; return !!c && !!ITEMS[c.id] && !!ITEMS[c.id].glider && c.dmg < maxDamageOf(c.id) - 1; }
   // ---------------------------------------------------------------- per tick
   tick(input) {
     this.baseTick();
+    if (this.gliding) {
+      if (!this.canGlide() || this.flying || this.riding || this.dead) this.gliding = false;
+      else if (++this.glideT % 20 === 0) {
+        if (!this.creative) { const c = this.inventory.armor.items[1]; c.dmg++; if (c.dmg >= maxDamageOf(c.id) - 1) this.game.audio.play('break', 0.8, 0.8); }
+        if (this.glideT >= 40) this.game.achieve('glide');
+      }
+    } else this.glideT = 0;
     if (this.sleeping) { this.forward = 0; this.strafe = 0; this.jumping = false; }
     else this.applyInput(input);
     this.pdistWalked = this.distWalked; this.pbob = this.bob; this.pbobPitch = this.bobPitch;
@@ -114,6 +123,11 @@ class Player extends Living {
       }
     }
     if (this.jumpTap > 0) this.jumpTap--;
+    // a fresh press of jump while falling opens a drift glider
+    if (jumpKey && !this.prevJumpKey && !this.onGround && !this.flying && !this.gliding && !this.inWater && !this.inLava && this.vy < 0 && this.canGlide()) {
+      this.gliding = true;
+      this.game.audio.play('glider_open', 0.7, 1);
+    }
     this.prevJumpKey = jumpKey;
     if (this.flying && this.onGround && !jumpKey) this.flying = false;
     // sprinting (ctrl or double-tap forward)
@@ -303,6 +317,7 @@ class Player extends Living {
       if (f.hungerChance && Math.random() < f.hungerChance) this.effects.hunger = f.hungerTicks || 600;
       if (f.poisonChance && Math.random() < f.poisonChance) this.effects.poison = f.poisonTicks || 100;
       if (f.regen) this.effects.regen = 100;
+      if (f.featherfall) Brewing.addEffect(this, 'featherfall', f.featherfall, 0);
       if (f.nightVision) this.effects.nightVision = Math.max(this.effects.nightVision || 0, f.nightVision === 1 ? 3600 : f.nightVision);
       this.game.audio.play('burp', 0.5, 0.9 + Math.random() * 0.1);
       this.game.onAte(s);

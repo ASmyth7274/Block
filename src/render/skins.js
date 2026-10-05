@@ -546,6 +546,34 @@ const Skins = (() => {
     return s;
   })();
 
+  // ------------------------------------------------------------ the Drift Isles
+  // a drift glider's wings: pale silk over dark starmetal ribs fanning out from the shoulder
+  S.glider = (() => {
+    const s = new Skin(); const r = rng('glider');
+    const silk = C('#dcd6f2'), silk2 = C('#c8c0e8'), rib = C('#4a4470'), edge = C('#8a82b8');
+    s.box(22, 0, 10, 20, 2, (f, x, y, fw, fh) => {
+      if (f === 'front' || f === 'back') {
+        if (x === 0 || (y > 2 && (y + x * 2) % 9 === 0)) return vary(r, rib, 0.08);
+        if (y === fh - 1 || x === fw - 1) return vary(r, edge, 0.08);
+        return vary(r, (x + y) % 2 ? silk : silk2, 0.04);
+      }
+      return vary(r, rib, 0.1);
+    });
+    return s;
+  })();
+  // an orrery sentinel: rings of old brass, worn bright in places
+  S.orrery = (() => {
+    const s = new Skin(); const r = rng('orrery');
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) s.set(x, y, vary(r, (x + y) % 5 === 0 ? C('#e8c060') : (x * 3 + y) % 7 === 0 ? C('#7a5418') : C('#b8862a'), 0.08));
+    return s;
+  })();
+  // and its core, which burns (drawn full-bright)
+  S.orrery_core = (() => {
+    const s = new Skin(); const r = rng('orrery_core');
+    s.box(0, 0, 4, 4, 4, (f, x, y) => ((x + y) % 3 === 0 ? [255, 255, 255] : vary(r, C('#7ae8ff'), 0.1)));
+    return s;
+  })();
+
   // ------------------------------------------------------------ the Hush
   // the Listener: slate-dark hide over a cage of ribs that glow when its heart beats,
   // and no face at all - only a dish of an ear, whorled like a shell

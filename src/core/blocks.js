@@ -16,11 +16,11 @@ const HFACE_OPP = [1, 0, 3, 2];
 // Render types
 const R = { NONE: 0, CUBE: 1, CROSS: 2, LIQUID: 3, TORCH: 4, MODEL: 5, CROP: 6, LADDER: 7, FIRE: 8, LILY: 9, VINE: 10, CIRCUIT: 11, RAIL: 12 };
 
-const WOOD = ['oak', 'spruce', 'birch', 'jungle', 'maple', 'redwood'];
-const WOOD_NAMES = ['Oak', 'Spruce', 'Birch', 'Jungle', 'Maple', 'Redwood'];
+const WOOD = ['oak', 'spruce', 'birch', 'jungle', 'maple', 'redwood', 'glimmer'];
+const WOOD_NAMES = ['Oak', 'Spruce', 'Birch', 'Jungle', 'Maple', 'Redwood', 'Glimmerwood'];
 // leaves / sapling "kinds" (tree species); wood type used by each
-const LEAF_KINDS = ['oak', 'spruce', 'birch', 'jungle', 'maple', 'redwood', 'gold_maple'];
-const LEAF_NAMES = ['Oak', 'Spruce', 'Birch', 'Jungle', 'Red Maple', 'Redwood', 'Golden Maple'];
+const LEAF_KINDS = ['oak', 'spruce', 'birch', 'jungle', 'maple', 'redwood', 'gold_maple', 'glimmer'];
+const LEAF_NAMES = ['Oak', 'Spruce', 'Birch', 'Jungle', 'Red Maple', 'Redwood', 'Golden Maple', 'Glimmer'];
 const LEAF_WOOD = [0, 1, 2, 3, 4, 5, 4];
 
 const COLORS = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black'];
@@ -55,6 +55,7 @@ const SLAB_MATS = [
   { key: 'deepstone_tile', name: 'Deepstone Tile', tex: 'deepstone_tiles', tool: 'pickaxe', hard: 3.5, sound: 'stone' },
   { key: 'starstone_brick', name: 'Starstone Brick', tex: 'starstone_bricks', tool: 'pickaxe', hard: 3, sound: 'stone' },
   { key: 'siltstone_brick', name: 'Siltstone Brick', tex: 'siltstone_bricks', tool: 'pickaxe', hard: 1.5, sound: 'stone' },
+  { key: 'glimmer', name: 'Glimmerwood', tex: 'planks_glimmer', tool: 'axe', hard: 2, sound: 'wood', flam: true },
 ];
 
 // Block storage
@@ -111,11 +112,11 @@ defBlock(3, 'dirt', {
 defBlock(4, 'cobblestone', { name: 'Cobblestone', hardness: 2, resistance: 30, tool: 'pickaxe', needsTool: true });
 defBlock(5, 'planks', {
   name: (m) => (WOOD_NAMES[m] || 'Oak') + ' Planks', tex: (m) => 'planks_' + (WOOD[m] || 'oak'),
-  hardness: 2, resistance: 15, tool: 'axe', sound: 'wood', flammable: 20, burnSpeed: 5, variants: [0, 1, 2, 3, 4, 5], itemMetaMask: 7,
+  hardness: 2, resistance: 15, tool: 'axe', sound: 'wood', flammable: 20, burnSpeed: 5, variants: [0, 1, 2, 3, 4, 5, 6], itemMetaMask: 7,
 });
 defBlock(6, 'sapling', Object.assign({}, plantBase, {
   name: (m) => (LEAF_NAMES[m & 7] || 'Oak') + ' Sapling', tex: (m) => 'sapling_' + (LEAF_KINDS[m & 7] || 'oak'),
-  variants: [0, 1, 2, 3, 4, 5, 6], itemMetaMask: 7, itemSprite: (d) => 'sapling_' + (LEAF_KINDS[d & 7] || 'oak'),
+  variants: [0, 1, 2, 3, 4, 5, 6, 7], itemMetaMask: 7, itemSprite: (d) => 'sapling_' + (LEAF_KINDS[d & 7] || 'oak'),
   select: () => box16(2, 0, 2, 14, 12, 14),
 }));
 defBlock(7, 'bedrock', { name: 'Bedrock', hardness: -1, resistance: 18000000, drops: () => [] });
@@ -148,7 +149,7 @@ defBlock(15, 'log', {
     const end = axis === 0 ? (f === 0 || f === 1) : axis === 1 ? (f === 4 || f === 5) : (f === 2 || f === 3);
     return end ? 'log_' + w + '_top' : 'log_' + w;
   },
-  hardness: 2, tool: 'axe', sound: 'wood', flammable: 5, burnSpeed: 5, variants: [0, 1, 2, 3, 4, 5], itemMetaMask: 7,
+  hardness: 2, tool: 'axe', sound: 'wood', flammable: 5, burnSpeed: 5, variants: [0, 1, 2, 3, 4, 5, 6], itemMetaMask: 7,
 });
 defBlock(16, 'leaves', {
   name: (m) => (LEAF_NAMES[m & 7] || 'Oak') + ' Leaves', tex: (m) => 'leaves_' + (LEAF_KINDS[m & 7] || 'oak'),
@@ -377,7 +378,7 @@ defBlock(59, 'sugar_cane', Object.assign({}, plantBase, {
 }));
 defBlock(60, 'fence', {
   name: (m) => (WOOD_NAMES[m & 7] || 'Oak') + ' Fence', tex: (m) => 'planks_' + (WOOD[m & 7] || 'oak'), render: R.MODEL, opaque: false, opacity: 0,
-  hardness: 2, tool: 'axe', sound: 'wood', flammable: 5, burnSpeed: 20, variants: [0, 1, 2, 3, 4, 5], itemMetaMask: 7,
+  hardness: 2, tool: 'axe', sound: 'wood', flammable: 5, burnSpeed: 20, variants: [0, 1, 2, 3, 4, 5, 6], itemMetaMask: 7,
   // model & collision computed with neighbour info in the mesher / physics
 });
 defBlock(61, 'pumpkin', { name: 'Pumpkin', tex: facingTex('pumpkin_face', 'pumpkin_side', 'pumpkin_top'), hardness: 1, tool: 'axe', sound: 'wood', itemMetaMask: 0 });
@@ -802,6 +803,31 @@ defBlock(171, 'wyrm_egg', {
   model: () => [{ b: [5, 0, 5, 11, 1, 11] }, { b: [3, 1, 3, 13, 3, 13] }, { b: [2, 3, 2, 14, 8, 14] }, { b: [3, 8, 3, 13, 11, 13] }, { b: [4, 11, 4, 12, 13, 12] }, { b: [6, 13, 6, 10, 15, 10] }],
   collide: () => [[2 / 16, 0, 2 / 16, 14 / 16, 15 / 16, 14 / 16]], select: () => [2 / 16, 0, 2 / 16, 14 / 16, 15 / 16, 14 / 16],
 });
+// --- the Drift Isles ------------------------------------------------------------
+// star moss: a soft violet nap over the starstone of the isles beyond the gulf
+defBlock(172, 'star_moss', {
+  name: 'Star Moss', tex: (m, f) => f === 1 ? 'star_moss_top' : f === 0 ? 'starstone' : 'star_moss_side',
+  hardness: 3, resistance: 45, tool: 'pickaxe', needsTool: true, sound: 'grass', drops: () => [[B.STARSTONE, 1, 0]],
+});
+// glimmerwood leaves glow faintly, and hold their place in the air whatever becomes of the trunk
+defBlock(173, 'glimmer_leaves', {
+  name: 'Glimmer Leaves', tex: 'glimmer_leaves', opaque: false, cutout: true, opacity: 1, light: 7, hardness: 0.2, tool: 'hoe', sound: 'grass',
+  flammable: 30, burnSpeed: 60, itemMetaMask: 0,
+  drops: (m, rng, tool) => {
+    if (tool && tool.kind === 'shears') return [[B.GLIMMER_LEAVES, 1, 0]];
+    const out = [];
+    if (rng.nextInt(20) === 0) out.push([B.SAPLING, 1, 7]);
+    if (rng.nextInt(14) === 0) out.push([ITEM_IDS.starfruit, 1, 0]);
+    return out;
+  },
+});
+defBlock(174, 'moonpetal', Object.assign({}, plantBase, { name: 'Moonpetal', tex: 'moonpetal', itemSprite: 'moonpetal', light: 9, select: () => box16(4, 0, 4, 12, 12, 12) }));
+defBlock(175, 'drift_grass', Object.assign({}, plantBase, { name: 'Drift Grass', tex: 'drift_grass', itemSprite: 'drift_grass', replaceable: true, select: () => box16(2, 0, 2, 14, 13, 14), drops: () => [] }));
+// starvines trail from glimmerwood and the undersides of the isles; bit 0: bearing a starfruit
+defBlock(176, 'starvine', Object.assign({}, glowVineBase, {
+  name: 'Starvine', tex: (m) => (m & 1) ? 'starvine_fruit' : 'starvine', light: 6, itemSprite: 'starvine',
+  drops: (m) => (m & 1) ? [[ITEM_IDS.starfruit, 1, 0]] : [],
+}));
 // infested bricks: something lives inside
 defBlock(151, 'infested_bricks', {
   name: (m) => ['Stone Bricks', 'Mossy Stone Bricks', 'Cracked Stone Bricks', 'Chiseled Stone Bricks'][m & 3],

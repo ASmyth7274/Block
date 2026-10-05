@@ -415,11 +415,11 @@ const HFACE_OPP = [1, 0, 3, 2];
 // Render types
 const R = { NONE: 0, CUBE: 1, CROSS: 2, LIQUID: 3, TORCH: 4, MODEL: 5, CROP: 6, LADDER: 7, FIRE: 8, LILY: 9, VINE: 10, CIRCUIT: 11, RAIL: 12 };
 
-const WOOD = ['oak', 'spruce', 'birch', 'jungle', 'maple', 'redwood'];
-const WOOD_NAMES = ['Oak', 'Spruce', 'Birch', 'Jungle', 'Maple', 'Redwood'];
+const WOOD = ['oak', 'spruce', 'birch', 'jungle', 'maple', 'redwood', 'glimmer'];
+const WOOD_NAMES = ['Oak', 'Spruce', 'Birch', 'Jungle', 'Maple', 'Redwood', 'Glimmerwood'];
 // leaves / sapling "kinds" (tree species); wood type used by each
-const LEAF_KINDS = ['oak', 'spruce', 'birch', 'jungle', 'maple', 'redwood', 'gold_maple'];
-const LEAF_NAMES = ['Oak', 'Spruce', 'Birch', 'Jungle', 'Red Maple', 'Redwood', 'Golden Maple'];
+const LEAF_KINDS = ['oak', 'spruce', 'birch', 'jungle', 'maple', 'redwood', 'gold_maple', 'glimmer'];
+const LEAF_NAMES = ['Oak', 'Spruce', 'Birch', 'Jungle', 'Red Maple', 'Redwood', 'Golden Maple', 'Glimmer'];
 const LEAF_WOOD = [0, 1, 2, 3, 4, 5, 4];
 
 const COLORS = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black'];
@@ -454,6 +454,7 @@ const SLAB_MATS = [
   { key: 'deepstone_tile', name: 'Deepstone Tile', tex: 'deepstone_tiles', tool: 'pickaxe', hard: 3.5, sound: 'stone' },
   { key: 'starstone_brick', name: 'Starstone Brick', tex: 'starstone_bricks', tool: 'pickaxe', hard: 3, sound: 'stone' },
   { key: 'siltstone_brick', name: 'Siltstone Brick', tex: 'siltstone_bricks', tool: 'pickaxe', hard: 1.5, sound: 'stone' },
+  { key: 'glimmer', name: 'Glimmerwood', tex: 'planks_glimmer', tool: 'axe', hard: 2, sound: 'wood', flam: true },
 ];
 
 // Block storage
@@ -510,11 +511,11 @@ defBlock(3, 'dirt', {
 defBlock(4, 'cobblestone', { name: 'Cobblestone', hardness: 2, resistance: 30, tool: 'pickaxe', needsTool: true });
 defBlock(5, 'planks', {
   name: (m) => (WOOD_NAMES[m] || 'Oak') + ' Planks', tex: (m) => 'planks_' + (WOOD[m] || 'oak'),
-  hardness: 2, resistance: 15, tool: 'axe', sound: 'wood', flammable: 20, burnSpeed: 5, variants: [0, 1, 2, 3, 4, 5], itemMetaMask: 7,
+  hardness: 2, resistance: 15, tool: 'axe', sound: 'wood', flammable: 20, burnSpeed: 5, variants: [0, 1, 2, 3, 4, 5, 6], itemMetaMask: 7,
 });
 defBlock(6, 'sapling', Object.assign({}, plantBase, {
   name: (m) => (LEAF_NAMES[m & 7] || 'Oak') + ' Sapling', tex: (m) => 'sapling_' + (LEAF_KINDS[m & 7] || 'oak'),
-  variants: [0, 1, 2, 3, 4, 5, 6], itemMetaMask: 7, itemSprite: (d) => 'sapling_' + (LEAF_KINDS[d & 7] || 'oak'),
+  variants: [0, 1, 2, 3, 4, 5, 6, 7], itemMetaMask: 7, itemSprite: (d) => 'sapling_' + (LEAF_KINDS[d & 7] || 'oak'),
   select: () => box16(2, 0, 2, 14, 12, 14),
 }));
 defBlock(7, 'bedrock', { name: 'Bedrock', hardness: -1, resistance: 18000000, drops: () => [] });
@@ -547,7 +548,7 @@ defBlock(15, 'log', {
     const end = axis === 0 ? (f === 0 || f === 1) : axis === 1 ? (f === 4 || f === 5) : (f === 2 || f === 3);
     return end ? 'log_' + w + '_top' : 'log_' + w;
   },
-  hardness: 2, tool: 'axe', sound: 'wood', flammable: 5, burnSpeed: 5, variants: [0, 1, 2, 3, 4, 5], itemMetaMask: 7,
+  hardness: 2, tool: 'axe', sound: 'wood', flammable: 5, burnSpeed: 5, variants: [0, 1, 2, 3, 4, 5, 6], itemMetaMask: 7,
 });
 defBlock(16, 'leaves', {
   name: (m) => (LEAF_NAMES[m & 7] || 'Oak') + ' Leaves', tex: (m) => 'leaves_' + (LEAF_KINDS[m & 7] || 'oak'),
@@ -776,7 +777,7 @@ defBlock(59, 'sugar_cane', Object.assign({}, plantBase, {
 }));
 defBlock(60, 'fence', {
   name: (m) => (WOOD_NAMES[m & 7] || 'Oak') + ' Fence', tex: (m) => 'planks_' + (WOOD[m & 7] || 'oak'), render: R.MODEL, opaque: false, opacity: 0,
-  hardness: 2, tool: 'axe', sound: 'wood', flammable: 5, burnSpeed: 20, variants: [0, 1, 2, 3, 4, 5], itemMetaMask: 7,
+  hardness: 2, tool: 'axe', sound: 'wood', flammable: 5, burnSpeed: 20, variants: [0, 1, 2, 3, 4, 5, 6], itemMetaMask: 7,
   // model & collision computed with neighbour info in the mesher / physics
 });
 defBlock(61, 'pumpkin', { name: 'Pumpkin', tex: facingTex('pumpkin_face', 'pumpkin_side', 'pumpkin_top'), hardness: 1, tool: 'axe', sound: 'wood', itemMetaMask: 0 });
@@ -1201,6 +1202,31 @@ defBlock(171, 'wyrm_egg', {
   model: () => [{ b: [5, 0, 5, 11, 1, 11] }, { b: [3, 1, 3, 13, 3, 13] }, { b: [2, 3, 2, 14, 8, 14] }, { b: [3, 8, 3, 13, 11, 13] }, { b: [4, 11, 4, 12, 13, 12] }, { b: [6, 13, 6, 10, 15, 10] }],
   collide: () => [[2 / 16, 0, 2 / 16, 14 / 16, 15 / 16, 14 / 16]], select: () => [2 / 16, 0, 2 / 16, 14 / 16, 15 / 16, 14 / 16],
 });
+// --- the Drift Isles ------------------------------------------------------------
+// star moss: a soft violet nap over the starstone of the isles beyond the gulf
+defBlock(172, 'star_moss', {
+  name: 'Star Moss', tex: (m, f) => f === 1 ? 'star_moss_top' : f === 0 ? 'starstone' : 'star_moss_side',
+  hardness: 3, resistance: 45, tool: 'pickaxe', needsTool: true, sound: 'grass', drops: () => [[B.STARSTONE, 1, 0]],
+});
+// glimmerwood leaves glow faintly, and hold their place in the air whatever becomes of the trunk
+defBlock(173, 'glimmer_leaves', {
+  name: 'Glimmer Leaves', tex: 'glimmer_leaves', opaque: false, cutout: true, opacity: 1, light: 7, hardness: 0.2, tool: 'hoe', sound: 'grass',
+  flammable: 30, burnSpeed: 60, itemMetaMask: 0,
+  drops: (m, rng, tool) => {
+    if (tool && tool.kind === 'shears') return [[B.GLIMMER_LEAVES, 1, 0]];
+    const out = [];
+    if (rng.nextInt(20) === 0) out.push([B.SAPLING, 1, 7]);
+    if (rng.nextInt(14) === 0) out.push([ITEM_IDS.starfruit, 1, 0]);
+    return out;
+  },
+});
+defBlock(174, 'moonpetal', Object.assign({}, plantBase, { name: 'Moonpetal', tex: 'moonpetal', itemSprite: 'moonpetal', light: 9, select: () => box16(4, 0, 4, 12, 12, 12) }));
+defBlock(175, 'drift_grass', Object.assign({}, plantBase, { name: 'Drift Grass', tex: 'drift_grass', itemSprite: 'drift_grass', replaceable: true, select: () => box16(2, 0, 2, 14, 13, 14), drops: () => [] }));
+// starvines trail from glimmerwood and the undersides of the isles; bit 0: bearing a starfruit
+defBlock(176, 'starvine', Object.assign({}, glowVineBase, {
+  name: 'Starvine', tex: (m) => (m & 1) ? 'starvine_fruit' : 'starvine', light: 6, itemSprite: 'starvine',
+  drops: (m) => (m & 1) ? [[ITEM_IDS.starfruit, 1, 0]] : [],
+}));
 // infested bricks: something lives inside
 defBlock(151, 'infested_bricks', {
   name: (m) => ['Stone Bricks', 'Mossy Stone Bricks', 'Cracked Stone Bricks', 'Chiseled Stone Bricks'][m & 3],
@@ -1431,8 +1457,8 @@ defItem('sunfish', { name: 'Sunfish', food: { hunger: 1, sat: 0.2 } });
 defItem('pufferfish', { name: 'Pufferfish', food: { hunger: 1, sat: 0.2, poisonChance: 1, poisonTicks: 300, hungerChance: 1, hungerTicks: 300 } });
 defItem('glimmerfin', { name: 'Glimmerfin', food: { hunger: 2, sat: 0.4, nightVision: 900 } });
 defItem('message_bottle', { name: 'Message in a Bottle', maxStack: 1, rare: true });
-defItem('boat', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Boat', tex: (d) => 'boat_' + (WOOD[d] || 'oak'), maxStack: 1, variants: [0, 1, 2, 3, 4, 5] });
-defItem('sign', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Sign', tex: (d) => 'sign_' + (WOOD[d] || 'oak'), maxStack: 16, variants: [0, 1, 2, 3, 4, 5], fuel: 200, places: 'sign' });
+defItem('boat', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Boat', tex: (d) => 'boat_' + (WOOD[d] || 'oak'), maxStack: 1, variants: [0, 1, 2, 3, 4, 5, 6] });
+defItem('sign', { name: (d) => (WOOD_NAMES[d] || 'Oak') + ' Sign', tex: (d) => 'sign_' + (WOOD[d] || 'oak'), maxStack: 16, variants: [0, 1, 2, 3, 4, 5, 6], fuel: 200, places: 'sign' });
 defItem('painting', { name: 'Painting' });
 defItem('relay', { name: 'Ember Relay', tex: 'item_relay', places: 'relay' });
 defItem('minecart', { name: 'Minecart', maxStack: 1 });
@@ -1467,6 +1493,7 @@ const POTIONS = [
   { key: 'invisibility', name: 'Invisibility', effect: 'invisible', dur: 3600, color: '#7f8392' },
   { key: 'water_breathing', name: 'Water Breathing', effect: 'waterBreathing', dur: 3600, color: '#2e5299' },
   { key: 'leaping', name: 'Leaping', effect: 'jump', dur: 3600, color: '#22ff4c', strong: true },
+  { key: 'featherfall', name: 'Featherfall', effect: 'featherfall', dur: 1800, color: '#e4dcff' },
 ];
 const EFFECTS = {
   speed: { name: 'Speed', color: '#7cafc6' }, slow: { name: 'Slowness', color: '#5a6c81', bad: true }, strength: { name: 'Strength', color: '#932423' },
@@ -1474,6 +1501,7 @@ const EFFECTS = {
   fireRes: { name: 'Fire Resistance', color: '#e49a3a' }, nightVision: { name: 'Night Vision', color: '#1f1fa1' }, invisible: { name: 'Invisibility', color: '#7f8392' },
   waterBreathing: { name: 'Water Breathing', color: '#2e5299' }, jump: { name: 'Jump Boost', color: '#22ff4c' }, hunger: { name: 'Hunger', color: '#587653', bad: true },
   haste: { name: 'Haste', color: '#d9c043' }, darkness: { name: 'Darkness', color: '#292721', bad: true },
+  featherfall: { name: 'Featherfall', color: '#e4dcff' }, drift: { name: 'Drift', color: '#b48cff', bad: true },
 };
 function potionOf(d) { return POTIONS[d & 63] || POTIONS[0]; }
 function potionName(d, splash) {
@@ -1511,6 +1539,13 @@ defItem('echo_fork', { name: 'Echo Fork', maxDamage: 48, handheld: true });
 // ---- the Starwyrm's isle ----  (items are numbered in the order they are defined: always add new ones at the end)
 // a shard of a fallen star, still warm: the Starwyrm calls them down from the sky
 defItem('star_fragment', { name: 'Star Fragment', rare: true });
+// ---- the Drift Isles ----
+// a pale fruit of the glimmerwood: one bite and you fall like a feather for a while
+defItem('starfruit', { name: 'Starfruit', food: { hunger: 4, sat: 4.8, featherfall: 600 } });
+// silk and starmetal ribs, worn on the back: jump as you fall and it opens, and you glide
+defItem('drift_glider', { name: 'Drift Glider', maxDamage: 432, armor: { slot: 1, points: 0, mat: 'glider' }, glider: true, rare: true });
+// what is left of an orrery sentinel: a brass gear still turning slowly by itself
+defItem('orrery_gear', { name: 'Orrery Gear' });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -2129,6 +2164,7 @@ const TexGen = (function () {
     jungle:  { plank: ['#80573a', '#8d6142', '#9a6b4a', '#a67452', '#b07d57'], bark: ['#463818', '#55451e', '#5f4f23', '#6e5f2a'], ring: ['#8d6142', '#a06e4b', '#b27c55'] },
     maple:   { plank: ['#94573d', '#a26043', '#b06a49', '#bc7451', '#c67e59'], bark: ['#4a3a34', '#594640', '#68534c', '#76615a'], ring: ['#a8684a', '#bf7856', '#d18a63'] },
     redwood: { plank: ['#6e2c1f', '#7b3324', '#8c3a2a', '#9a4230', '#a84a37'], bark: ['#5a2414', '#6c2e1a', '#7e3820', '#8f4227'], ring: ['#8c3a2a', '#a04634', '#b4523d'] },
+    glimmer: { plank: ['#7a7498', '#86809f', '#928cac', '#9e98b8', '#aaa4c4'], bark: ['#4c4670', '#5a547e', '#68628e', '#78729e'], ring: ['#8e88aa', '#a29cbe', '#b6b0d0'] },
   };
   function planks(w) {
     const P = pal(WOODPAL[w].plank);
@@ -2172,6 +2208,7 @@ const TexGen = (function () {
       }
     }
     if (w === 'jungle') { for (let k = 0; k < 10; k++) img.set(rng.nextInt(16), rng.nextInt(16), C(rng.nextBool() ? '#4c6b2a' : '#5d7d33')); }
+    if (w === 'glimmer') { for (let k = 0; k < 8; k++) img.set(rng.nextInt(16), rng.nextInt(16), C(k % 3 ? '#cfc4ff' : '#fff4c8')); }
     return img;
   }
   function logTop(w) {
@@ -3522,6 +3559,7 @@ const TexGen = (function () {
     oak: ['#3a2a14', '#7a6038', '#a88a57', '#5e4a2a'], spruce: ['#22160a', '#523a20', '#785832', '#3f2c18'],
     birch: ['#5a5030', '#b3a36a', '#d0c084', '#8a7c4c'], jungle: ['#3a2414', '#80573a', '#a67452', '#5e3e28'],
     maple: ['#3e2014', '#94573d', '#bc7451', '#6e3e2a'], redwood: ['#2e100a', '#6e2c1f', '#9a4230', '#4e1c12'],
+    glimmer: ['#2a2640', '#7a7498', '#aaa4c4', '#4c4670'],
   };
   for (const w of WOOD) {
     const c = WOODCOL[w];
@@ -4589,6 +4627,78 @@ const TexGen = (function () {
     '................', '................', '................', '................', '..oooo....oooo..', '..oLLo....oLLo..', '..oLLo....oLLo..', '..oLLo....oLLo..',
     '..oLLo....oLLo..', '.ooLLo...ooLLo..', 'oLLLLo..oLLLLo..', 'oSSSSo..oSSSSo..', 'oooooo..oooooo..', '................', '................', '................'],
     { o: '#2a2632', L: '#6a5a4a', S: '#9a94ae' });
+})();
+
+// ---- src/render/driftart.js
+// ---------------------------------------------------------------------------
+// Artwork for the Drift Isles beyond the gulf: star moss on the starstone,
+// glimmerwood leaves full of light, moonpetals, drift grass, starvines and
+// their fruit; the drift glider and the orrery gear.
+// ---------------------------------------------------------------------------
+(function () {
+  const { Img, T, reg, sprite, rngFor, noiseImg, C, mix } = TexGen;
+  // star moss: a soft violet nap, flecked with pale points of light
+  reg('star_moss_top', (() => {
+    const img = noiseImg('star_moss_top', ['#4a3e78', '#544684', '#5e4e90', '#68589a', '#7262a4'], { scales: [4, 2, 1], weights: [0.3, 0.35, 0.35] });
+    const rng = rngFor('star_moss_top2');
+    for (let k = 0; k < 6; k++) img.set(rng.nextInt(16), rng.nextInt(16), C('#d8ccff'));
+    for (let k = 0; k < 4; k++) img.set(rng.nextInt(16), rng.nextInt(16), C('#3a2e62'));
+    return img;
+  })());
+  reg('star_moss_side', (() => {
+    const img = T.starstone.copy(), top = T.star_moss_top, rng = rngFor('star_moss_side');
+    for (let x = 0; x < 16; x++) {
+      const h = 2 + rng.nextInt(3) + ((x * 7) % 3 === 0 ? 1 : 0);
+      for (let y = 0; y < h; y++) { const i = (y * 16 + x) * 4; img.set(x, y, [top.d[i], top.d[i + 1], top.d[i + 2]]); }
+    }
+    return img;
+  })());
+  // glimmer leaves: deep blue-violet, full of small lights (not tinted by the biome)
+  reg('glimmer_leaves', (() => {
+    const img = new Img(), rng = rngFor('glimmer_leaves');
+    const P = [C('#383478'), C('#433e88'), C('#4e4898'), C('#5a54a8'), C('#6a62bc')];
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      if (rng.nextInt(5) === 0) { img.set(x, y, [0, 0, 0], 0); continue; }
+      img.set(x, y, P[rng.nextInt(P.length)]);
+    }
+    for (let k = 0; k < 7; k++) { const x = rng.nextInt(16), y = rng.nextInt(16); img.set(x, y, k % 3 ? C('#b8e8ff') : C('#fff4c0')); }
+    return img;
+  })());
+  reg('leaves_glimmer', T.glimmer_leaves.copy());
+  sprite('moonpetal', [
+    '................', '................', '.....w....w.....', '....wWw..wWw....', '.....wcwwcw.....', '...wwwcyycwww...', '..wWWwcyycwWWw..', '...wwwccccwww...',
+    '.....wcwwcw.....', '....wWw.gwWw....', '.....w..g.w.....', '........g.......', '.......gg.......', '.......g.g......', '......g...g.....', '................'],
+    { w: '#d8d4f8', W: '#ffffff', c: '#a8b8f0', y: '#fff0a8', g: '#5a6a8a' });
+  sprite('drift_grass', [
+    '................', '................', '................', '.......l........', '...l...l....l...', '...l..ll...l....', '....l.l...l..l..', '....lll..ll.l...',
+    '..l..ll.l..ll...', '...l.dl.l.ld....', '....ddldlldd....', '.....ddddld.....', '......dddd......', '.......dd.......', '................', '................'],
+    { l: '#b4a8e0', d: '#6c5ea8' });
+  sprite('starvine', [
+    '.......v........', '.......vv.......', '........v.......', '.......vv.......', '......vv..*.....', '......v.........', '.......v........', '.......vv.......',
+    '........v.......', '...*...vv.......', '.......v........', '......vv........', '......v.........', '.......v...*....', '.......vv.......', '........v.......'],
+    { v: '#7a6cc8', '*': '#e8f0ff' });
+  sprite('starvine_fruit', [
+    '.......v........', '.......vv.......', '........v.......', '.......vv.......', '......vv........', '......v.........', '.....ffff.......', '....fFFFFf......',
+    '....fFwFFf......', '....fFFFFf......', '.....ffff.......', '......vv........', '......v.........', '.......v........', '.......vv.......', '........v.......'],
+    { v: '#7a6cc8', f: '#d8a840', F: '#ffe080', w: '#fffbe8' });
+  sprite('sapling_glimmer', [
+    '................', '......b.........', '.....bBb..b.....', '....bB*Bbbb.....', '.....bBb.bBb....', '..b...bt.b*b....', '.bBb...t..b.....', '..b.b..t........',
+    '....bBbt........', '....b*bt........', '.....b.t........', '.......t........', '.......t........', '.......t........', '................', '................'],
+    { b: '#3e3e8c', B: '#5a58b0', '*': '#fff4c0', t: '#8c86ac' });
+  // ---- items ----
+  sprite('starfruit', [
+    '................', '................', '.......s........', '......ss........', '.....oooo.......', '...ooYYYYoo.....', '..oYYWYYYYYo....', '..oYWWYYYYYo....',
+    '..oYYYYYYYYo....', '..oYYYYYYYYo....', '...oYYYYYYo.....', '....ooYYoo......', '......oo........', '................', '................', '................'],
+    { s: '#6c5ea8', o: '#a07818', Y: '#f0c848', W: '#fffbe0' });
+  sprite('drift_glider', [
+    '................', '..rr........rr..', '.rSSr......rSSr.', '.rSSSr....rSSSr.', '.rSsSSr..rSSsSr.', '.rSSsSSrrSSsSSr.', '.rSSSsSSSSsSSSr.', '.rSSSSsSSsSSSSr.',
+    '.rSSSSSssSSSSSr.', '.rSSSSSSSSSSSSr.', '..rSSSSSSSSSSr..', '...rrSSSSSSrr...', '.....rrSSrr.....', '.......rr.......', '................', '................'],
+    { r: '#4a4470', S: '#d8d2f0', s: '#8a82b8' });
+  sprite('orrery_gear', [
+    '................', '......oo........', '...o.oGGo.o.....', '..oGoGGGGoGo....', '...oGGggGGo.....', '.ooGGgccgGGoo...', '.oGGgcwwcgGGo...', '..oGgcwwcgGo....',
+    '.oGGgcccggGGo...', '.ooGGgggGGGoo...', '...oGGGGGGo.....', '..oGo.GG.oGo....', '...o..oo..o.....', '................', '................', '................'],
+    { o: '#5a3e14', G: '#c8962e', g: '#8a6420', c: '#3a2a10', w: '#fff0a0' });
+  void mix;
 })();
 
 // ---- src/world/worldgen.js
@@ -6648,6 +6758,8 @@ function WorldGenFactory(Noise, TAB) {
         sift: [[I.lost_letter, 1, 1, 14], [I.gold_ingot, 1, 4, 8], [I.iron_ingot, 1, 5, 8], [I.diamond, 1, 2, 3], [I.compass, 1, 1, 4], [I.clock, 1, 1, 4], [I.book, 1, 3, 6],
           [I.golden_apple, 1, 1, 2], [I.jade, 1, 3, 5], [I.bread, 1, 3, 5], [I.string, 2, 6, 5], [I.iron_sword, 1, 1, 3], [I.bow, 1, 1, 3], [I.arrow, 3, 9, 4], [I.wayback_compass, 1, 1, 2],
           [I.message_bottle, 1, 1, 3], [I.seeker_eye, 1, 1, 1], [I.gold_nugget, 3, 9, 6], [I.sift_scale, 1, 3, 4], [I.map, 1, 1, 2], [I.cobalt_ingot, 1, 3, 4], [B.PALE_LANTERN, 1, 2, 3], [I.wisp_essence, 1, 2, 3]],
+        observatory: [[I.book, 1, 3, 10], [I.paper, 2, 6, 8], [I.starfruit, 1, 4, 10], [I.star_fragment, 1, 3, 8], [I.compass, 1, 1, 4], [I.clock, 1, 1, 4], [I.map, 1, 1, 3],
+          [I.glass_bottle, 1, 3, 4], [I.gold_ingot, 1, 3, 6], [I.starmetal_ingot, 1, 1, 2], [B.SAPLING, 1, 2, 5, 7], [B.MOONPETAL, 1, 3, 5], [I.orrery_gear, 1, 2, 4], [I.star_crystal, 1, 1, 1], [I.diamond, 1, 2, 2]],
         city_keep: [[I.hush_shard, 2, 5, 10], [I.diamond, 1, 3, 6], [I.golden_apple, 1, 2, 4], [I.diamond_leggings, 1, 1, 2], [I.starmetal_ingot, 1, 1, 1], [I.gold_ingot, 2, 5, 6]],
         vault_library: [[I.book, 1, 3, 20], [I.paper, 2, 7, 20], [I.compass, 1, 1, 5], [I.wisp_essence, 1, 2, 4], [I.jade, 1, 2, 4], [I.dye, 2, 6, 6, 11], [I.glass_bottle, 1, 3, 4], [I.seeker_eye, 1, 1, 1]],
         fortress: [[I.gold_ingot, 1, 3, 15], [I.iron_ingot, 1, 5, 6], [I.diamond, 1, 3, 5], [I.gold_sword, 1, 1, 5], [I.gold_chestplate, 1, 1, 5], [I.gold_pickaxe, 1, 1, 3], [I.flint_and_steel, 1, 1, 5],
@@ -6667,7 +6779,7 @@ function WorldGenFactory(Noise, TAB) {
         if (pick[4] !== undefined) dmg = pick[4];
         else if (pick[0] === I.dye) dmg = rng.nextInt(16);
         if (pick[0] === B.WOOL) dmg = rng.nextInt(16);
-        if (pick[0] === B.SAPLING) dmg = rng.nextInt(7);
+        if (pick[0] === B.SAPLING && pick[4] === undefined) dmg = rng.nextInt(7);
         if (pick[0] === I.lost_letter) dmg = rng.nextInt(64);
         items.push({ slot: rng.nextInt(27), id: pick[0], c: count, d: dmg });
       }
@@ -6909,6 +7021,34 @@ function WorldGenFactory(Noise, TAB) {
       };
       const trunk = (h, wood) => { for (let k = 0; k < h; k++) W.set(x, y + k, z, LOG, wood, 3); W.setIf(x, y - 1, z, B.DIRT, 0, B.GRASS); };
       switch (kind) {
+        case 'glimmer': {
+          // a pale trunk that leans and twists as it climbs, under a wide, drooping canopy
+          // of glowing leaves strung with starvines
+          const h = 6 + rng.nextInt(4), lx = rng.nextInt(3) - 1, lz = rng.nextInt(3) - 1;
+          let tx = x, tz = z;
+          for (let k = 0; k < h; k++) {
+            if (k >= 3 && k < h - 1 && rng.nextInt(3) === 0) { tx += lx; tz += lz; }
+            W.set(tx, y + k, tz, LOG, 6, 3);
+          }
+          W.setIf(x, y - 1, z, B.STARSTONE, 0, B.STAR_MOSS);
+          const top = y + h;
+          for (let dy = -2; dy <= 1; dy++) {
+            const r = dy === 1 ? 1.6 : dy === 0 ? 2.9 : dy === -1 ? 3.4 : 2.6;
+            for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++) {
+              const d = Math.sqrt(dx * dx + dz * dz);
+              if (d > r || (d > r - 0.8 && rng.nextInt(3) === 0)) continue;
+              W.set(tx + dx, top + dy - 1, tz + dz, B.GLIMMER_LEAVES, 0, 1);
+            }
+          }
+          // starvines trailing from the underside of the canopy
+          for (let i = 0; i < 7; i++) {
+            const a = rng.nextFloat() * Math.PI * 2, r = 1.5 + rng.nextFloat() * 1.6;
+            const vx = tx + Math.round(Math.cos(a) * r), vz = tz + Math.round(Math.sin(a) * r), len = 1 + rng.nextInt(5);
+            const vy = Math.hypot(vx - tx, vz - tz) <= 2.5 ? top - 4 : top - 3;
+            for (let k = 0; k < len; k++) W.set(vx, vy - k, vz, B.STARVINE, k === len - 1 && rng.nextInt(3) === 0 ? 1 : 0, 1);
+          }
+          break;
+        }
         case 'oak': case 'birch': case 'maple': case 'gold_maple': {
           const wood = kind === 'birch' ? 2 : (kind === 'oak' ? 0 : 4);
           const leaf = kind === 'birch' ? 2 : kind === 'oak' ? 0 : kind === 'maple' ? 4 : 6;
@@ -7664,7 +7804,130 @@ function WorldGenFactory(Noise, TAB) {
         for (let y = col[0]; y <= col[1]; y++) blocks[IDX(x, y, z)] = B.STARSTONE;
       }
       if (Math.abs(cx) <= 9 && Math.abs(cz) <= 9) { this.spires(out); this.starWell(out); }
+      if ((x0 + 8) * (x0 + 8) + (z0 + 8) * (z0 + 8) > (ISLES.GULF - 120) * (ISLES.GULF - 120)) this.driftDecor(out);
       return out;
+    }
+    // ---------------------------------------------------------------- the Drift Isles
+    // each drift isle is bare rock, a mossy meadow, a glimmerwood grove, or (if it is big
+    // enough) the site of an old observatory
+    isleKind(d) {
+      if (d.kind) return d.kind;
+      const v = new Random(seedHash(this.seed, d.i, d.j, 0x15E)).nextFloat();
+      d.kind = d.R >= 17 && v < 0.24 ? 'observatory' : v < 0.48 ? 'grove' : v < 0.82 ? 'meadow' : 'bare';
+      return d.kind;
+    }
+    // where the glimmerwood grows on an isle
+    isleTrees(d) {
+      if (d.trees) return d.trees;
+      const kind = this.isleKind(d), rng = new Random(seedHash(this.seed, d.i, d.j, 0x7EE));
+      const n = kind === 'grove' ? Math.round(d.R * d.R / 45) + 2 : kind === 'meadow' ? rng.nextInt(3) : kind === 'observatory' ? 2 : 0;
+      const out = [];
+      for (let k = 0; k < n * 3 && out.length < n; k++) {
+        const a = rng.nextFloat() * Math.PI * 2, r = (kind === 'observatory' ? 10 : 3.5) + rng.nextFloat() * (d.R * 0.7 - 3);
+        const x = Math.round(d.x + Math.cos(a) * r), z = Math.round(d.z + Math.sin(a) * r), col = this.column(x, z);
+        if (!col || col[2] !== d || out.some((t) => (t.x - x) ** 2 + (t.z - z) ** 2 < 25)) continue;
+        out.push({ x, z, y: col[1] + 1, seed: rng.nextInt(0x7fffffff) });
+      }
+      return (d.trees = out);
+    }
+    driftDecor(out) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16;
+      const hash = (x, z) => { let h = Math.imul(x, 374761393) ^ Math.imul(z, 668265263) ^ this.seed; h = Math.imul(h ^ (h >>> 13), 1274126177); return (h ^ (h >>> 16)) >>> 0; };
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
+        const wx = X0 + x, wz = Z0 + z, col = this.column(wx, wz);
+        if (!col || !col[2]) continue;
+        const d = col[2], kind = this.isleKind(d), top = col[1], h = hash(wx, wz);
+        // starvines trail from the undersides
+        if ((h & 31) === 7 && col[0] > 6) {
+          const len = 1 + ((h >> 6) & 3) + ((h >> 8) & 1) * 2;
+          for (let k = 1; k <= len; k++) { const i = IDX(x, col[0] - k, z); blocks[i] = B.STARVINE; meta[i] = k === len && ((h >> 10) & 3) === 0 ? 1 : 0; }
+        }
+        if (kind === 'bare' || top + 1 >= H) continue;
+        if (kind !== 'grove' && this.iCluster.noise2(wx / 9 + 40, wz / 9) < -0.3) continue;
+        blocks[IDX(x, top, z)] = B.STAR_MOSS;
+        const r = (h >> 12) & 255, i = IDX(x, top + 1, z);
+        if (r < (kind === 'meadow' ? 46 : 26)) blocks[i] = B.DRIFT_GRASS;
+        else if (r < (kind === 'meadow' ? 58 : 30)) blocks[i] = B.MOONPETAL;
+      }
+      // glimmerwood and observatories, from every isle near enough to reach into this chunk
+      const W = new Writer(out.cx, out.cz, blocks, meta);
+      const i0 = Math.floor((X0 + 8) / 64), j0 = Math.floor((Z0 + 8) / 64);
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const d = this.driftIsle(i0 + di, j0 + dj);
+        if (!d || d.x + d.R * 1.4 + 8 < X0 || d.x - d.R * 1.4 - 8 > X0 + 15 || d.z + d.R * 1.4 + 8 < Z0 || d.z - d.R * 1.4 - 8 > Z0 + 15) continue;
+        for (const t of this.isleTrees(d)) {
+          if (t.x + 5 < X0 || t.x - 5 > X0 + 15 || t.z + 5 < Z0 || t.z - 5 > Z0 + 15) continue;
+          this.tree(W, new Random(t.seed), 'glimmer', t.x, t.y, t.z);
+        }
+        if (this.isleKind(d) === 'observatory') this.observatory(out, W, d);
+      }
+    }
+    // an old observatory: a round tower of starstone bricks on the crown of a large drift
+    // isle, three floors and a glass dome over its great brass telescope
+    observatory(out, W, d) {
+      const col = this.column(d.x, d.z);
+      if (!col || col[2] !== d) return;
+      const X0 = out.cx * 16, Z0 = out.cz * 16, cx = d.x, cz = d.z, y0 = col[1] + 1;
+      if (cx + 8 < X0 || cx - 8 > X0 + 15 || cz + 8 < Z0 || cz - 8 > Z0 + 15) return;
+      const rng = new Random(seedHash(this.seed, d.i, d.j, 0x0B5));
+      const R = 5, TOP = y0 + 18;
+      const inC = (x, z) => x >= X0 && x < X0 + 16 && z >= Z0 && z < Z0 + 16;
+      const put = (x, y, z, id, m) => W.set(x, y, z, id, m || 0, 0);
+      const chest = (x, y, z, table, extra) => { put(x, y, z, B.CHEST, 0); if (inC(x, z)) out.tiles.push({ type: 'chest', x, y, z, items: this.loot(rng, table).concat(extra || []) }); };
+      for (let dx = -R - 1; dx <= R + 1; dx++) for (let dz = -R - 1; dz <= R + 1; dz++) {
+        const r = Math.hypot(dx, dz), x = cx + dx, z = cz + dz;
+        if (r > R + 0.5 || !inC(x, z)) continue;
+        // a footing of brick down to the rock
+        for (let y = y0 - 1; y > y0 - 12 && y > 1; y--) { const id = W.get(x, y, z); if (id > 0 && SOLID[id] && id !== B.STAR_MOSS) break; put(x, y, z, B.STARSTONE_BRICKS); }
+        put(x, y0 - 1, z, B.STARSTONE_BRICKS);
+        for (let y = y0; y <= TOP + R + 1; y++) put(x, y, z, 0);
+        const wall = r > R - 0.5;
+        for (let y = y0; y <= TOP; y++) {
+          const f = (y - y0) % 6;
+          if (wall) {
+            const card = Math.abs(dx) <= 1 || Math.abs(dz) <= 1;
+            if (card && (f === 2 || f === 3) && y > y0 + 1 && !(dx === R && dz === 0)) put(x, y, z, B.GLASS_PANE);
+            else put(x, y, z, f === 0 ? B.STARSTONE : B.STARSTONE_BRICKS);
+          } else if (f === 0 && y > y0) put(x, y, z, y === TOP ? B.STARSTONE_BRICKS : B.PLANKS, y === TOP ? 0 : 6);
+        }
+        if (!wall) put(x, y0 - 1, z, B.PLANKS, 6);
+        // the dome, open in a slot for the telescope
+        for (let dy = 1; dy <= R + 1; dy++) {
+          const s = Math.hypot(dx, dz, dy);
+          if (s > R + 0.5 || s < R - 0.6) continue;
+          if (Math.abs(dx) <= 1 && dz > 0 && dy < R) continue;
+          put(x, TOP + dy, z, B.GLASS);
+        }
+      }
+      // a ladder up the inside of the east wall, through a hole in every floor
+      for (let y = y0; y <= TOP; y++) put(cx + R - 1, y, cz, B.LADDER, 2);
+      // the door, facing west, with a step
+      put(cx - R, y0, cz, 0); put(cx - R, y0 + 1, cz, 0); put(cx - R - 1, y0 - 1, cz, B.STARSTONE_BRICKS);
+      // the ground floor: a workroom
+      for (const [dx, dz] of [[-3, -3], [-3, 3], [3, -3], [3, 3]]) put(cx + dx, y0, cz + dz, B.PALE_LANTERN, 0);
+      put(cx + 2, y0, cz - 3, B.CRAFTING_TABLE); put(cx - 1, y0, cz - 4, B.BOOKSHELF); put(cx, y0, cz - 4, B.BOOKSHELF); put(cx + 1, y0, cz - 4, B.BOOKSHELF);
+      chest(cx - 2, y0, cz + 3, 'observatory');
+      // the library above
+      for (let k = -2; k <= 2; k++) { put(cx + k, y0 + 7, cz - 4, B.BOOKSHELF); put(cx + k, y0 + 8, cz - 4, B.BOOKSHELF); put(cx + k, y0 + 7, cz + 4, B.BOOKSHELF); }
+      put(cx, y0 + 11, cz, B.PALE_LANTERN, 1);
+      chest(cx - 3, y0 + 7, cz + 2, 'observatory');
+      // the star-gazer's room: a bed, a desk, a hanging lantern
+      put(cx - 3, y0 + 13, cz - 1, B.SLAB, 23); put(cx - 3, y0 + 13, cz, B.SLAB, 23);
+      put(cx, y0 + 17, cz, B.PALE_LANTERN, 1);
+      chest(cx - 2, y0 + 13, cz - 3, 'observatory');
+      // the deck: the great telescope on its stand, aimed out through the slot
+      put(cx, TOP + 1, cz, B.FENCE, 6);
+      put(cx, TOP + 2, cz - 1, B.IRON_BLOCK);
+      for (let k = 0; k < 4; k++) put(cx, TOP + 2 + Math.floor(k * 0.75), cz + k, B.GOLD_BLOCK);
+      put(cx, TOP + 5, cz + 4, B.GLASS);
+      // the treasure of the place: a glider, in the chest by the telescope
+      chest(cx + 2, TOP + 1, cz - 2, 'observatory', [{ slot: 13, id: I.drift_glider, c: 1, d: 0 }]);
+      // orrery sentinels keep watch round it
+      const n = 2 + rng.nextInt(2);
+      for (let k = 0; k < n; k++) {
+        const a = rng.nextFloat() * Math.PI * 2, ex = cx + 0.5 + Math.cos(a) * (R + 3), ez = cz + 0.5 + Math.sin(a) * (R + 3);
+        if (inC(Math.floor(ex), Math.floor(ez))) out.entities.push({ type: 'orrery', x: ex, y: y0 + 4 + k * 6 + rng.nextInt(3), z: ez });
+      }
     }
     // ten obsidian spires in a ring, tallest and widest at random; the two
     // shortest keep their crystals in iron cages
@@ -7703,7 +7966,7 @@ function WorldGenFactory(Noise, TAB) {
       const a = Math.PI * 2 * k / n, ca = Math.cos(a), sa = Math.sin(a);
       for (let r = ISLES.GULF - 50; r < ISLES.GULF + 1200; r += 6) {
         const x = Math.round(ca * r), z = Math.round(sa * r), col = this.column(x, z);
-        if (!col || !col[2]) continue;
+        if (!col || !col[2] || this.isleKind(col[2]) === 'observatory') continue;
         const d = col[2];
         let best = null, bs = -1e9;
         for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) {
@@ -9685,7 +9948,7 @@ class Mesher {
           if (k === 1) return FIXED_TINT.spruce;
           if (k === 2) return FIXED_TINT.birch;
           if (k === 5) return FIXED_TINT.redwood;
-          if (k === 4 || k === 6) return FIXED_TINT.white;
+          if (k === 4 || k === 6 || k === 7) return FIXED_TINT.white;
         }
         return [tints[ci + 3], tints[ci + 4], tints[ci + 5]];
       case 3: return [tints[ci + 6], tints[ci + 7], tints[ci + 8]];
@@ -11371,7 +11634,7 @@ class ItemIcons {
     if (id === B.LEAVES) {
       const k = meta & 7;
       if (k === 1) return ICON_TINT.spruce; if (k === 2) return ICON_TINT.birch; if (k === 5) return ICON_TINT.redwood;
-      if (k === 4 || k === 6) return null;
+      if (k === 4 || k === 6 || k === 7) return null;
       return ICON_TINT.foliage;
     }
     if (id === B.WATER) return ICON_TINT.water;
@@ -12203,6 +12466,7 @@ class Living extends Entity {
     this.vz += -forward * c - strafe * s;
   }
   travel(strafe, forward) {
+    if (this.gliding) { this.glide(); return; }
     if (this.flying) {
       this.moveFlying(strafe, forward, this.flySpeed * (this.sprinting ? 2 : 1));
       this.move(this.vx, this.vy, this.vz);
@@ -12243,9 +12507,33 @@ class Living extends Entity {
     }
     this.move(this.vx, this.vy, this.vz);
     if (this.collidedH && ladder) this.vy = 0.2;
-    if (!this.noGravity) this.vy -= 0.08;
+    const fx = this.effects;
+    // drift lifts you gently into the air; featherfall lets you down like a leaf
+    if (fx && fx.drift) this.vy += (0.05 * Brewing.level(this, 'drift') - this.vy) * 0.2;
+    else if (!this.noGravity) this.vy -= (fx && fx.featherfall && this.vy <= 0) ? 0.01 : 0.08;
+    if (fx && fx.featherfall) this.fallDistance = 0;
     this.vy *= 0.98;
     this.vx *= f4; this.vz *= f4;
+  }
+  // gliding on a drift glider: dive for speed, pull up to trade it for height (the classic way)
+  glide() {
+    const cp = Math.cos(this.pitch), lx = -Math.sin(this.yaw) * cp, ly = Math.sin(this.pitch), lz = -Math.cos(this.yaw) * cp;
+    const f = -this.pitch, hl = Math.sqrt(lx * lx + lz * lz), hv = Math.sqrt(this.vx * this.vx + this.vz * this.vz);
+    let k = Math.cos(f); k = k * k;
+    this.vy += -0.08 + k * 0.06;
+    if (this.vy < 0 && hl > 0) { const d = this.vy * -0.1 * k; this.vy += d; this.vx += lx * d / hl; this.vz += lz * d / hl; }
+    if (f < 0 && hl > 0) { const d = hv * -Math.sin(f) * 0.04; this.vy += d * 3.2; this.vx -= lx * d / hl; this.vz -= lz * d / hl; }
+    if (hl > 0) { this.vx += (lx / hl * hv - this.vx) * 0.1; this.vz += (lz / hl * hv - this.vz) * 0.1; }
+    this.vx *= 0.99; this.vy *= 0.98; this.vz *= 0.99;
+    void ly;
+    const before = Math.sqrt(this.vx * this.vx + this.vz * this.vz);
+    this.move(this.vx, this.vy, this.vz);
+    if (this.collidedH) {
+      const after = Math.sqrt(this.vx * this.vx + this.vz * this.vz), dmg = (before - after) * 10 - 3;
+      if (dmg > 0 && this.hurt) this.hurt(dmg, { type: 'wall' });
+    }
+    if (this.vy > -0.5) this.fallDistance = 1;
+    if (this.onGround || this.inWater || this.inLava) this.gliding = false;
   }
   moveSpeed() { let s = this.landSpeed; if (this.sprinting) s *= 1.3; if (this.effects.slow) s *= 1 - 0.15 * Brewing.level(this, 'slow') - 0.15; if (this.effects.speed) s *= 1 + 0.2 * Brewing.level(this, 'speed'); return s; }
   isFreeOffset(dx, dy, dz) {
@@ -13335,9 +13623,18 @@ class Player extends Living {
     this.invulnerable = m === 'creative';
   }
 
+  // wearing a drift glider that still holds together?
+  canGlide() { const c = this.inventory.armor.items[1]; return !!c && !!ITEMS[c.id] && !!ITEMS[c.id].glider && c.dmg < maxDamageOf(c.id) - 1; }
   // ---------------------------------------------------------------- per tick
   tick(input) {
     this.baseTick();
+    if (this.gliding) {
+      if (!this.canGlide() || this.flying || this.riding || this.dead) this.gliding = false;
+      else if (++this.glideT % 20 === 0) {
+        if (!this.creative) { const c = this.inventory.armor.items[1]; c.dmg++; if (c.dmg >= maxDamageOf(c.id) - 1) this.game.audio.play('break', 0.8, 0.8); }
+        if (this.glideT >= 40) this.game.achieve('glide');
+      }
+    } else this.glideT = 0;
     if (this.sleeping) { this.forward = 0; this.strafe = 0; this.jumping = false; }
     else this.applyInput(input);
     this.pdistWalked = this.distWalked; this.pbob = this.bob; this.pbobPitch = this.bobPitch;
@@ -13404,6 +13701,11 @@ class Player extends Living {
       }
     }
     if (this.jumpTap > 0) this.jumpTap--;
+    // a fresh press of jump while falling opens a drift glider
+    if (jumpKey && !this.prevJumpKey && !this.onGround && !this.flying && !this.gliding && !this.inWater && !this.inLava && this.vy < 0 && this.canGlide()) {
+      this.gliding = true;
+      this.game.audio.play('glider_open', 0.7, 1);
+    }
     this.prevJumpKey = jumpKey;
     if (this.flying && this.onGround && !jumpKey) this.flying = false;
     // sprinting (ctrl or double-tap forward)
@@ -13593,6 +13895,7 @@ class Player extends Living {
       if (f.hungerChance && Math.random() < f.hungerChance) this.effects.hunger = f.hungerTicks || 600;
       if (f.poisonChance && Math.random() < f.poisonChance) this.effects.poison = f.poisonTicks || 100;
       if (f.regen) this.effects.regen = 100;
+      if (f.featherfall) Brewing.addEffect(this, 'featherfall', f.featherfall, 0);
       if (f.nightVision) this.effects.nightVision = Math.max(this.effects.nightVision || 0, f.nightVision === 1 ? 3600 : f.nightVision);
       this.game.audio.play('burp', 0.5, 0.9 + Math.random() * 0.1);
       this.game.onAte(s);
@@ -13667,7 +13970,7 @@ const Recipes = (() => {
   function smelt(input, output, xp) { SMELTING.push({ input: ref(input), output: { id: output[0], count: output[1] || 1, dmg: output[2] || 0 }, xp: xp || 0.1 }); }
 
   // ---------------- wood basics ----------------
-  for (let t = 0; t < 6; t++) shapeless([B.PLANKS, 4, t], [[B.LOG, t]]);
+  for (let t = 0; t < 7; t++) shapeless([B.PLANKS, 4, t], [[B.LOG, t]]);
   shaped([I.stick, 4], ['#', '#'], { '#': B.PLANKS });
   shaped([B.CRAFTING_TABLE, 1], ['##', '##'], { '#': B.PLANKS });
   shaped([B.CHEST, 1], ['###', '# #', '###'], { '#': B.PLANKS });
@@ -13681,6 +13984,10 @@ const Recipes = (() => {
     shaped([B.SLAB, 6, t], ['###'], { '#': [B.PLANKS, t] });
     shaped([B.STAIRS, 4, t], ['#  ', '## ', '###'], { '#': [B.PLANKS, t] });
   }
+  // glimmerwood (its slabs and stairs are numbered after the stone ones)
+  shaped([B.FENCE, 3, 6], ['W#W', 'W#W'], { W: [B.PLANKS, 6], '#': I.stick });
+  shaped([B.SLAB, 6, 23], ['###'], { '#': [B.PLANKS, 6] });
+  shaped([B.STAIRS, 4, 23], ['#  ', '## ', '###'], { '#': [B.PLANKS, 6] });
   shaped([B.FENCE_GATE, 1], ['#W#', '#W#'], { W: B.PLANKS, '#': I.stick });
   shaped([I.door_wood, 3], ['##', '##', '##'], { '#': B.PLANKS });
   shaped([I.door_iron, 3], ['##', '##', '##'], { '#': I.iron_ingot });
@@ -13711,7 +14018,7 @@ const Recipes = (() => {
   shaped([I.bow], [' #S', '# S', ' #S'], { '#': I.stick, S: I.string });
   shaped([I.arrow, 4], ['F', '#', 'E'], { F: I.flint, '#': I.stick, E: I.feather });
   shaped([I.fishing_rod], ['  #', ' #S', '# S'], { '#': I.stick, S: I.string });
-  for (let t = 0; t < 6; t++) {
+  for (let t = 0; t < 7; t++) {
     shaped([I.boat, 1, t], ['P P', 'PPP'], { P: [B.PLANKS, t] });
     shaped([I.sign, 3, t], ['PPP', 'PPP', ' # '], { P: [B.PLANKS, t], '#': I.stick });
   }
@@ -13850,6 +14157,8 @@ const Recipes = (() => {
   // what the Starwyrm calls down: crystals to call it back with, and starmetal
   shaped([I.star_crystal], ['GGG', 'GFG', 'GTG'], { G: B.GLASS, F: I.star_fragment, T: I.wailer_tear });
   shaped([I.starmetal_ingot], ['FFF', 'FFF', 'FFF'], { F: I.star_fragment });
+  // ---------------- the Drift Isles ----------------
+  shapeless([I.dye, 2, 3], [B.MOONPETAL]);
   // ---------------- the Sift ----------------
   shaped([B.SILTSTONE_BRICKS, 4, 0], ['##', '##'], { '#': B.SILTSTONE });
   shaped([B.SILTSTONE_BRICKS, 4, 1], ['##', '##'], { '#': [B.SILTSTONE_BRICKS, 0] });
@@ -13940,7 +14249,21 @@ const Recipes = (() => {
     }
     return null;
   }
+  // mending: a worn drift glider and orrery gears to set its ribs right (a quarter each)
+  function mend(grid) {
+    let tool = null, gears = 0;
+    for (const s of grid) {
+      if (!s) continue;
+      if (s.id === ITEM_IDS.drift_glider && !tool) tool = s;
+      else if (s.id === ITEM_IDS.orrery_gear) gears++;
+      else return null;
+    }
+    if (!tool || !gears || tool.dmg <= 0) return null;
+    return new ItemStack(tool.id, 1, Math.max(0, tool.dmg - Math.ceil(maxDamageOf(tool.id) / 4) * gears));
+  }
   function result(grid, gw, gh) {
+    const fixed = mend(grid);
+    if (fixed) return fixed;
     const r = find(grid, gw, gh);
     if (!r) return null;
     return new ItemStack(r.result.id, r.result.count, r.result.dmg);
@@ -14258,7 +14581,7 @@ const Brewing = (() => {
   const BREW_TIME = 400;
   const AWKWARD = {
     sugar: 'swiftness', glistering_melon: 'healing', spider_eye: 'poison', wailer_tear: 'regeneration', flare_powder: 'strength',
-    magma_cream: 'fire_resistance', glimmerfin: 'night_vision', pufferfish: 'water_breathing', slimeball: 'leaping',
+    magma_cream: 'fire_resistance', glimmerfin: 'night_vision', pufferfish: 'water_breathing', slimeball: 'leaping', starfruit: 'featherfall',
   };
   const MUNDANE = ['sugar', 'glistering_melon', 'spider_eye', 'wailer_tear', 'flare_powder', 'magma_cream', 'ember_dust', 'slimeball'];
   const CORRUPT = {
@@ -14460,7 +14783,10 @@ const Behaviors = (() => {
     const below = w.getBlock(x, y - 1, z);
     switch (id) {
       case B.SAPLING: case B.TALL_GRASS: case B.FLOWER: case B.BRAMBLE:
-        return below === B.GRASS || below === B.DIRT || below === B.PODZOL || below === B.FARMLAND || below === B.MYCELIUM || (id === B.FLOWER && meta === 7 && below === B.ASH);
+        return below === B.GRASS || below === B.DIRT || below === B.PODZOL || below === B.FARMLAND || below === B.MYCELIUM || (id === B.FLOWER && meta === 7 && below === B.ASH)
+          || (id === B.SAPLING && (below === B.STAR_MOSS || below === B.STARSTONE));
+      case B.MOONPETAL: case B.DRIFT_GRASS: return below === B.STAR_MOSS || below === B.STARSTONE || below === B.GRASS || below === B.DIRT || below === B.PODZOL;
+      case B.STARVINE: { const a = w.getBlock(x, y + 1, z); return a === B.STARVINE || a === B.GLIMMER_LEAVES || a === B.LEAVES || (BT.solid[a] && BT.opaque[a]); }
       case B.DEAD_BUSH: return below === B.SAND || below === B.TERRACOTTA || below === B.DIRT || below === B.ASH || below === B.SALT || below === B.PODZOL || below === B.GRASS;
       case B.MUSHROOM_BROWN: case B.MUSHROOM_RED: case B.GLOWSHROOM:
         return BT.opaque[below] && (below === B.MYCELIUM || below === B.PODZOL || w.getLightLevel(x, y, z) < 13 || id === B.GLOWSHROOM);
@@ -14835,6 +15161,7 @@ const Behaviors = (() => {
     else if (id === B.WHEAT || id === B.CARROTS || id === B.POTATOES) { if (m < 7) { w.setMeta(x, y, z, Math.min(7, m + 2 + Math.floor(Math.random() * 3))); used = true; } }
     else if (id === B.BRAMBLE) { if (m < 3) { w.setMeta(x, y, z, 3); used = true; } }
     else if (id === B.GLOW_VINE) { w.setBlock(x, y, z, B.GLOW_VINE_BERRIES, 0); used = true; }
+    else if (id === B.STARVINE && !(m & 1)) { w.setMeta(x, y, z, 1); used = true; }
     else if (id === B.GRASS) {
       used = true;
       for (let i = 0; i < 64; i++) {
@@ -14899,6 +15226,12 @@ const Behaviors = (() => {
       case B.GLOW_VINE_BERRIES:
         w.setBlock(x, y, z, B.GLOW_VINE, 0);
         dropStack(game, x + 0.5, y + 0.3, z + 0.5, new ItemStack(I.glowberry, 1, 0));
+        game.audio.playBlock('grass', 'break', x + 0.5, y + 0.5, z + 0.5);
+        return true;
+      case B.STARVINE:
+        if (!(m & 1)) return false;
+        w.setMeta(x, y, z, m & ~1);
+        dropStack(game, x + 0.5, y + 0.3, z + 0.5, new ItemStack(I.starfruit, 1, 0));
         game.audio.playBlock('grass', 'break', x + 0.5, y + 0.5, z + 0.5);
         return true;
       case B.GATE_KEYSTONE: return Hush.useKeystone(game, player, x, y, z);
@@ -15203,6 +15536,14 @@ const Behaviors = (() => {
         return;
       }
       case B.BLOODCAP: if (m < 3 && w.rng.nextInt(10) === 0) w.setMeta(x, y, z, m + 1, 4); return;
+      // starvines lengthen slowly in the dark, and now and then a starfruit swells on one
+      case B.STARVINE: {
+        if (!(m & 1) && w.rng.nextInt(30) === 0) { w.setMeta(x, y, z, m | 1, 4); return; }
+        if (w.getBlock(x, y - 1, z) !== 0 || w.rng.nextInt(12) !== 0) return;
+        let n = 1; while (n < 16 && w.getBlock(x, y + n, z) === B.STARVINE) n++;
+        if (n < 16) w.setBlock(x, y - 1, z, B.STARVINE, 0);
+        return;
+      }
       // glow vines creep slowly downward; now and then the new growth bears berries
       case B.GLOW_VINE: case B.GLOW_VINE_BERRIES: {
         if (w.getBlock(x, y - 1, z) !== 0 || w.rng.nextInt(8) !== 0) return;
@@ -15288,7 +15629,7 @@ const Behaviors = (() => {
   // ---------------------------------------------------------------- growing trees from saplings
   function growTree(w, x, y, z, m) {
     const kind = LEAF_KINDS[m & 7] || 'oak';
-    const map = { oak: Math.random() < 0.1 ? 'big_oak' : 'oak', spruce: 'spruce', birch: 'birch', jungle: 'jungle', maple: 'maple', redwood: 'small_redwood', gold_maple: 'gold_maple' };
+    const map = { oak: Math.random() < 0.1 ? 'big_oak' : 'oak', spruce: 'spruce', birch: 'birch', jungle: 'jungle', maple: 'maple', redwood: 'small_redwood', gold_maple: 'gold_maple', glimmer: 'glimmer' };
     const t = map[kind];
     // check headroom
     for (let dy = 1; dy < 6; dy++) if (BT.opaque[w.getBlock(x, y + dy, z)]) return false;
@@ -17326,7 +17667,7 @@ class Particles {
     return atlas.face(id, meta, face === undefined ? 2 : face);
   }
   blockTint(id, meta) {
-    if (id === B.LEAVES) { const k = meta & 7; if (k === 4 || k === 6) return [1, 1, 1]; return [0.42, 0.68, 0.3]; }
+    if (id === B.LEAVES) { const k = meta & 7; if (k === 4 || k === 6 || k === 7) return [1, 1, 1]; return [0.42, 0.68, 0.3]; }
     if (id === B.TALL_GRASS && meta) return [0.5, 0.74, 0.35];
     return [1, 1, 1];
   }
@@ -18104,6 +18445,34 @@ const Skins = (() => {
       return wyStar(f, x, y, 2) ? STAR_COLS[(x * 3 + y) % 3] : null;
     });
     s.box(0, 18, 10, 1, 6, (f, x, y) => (f === 'top' && x === 9 && y % 2 === 0) ? [190, 170, 255] : null);
+    return s;
+  })();
+
+  // ------------------------------------------------------------ the Drift Isles
+  // a drift glider's wings: pale silk over dark starmetal ribs fanning out from the shoulder
+  S.glider = (() => {
+    const s = new Skin(); const r = rng('glider');
+    const silk = C('#dcd6f2'), silk2 = C('#c8c0e8'), rib = C('#4a4470'), edge = C('#8a82b8');
+    s.box(22, 0, 10, 20, 2, (f, x, y, fw, fh) => {
+      if (f === 'front' || f === 'back') {
+        if (x === 0 || (y > 2 && (y + x * 2) % 9 === 0)) return vary(r, rib, 0.08);
+        if (y === fh - 1 || x === fw - 1) return vary(r, edge, 0.08);
+        return vary(r, (x + y) % 2 ? silk : silk2, 0.04);
+      }
+      return vary(r, rib, 0.1);
+    });
+    return s;
+  })();
+  // an orrery sentinel: rings of old brass, worn bright in places
+  S.orrery = (() => {
+    const s = new Skin(); const r = rng('orrery');
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) s.set(x, y, vary(r, (x + y) % 5 === 0 ? C('#e8c060') : (x * 3 + y) % 7 === 0 ? C('#7a5418') : C('#b8862a'), 0.08));
+    return s;
+  })();
+  // and its core, which burns (drawn full-bright)
+  S.orrery_core = (() => {
+    const s = new Skin(); const r = rng('orrery_core');
+    s.box(0, 0, 4, 4, 4, (f, x, y) => ((x + y) % 3 === 0 ? [255, 255, 255] : vary(r, C('#7ae8ff'), 0.1)));
     return s;
   })();
 
@@ -19086,6 +19455,22 @@ const MODELS = (() => {
       finL: { pivot: [-4, 0, 0], boxes: [bx([-10, -0.5, -3], [10, 1, 6], [0, 18], { mirror: true })] },
     },
     wyrmTail: { fin: { pivot: [0, 0, 4], boxes: [bx([-0.5, -4, 0], [1, 8, 10], [36, 8])] } },
+    // an orrery sentinel: three brass rings turning round a burning core, and a pointer
+    orrery: (() => {
+      const ring = (r) => [bx([-r, -0.5, -r], [2 * r, 1, 1], [0, 0]), bx([-r, -0.5, r - 1], [2 * r, 1, 1], [0, 0]), bx([-r, -0.5, -r + 1], [1, 1, 2 * r - 2], [0, 0]), bx([r - 1, -0.5, -r + 1], [1, 1, 2 * r - 2], [0, 0])];
+      return {
+        core: { pivot: [0, 8, 0], boxes: [bx([-2, -2, -2], [4, 4, 4], [0, 0])] },
+        ringA: { pivot: [0, 8, 0], boxes: ring(8) },
+        ringB: { pivot: [0, 8, 0], boxes: ring(6) },
+        ringC: { pivot: [0, 8, 0], boxes: ring(4) },
+        arm: { pivot: [0, 8, 0], boxes: [bx([-0.5, -0.5, -11], [1, 1, 4], [0, 0])] },
+      };
+    })(),
+    // a drift glider: two silk wings hung from the shoulders, folded down the back
+    glider: {
+      wingR: { pivot: [1, 24, 2.3], boxes: [bx([-1, -20, 0], [10, 20, 2], [22, 0])] },
+      wingL: { pivot: [-1, 24, 2.3], boxes: [bx([-9, -20, 0], [10, 20, 2], [22, 0], { mirror: true })] },
+    },
   };
 })();
 
@@ -19827,6 +20212,17 @@ class EntityRenderer {
     pose.larm = [la, lay, laz];
     return pose;
   }
+  // a drift glider on someone's back: folded, or spread wide in flight
+  drawGlider(e, base, partial, col, sky, blk, stack) {
+    const t = (e.glideAnim === undefined ? 0 : e.glideAnim);
+    const open = e.gliding ? 1 : 0;
+    e.glideAnim = t + (open - t) * 0.15;
+    const k = e.glideAnim, flutter = e.gliding ? Math.sin((e.age + partial) * 0.6) * 0.04 : 0;
+    const pose = { wingR: [0.25 - k * 0.05 + flutter, 0, -0.18 + k * 1.38], wingL: [0.25 - k * 0.05 + flutter, 0, 0.18 - k * 1.38] };
+    const n0 = this.skinBatch.n;
+    this.drawModel(MODELS.glider, 'glider', base, pose, col, sky, blk);
+    if (Enchant.has(stack)) this.glintCopy(this.skinBatch, n0, this.skinBatch.n, 20);
+  }
   baseMatrix(e, rx, ry, rz, partial, scale) {
     const bodyYaw = e.pbodyYaw + wrapRadians(e.bodyYaw - e.pbodyYaw) * partial;
     let m = M3.trans(rx, ry, rz);
@@ -19854,7 +20250,14 @@ class EntityRenderer {
     const [sky, blk] = this.lightAt(e.x, e.y + e.h * 0.6, e.z);
     const model = kind === 'skeleton' ? MODELS.skeleton : kind === 'wraith' ? MODELS.wraith : MODELS.biped;
     const pose = this.bipedPose(e, partial, kind);
-    const base = this.baseMatrix(e, rx, ry + (opts.yOff || 0) - (e.sneaking ? 0.2 : 0), rz, partial, opts.scale);
+    let base = this.baseMatrix(e, rx, ry + (opts.yOff || 0) - (e.sneaking ? 0.2 : 0), rz, partial, opts.scale);
+    // gliding: laid out flat along the line of flight, arms a little out from the sides
+    if (e.gliding) {
+      const pitch = (e.ppitch === undefined ? e.pitch : e.ppitch + (e.pitch - e.ppitch) * partial);
+      base = M3.mul(M3.mul(M3.mul(base, M3.trans(0, 14, 0)), M3.rx(-Math.PI / 2 + pitch)), M3.trans(0, -14, 0));
+      pose.rarm = [0, 0, 0.35]; pose.larm = [0, 0, -0.35]; pose.rleg = [0, 0, 0.05]; pose.lleg = [0, 0, -0.05];
+      if (pose.head) pose.head = [Math.PI / 2 - 0.3, 0, 0];
+    }
     const col = this.entColor(e);
     if (opts.alpha) col[3] = opts.alpha;
     const lsky = opts.glow ? -1 : sky, lblk = opts.glow ? 0 : blk;
@@ -19864,6 +20267,7 @@ class EntityRenderer {
       const armor = e.inventory ? e.inventory.armor.items : e.armorItems;
       for (let i = 0; i < 4; i++) {
         const a = armor[i]; if (!a) continue;
+        if (ITEMS[a.id] && ITEMS[a.id].glider) { this.drawGlider(e, base, partial, col, lsky, lblk, a); continue; }
         const ad = armorOf(a.id); if (!ad) continue;
         const parts = [['head', 'hat'], ['body', 'rarm', 'larm'], ['body', 'rleg', 'lleg'], ['rleg', 'lleg']][i];
         const sk = (i === 2 ? 'legs_' : 'armor_') + ad.mat;
@@ -20797,6 +21201,23 @@ const SOUND_DEFS = (() => {
       [880, 1108.7, 1318.5].forEach((f, i) => { s += Math.sin(2 * Math.PI * f * t) * 0.07 * Math.max(0, Math.sin(t * (1.3 + i * 0.4))); });
       return (s + lp.p(noise()) * 0.6) * sw;
     });
+  };
+  // ----- the Drift Isles -----
+  // an orrery sentinel: the dry tick of its clockwork as it turns
+  S.orrery_tick = () => { const ck = []; for (let i = 0; i < 8; i++) ck.push([i * 0.11 + rnd() * 0.01, 2400 + (i % 2) * 700, 0.4, 0.004]); return render(1, (t) => ring(ck, t)); };
+  S.orrery_shoot = () => { let ph = 0; return render(0.7, (t) => { const f = 500 + t * 1800; ph += 2 * Math.PI * f / DSP.SR; return Math.sin(ph) * env(t, 0.01, 0.2) * 0.6 + Math.sin(ph * 2.01) * env(t, 0.01, 0.12) * 0.3; }); };
+  S.orrery_hurt = () => { const ck = []; for (let i = 0; i < 6; i++) ck.push([rnd() * 0.15, 1200 + rnd() * 2500, 0.5, 0.01]); return render(0.4, (t) => ring(ck, t) + Math.sin(2 * Math.PI * 330 * t) * env(t, 0.003, 0.06) * 0.5); };
+  S.orrery_death = () => {
+    const ck = []; for (let i = 0; i < 30; i++) ck.push([rnd() * 1.1, 900 + rnd() * 3000, 0.3, 0.01 + rnd() * 0.02]);
+    return render(1.6, (t) => ring(ck, t) + Math.sin(2 * Math.PI * (440 - t * 200) * t) * env(t, 0.01, 0.5) * 0.4);
+  };
+  S.mote_pop = () => render(0.4, (t) => Math.sin(2 * Math.PI * (1600 - t * 2000) * t) * env(t, 0.002, 0.08));
+  S.mote_hit = () => { let ph = 0; return render(1.1, (t) => { const f = 300 + t * 900; ph += 2 * Math.PI * f / DSP.SR; return Math.sin(ph) * env(t, 0.01, 0.4) * 0.6 + Math.sin(2 * Math.PI * 1318 * t) * env(t, 0.05, 0.3) * 0.2; }); };
+  // a glider snapping open, and the wind past it (looped)
+  S.glider_open = () => { const hp = new Biquad('hp', 900, 0.8); return render(0.45, (t) => hp.p(noise()) * env(t, 0.004, 0.08) * 1.2 + Math.sin(2 * Math.PI * 180 * t) * env(t, 0.004, 0.05) * 0.4); };
+  S.glide_wind = () => {
+    const bp = new Biquad('bp', 500, 0.7), lp = new Biquad('lp', 260, 0.7);
+    return render(6, (t) => { bp.set(420 + Math.sin(t * 2.1) * 160 + Math.sin(t * 5.3) * 60, 0.8); return (bp.p(noise()) * 0.9 + lp.p(noise()) * 1.4) * (0.75 + 0.25 * Math.sin(Math.PI * 2 * t / 6)); });
   };
   // ----- the Hush -----
   // the air of the Hush: a pressure more than a sound, with something ticking far away (looped)
@@ -23098,6 +23519,7 @@ function drawEffectList(gui, p, x, y) {
     const pi = POTIONS.findIndex((q) => q.effect === k);
     if (pi >= 0) gui.item(new ItemStack(ITEM_IDS.potion, 1, pi), x + 7, yy + 7);
     else if (k === 'darkness') gui.item(new ItemStack(ITEM_IDS.hush_shard, 1, 0), x + 7, yy + 7);
+    else if (k === 'drift') gui.item(new ItemStack(ITEM_IDS.orrery_gear, 1, 0), x + 7, yy + 7);
     const lvl = (p.effectAmp && p.effectAmp[k]) ? ' II' : '';
     gui.text(ef.name + lvl, x + 28, yy + 6, ef.bad ? '#ff8080' : '#ffffff');
     gui.text(fmtTicks(p.effects[k]), x + 28, yy + 16, '#7f7f7f');
@@ -23380,6 +23802,7 @@ const CREATIVE_TABS = (() => {
     blk(B.TORCH), blk(B.CHEST), blk(B.CRAFTING_TABLE), blk(B.FURNACE), blk(B.ENCHANTING_TABLE), blk(B.LADDER), blk(B.ROPE), blk(B.SNOW_LAYER), blk(B.CACTUS), blk(B.PUMPKIN), blk(B.JACK_O_LANTERN), blk(B.MELON), blk(B.VINE),
     blk(B.LILY_PAD), blk(B.CATTAIL), blk(B.BRAMBLE), blk(B.LEAF_LITTER), ...all(B.FENCE), blk(B.FENCE_GATE), blk(B.TRAPDOOR), blk(B.GLASS_PANE), ...all(B.CARPET), blk(B.LUMITE_LAMP), blk(B.MOB_SPAWNER), blk(B.BRIMSTONE_FENCE), [I.bloodcap, 0],
     blk(B.IRON_BARS), blk(B.RIFT_FRAME), ...all(B.INFESTED_BRICKS), [I.star_crystal, 0], blk(B.WYRM_EGG), [I.star_fragment, 0],
+    blk(B.STAR_MOSS), blk(B.GLIMMER_LEAVES), blk(B.MOONPETAL), blk(B.DRIFT_GRASS), blk(B.STARVINE), [I.drift_glider, 0], [I.orrery_gear, 0],
     blk(B.GLOW_VINE), blk(B.GLOW_VINE_BERRIES), blk(B.PALE_LANTERN), blk(B.HUSH_SENSOR), blk(B.HUSH_SHRIEKER), blk(B.GATE_KEYSTONE), blk(B.DUNE_GRASS),
     [I.door_wood, 0], [I.door_iron, 0], [I.bed, 0], ...WOOD.map((w, i) => [I.sign, i]), [I.painting, 0]] });
   T.push({ name: 'Tools', icon: [I.iron_axe, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ['shovel', 'pickaxe', 'axe', 'hoe'].map((k) => [I[m + '_' + k], 0])),
@@ -23392,7 +23815,7 @@ const CREATIVE_TABS = (() => {
   T.push({ name: 'Brewing', icon: [I.potion, 10], list: [blk(B.BREWING_STAND), [I.glass_bottle, 0], ...POTION_VARIANTS.map((d) => [I.potion, d]), ...POTION_VARIANTS.map((d) => [I.splash_potion, d]),
     ...items(['bloodcap', 'sugar', 'glistering_melon', 'spider_eye', 'fermented_spider_eye', 'wailer_tear', 'flare_powder', 'magma_cream', 'glimmerfin', 'pufferfish', 'slimeball', 'ember_dust', 'sunstone_dust', 'gunpowder'])] });
   T.push({ name: 'Foodstuffs', icon: [I.apple, 0], list: items(['apple', 'golden_apple', 'bread', 'porkchop', 'cooked_porkchop', 'beef', 'steak', 'chicken', 'cooked_chicken', 'mutton', 'cooked_mutton', 'venison', 'cooked_venison', 'jerky',
-    'fish', 'cooked_fish', 'salmon', 'cooked_salmon', 'sunfish', 'pufferfish', 'glimmerfin', 'carrot', 'potato', 'baked_potato', 'poison_potato', 'cookie', 'melon_slice', 'mushroom_stew', 'glow_berries', 'pumpkin_pie', 'berry_pie', 'berries', 'glowberry', 'rotten_flesh', 'spider_eye']) });
+    'fish', 'cooked_fish', 'salmon', 'cooked_salmon', 'sunfish', 'pufferfish', 'glimmerfin', 'carrot', 'potato', 'baked_potato', 'poison_potato', 'cookie', 'melon_slice', 'mushroom_stew', 'glow_berries', 'pumpkin_pie', 'berry_pie', 'berries', 'glowberry', 'starfruit', 'rotten_flesh', 'spider_eye']) });
   T.push({ name: 'Materials', icon: [I.stick, 0], list: [...items(['coal']), [I.coal, 1], ...items(['diamond', 'iron_ingot', 'gold_ingot', 'gold_nugget', 'cobalt_ingot', 'starmetal_ingot', 'jade', 'ember_dust', 'sulfur', 'lumite_shard', 'salt',
     'stick', 'bowl', 'string', 'cattail_fiber', 'feather', 'flint', 'gunpowder', 'leather', 'bone', 'clay_ball', 'brick', 'paper', 'book', 'slimeball', 'wheat', 'seeds', 'sugar', 'sugar_cane', 'wisp_essence',
       'sunstone_dust', 'smoky_quartz', 'brimstone_brick', 'wailer_tear', 'flare_rod', 'flare_powder', 'magma_cream', 'fire_charge', 'seeker_eye', 'hush_shard', 'echo_heart', 'sift_scale']),
@@ -23780,6 +24203,8 @@ const MILESTONES = [
   { id: 'wyrm', name: 'Wyrmfall', desc: 'Bring down the Starwyrm', icon: () => [ITEM_IDS.star_fragment, 0] },
   { id: 'egg', name: 'Something Stirs', desc: 'Take the Starwyrm\'s egg', icon: () => [B.WYRM_EGG, 0] },
   { id: 'gateway', name: 'Over the Gulf', desc: 'Pass through a star gateway', icon: () => [B.STAR_GATEWAY, 0] },
+  { id: 'observatory', name: 'Stargazer', desc: 'Find an old observatory on the Drift Isles', icon: () => [ITEM_IDS.orrery_gear, 0] },
+  { id: 'glide', name: 'Wingspan', desc: 'Glide on a drift glider', icon: () => [ITEM_IDS.drift_glider, 0] },
   { id: 'city', name: 'Lost and Found', desc: 'Find a forgotten city deep in the Hush', icon: () => [B.DEEPSTONE_BRICKS, 2] },
   { id: 'gate', name: 'The Grey Door', desc: 'Wake a city gate with an Echo Heart', icon: () => [ITEM_IDS.echo_heart, 0] },
   { id: 'listener', name: 'Unheard Of', desc: 'Defeat the Listener', icon: () => [ITEM_IDS.hush_shard, 0] },
@@ -23811,7 +24236,7 @@ const BIOME_DESCRIPTIONS = {
   the_hush: 'Far below, the stone turns dark and the caves fall silent. Things here listen. Walk softly - and never wake the shriekers.',
   great_isle: 'Far Isles. Pale starstone ringed by obsidian spires, each crowned with a star crystal. Something vast circles overhead.',
   starlit_gulf: 'Far Isles. Nothing at all, for hundreds of blocks: just the void and the stars.',
-  drift_isles: 'Far Isles. Islands without number, scattered out across the void beyond the gulf.',
+  drift_isles: 'Far Isles. Islands without number beyond the gulf: mossy meadows, glimmerwood groves hung with starvines, and here and there an old observatory, still watched over by its orreries.',
 };
 class JournalScreen extends Screen {
   constructor(game, parent) { super(game); this.parent = parent; this.background = 'world'; this.tab = 0; this.page = 0; this.pauses = !!parent; }
@@ -27666,7 +28091,8 @@ MobSpawner.prototype.tickIsles = function (rd, area) {
     const x = x0 + this.rnd(7) - 3, z = z0 + this.rnd(7) - 3;
     if (!w.isLoaded(x, z)) continue;
     const y = w.topSolidY(x, z) + 1;
-    if (y < 2 || w.getBlock(x, y - 1, z) !== B.STARSTONE) continue;
+    const ground = w.getBlock(x, y - 1, z);
+    if (y < 2 || (ground !== B.STARSTONE && ground !== B.STAR_MOSS)) continue;
     if ((x + 0.5 - p.x) ** 2 + (y - p.y) ** 2 + (z + 0.5 - p.z) ** 2 < 24 * 24) continue;
     if (!this.canStand(x, y, z, 3)) continue;
     g.spawnMob('gaunt', x + 0.5, y, z + 0.5);
@@ -28376,6 +28802,141 @@ StarCrystal.prototype.beam = function (er, rx, cy, rz, partial) {
   }
 };
 
+// ---- src/entity/driftmobs.js
+// ---------------------------------------------------------------------------
+// Things of the Drift Isles. The orrery sentinel: an old astronomer's
+// machine that still keeps watch over its observatory, three brass rings
+// turning round a burning core. It spins up when it sees you and looses
+// drift motes, slow sparks that home in on you and, where they strike, lift
+// you off your feet for a while (and what goes up must come down). Starfruit,
+// or a featherfall potion, takes the sting out of that.
+// ---------------------------------------------------------------------------
+MOB_TYPES.push({
+  key: 'orrery', name: 'Orrery Sentinel', egg: ['#b8862a', '#7ae8ff'], cat: 'monster',
+  lore: 'An old astronomer\'s machine that still keeps watch over its observatory on the Drift Isles. When it sees you its rings spin up and it looses drift motes: slow sparks that follow you and lift you off your feet. What goes up must come down.',
+});
+MOB_TYPES.forEach((m, i) => { if (m) { m.index = i; MOB_INDEX[m.key] = m; } });
+
+class OrrerySentinel extends Monster {
+  constructor(world) {
+    super(world, 'orrery');
+    this.maxHealth = this.health = 24;
+    this.w = 1.0; this.h = 1.0; this.eye = 0.5;
+    this.noGravity = true; this.persistent = true; this.swims = false;
+    this.home = null; this.fireCool = 30 + this.rnd(40); this.spin = this.rnd(400); this.awake = 0; this.pawake = 0;
+    this.talkInterval = 200; this.xpValue = 6;
+  }
+  // it hangs where it was set, bobbing a little
+  travel() {
+    if (!this.home) this.home = [this.x, this.y, this.z];
+    const ty = this.home[1] + Math.sin(this.age * 0.05) * 0.2;
+    this.vx = (this.home[0] - this.x) * 0.1; this.vz = (this.home[2] - this.z) * 0.1; this.vy = (ty - this.y) * 0.1;
+    this.move(this.vx, this.vy, this.vz);
+    this.fallDistance = 0;
+  }
+  aiTick(game) {
+    const p = game.player;
+    this.spin += 1 + this.awake * 3;
+    this.pawake = this.awake;
+    if (this.fireCool > 0) this.fireCool--;
+    const sees = p && !p.dead && p.survivalLike && this.world.difficulty > 0 && this.distSqTo(p) < 20 * 20 && this.canSee(p);
+    this.awake += ((sees ? 1 : 0) - this.awake) * 0.08;
+    if (sees) {
+      this.lookAtEntity(p, 2);
+      this.yaw = this.bodyYaw = Math.atan2(-(p.x - this.x), -(p.z - this.z));
+      if (this.fireCool <= 0 && this.awake > 0.6) { this.loose(game, p); this.fireCool = 45 + this.rnd(40); }
+    }
+  }
+  loose(game, p) {
+    game.spawnEntity(new DriftMote(this.world, this, this.x, this.y + 0.5, this.z, p));
+    game.audio.play('orrery_shoot', 1.2, 0.9 + Math.random() * 0.2, this.x, this.y + 0.5, this.z);
+  }
+  knockback() {}
+  checkDespawn() {}
+  onRevenge(e) { if (e && e.type === 'player') this.fireCool = Math.min(this.fireCool, 10); }
+  dropLoot(game, byPlayer) {
+    this.drop(ITEM_IDS.orrery_gear, 1 + this.rnd(2));
+    if (Math.random() < 0.3) this.drop(ITEM_IDS.star_fragment, 1);
+  }
+  saySound() { return 'orrery_tick'; }
+  soundVolume() { return 0.7; }
+  render(er, rx, ry, rz, partial) {
+    const [sky, blk] = er.lightAt(this.x, this.y + 0.5, this.z);
+    const t = this.spin + partial * (1 + this.awake * 3), aw = this.pawake + (this.awake - this.pawake) * partial;
+    const base = er.baseMatrix(this, rx, ry, rz, partial);
+    const pose = { ringA: [t * 0.02, 0, 0.4], ringB: [0.3, t * 0.035, 0], ringC: [t * 0.05, 0, t * 0.03], arm: [-0.1 * aw, 0, 0], core: [t * 0.01, t * 0.013, 0] };
+    er.drawModel(MODELS.orrery, 'orrery', base, pose, er.entColor(this), sky, blk, { only: ['ringA', 'ringB', 'ringC', 'arm'] });
+    er.drawModel(MODELS.orrery, 'orrery_core', base, pose, [255, 255, 255, 255], -1, 0, { only: ['core'] });
+    er.glow(rx, ry + 0.5, rz, 0.55 + aw * 0.35 + Math.sin(t * 0.2) * 0.05, [120, 230, 255, 70 + Math.round(aw * 80)]);
+  }
+  save() { const d = super.save(); if (this.home) d.home = this.home; return d; }
+  load(d) { super.load(d); this.home = d.home || null; this.persistent = true; }
+}
+MOB_CLASSES.orrery = OrrerySentinel;
+
+// ---------------------------------------------------------------------------
+// A drift mote: a slow spark that follows its mark. Where it strikes you, you
+// drift up off your feet for a few seconds. A blow scatters it.
+// ---------------------------------------------------------------------------
+class DriftMote extends Entity {
+  constructor(world, shooter, x, y, z, target) {
+    super(world);
+    this.type = 'drift_mote';
+    this.w = this.h = 0.45;
+    this.noGravity = true; this.noClip = true;
+    this.shooter = shooter; this.target = target;
+    this.setPos(x, y - this.h / 2, z);
+    const dx = target.x - x, dy = target.y + 1 - y, dz = target.z - z, l = Math.hypot(dx, dy, dz) || 1;
+    this.dir = [dx / l, dy / l, dz / l];
+  }
+  get game() { return this.world.game; }
+  hurt(amount, src) {
+    if (!src || !src.entity || src.entity.type !== 'player') return false;
+    this.pop(this.game, false);
+    return true;
+  }
+  tick(game) {
+    this.px = this.x; this.py = this.y; this.pz = this.z;
+    this.age++;
+    if (this.age > 180) { this.pop(game, false); return; }
+    const t = this.target, cy = this.y + this.h / 2;
+    // it bends toward its mark, but not quickly: you can step out of its way
+    if (t && !t.dead && !t.removed) {
+      let dx = t.x - this.x, dy = t.y + 1 - cy, dz = t.z - this.z;
+      const l = Math.hypot(dx, dy, dz) || 1; dx /= l; dy /= l; dz /= l;
+      const d = this.dir, k = 0.08;
+      d[0] += (dx - d[0]) * k; d[1] += (dy - d[1]) * k; d[2] += (dz - d[2]) * k;
+      const dl = Math.hypot(d[0], d[1], d[2]) || 1; d[0] /= dl; d[1] /= dl; d[2] /= dl;
+    }
+    const sp = 0.26, w = this.world;
+    const hit = raycastBlocks(w, this.x, cy, this.z, this.dir[0], this.dir[1], this.dir[2], sp, { collision: true });
+    if (hit) { this.pop(game, false); return; }
+    this.x += this.dir[0] * sp; this.y += this.dir[1] * sp; this.z += this.dir[2] * sp;
+    this.updateBox();
+    for (const e of w.entities.concat(game.player && !game.player.dead ? [game.player] : [])) {
+      if (e === this || e === this.shooter || e.removed || e.dead || !e.hurt || !e.effects || e.type === 'orrery' || e.type === 'drift_mote') continue;
+      if (e.type === 'player' && !e.survivalLike) continue;
+      if (!e.box.intersects(this.box)) continue;
+      e.hurt(2, { type: 'magic', entity: this.shooter || this, knockback: 0 });
+      Brewing.addEffect(e, 'drift', 90, 0);
+      this.pop(game, true);
+      return;
+    }
+    if (game.settings.particles !== 'minimal' && this.age % 2 === 0) game.particles.sparkle(this.x, cy, this.z, 0.5, 0.9, 1, 1, 0.3);
+  }
+  pop(game, struck) {
+    this.removed = true;
+    game.audio.play(struck ? 'mote_hit' : 'mote_pop', 0.9, 0.9 + Math.random() * 0.3, this.x, this.y, this.z);
+    if (game.settings.particles !== 'minimal') for (let i = 0; i < 14; i++) game.particles.sparkle(this.x, this.y + this.h / 2, this.z, 0.5, 0.9, 1, 1, 0.8);
+  }
+  render(er, rx, ry, rz, partial) {
+    const t = this.age + partial, cy = ry + this.h / 2;
+    er.glow(rx, cy, rz, 0.42 + Math.sin(t * 0.5) * 0.06, [120, 230, 255, 170]);
+    er.glow(rx, cy, rz, 0.18, [240, 255, 255, 255]);
+  }
+  save() { return null; }
+}
+
 // ---- src/entity/deepmobs.js
 // ---------------------------------------------------------------------------
 // The Listener: the blind keeper of the Hush. It cannot see you - it hears
@@ -28915,7 +29476,7 @@ const MENU_SEEDS = [1337, 20111118, 404, 8675309, 31415, 777, 2468, 99, 12345, 4
 // blocks that receive random ticks
 const RANDOM_TICK = new Uint8Array(256);
 for (const id of [B.GRASS, B.MYCELIUM, B.SAPLING, B.WHEAT, B.CARROTS, B.POTATOES, B.FARMLAND, B.SUGAR_CANE, B.CACTUS, B.LEAVES, B.ICE, B.SNOW_LAYER,
-  B.EMBER_ORE_LIT, B.BRAMBLE, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.GLOWSHROOM, B.FIRE, B.WATER, B.BLOODCAP, B.PORTAL, B.GLOW_VINE, B.GLOW_VINE_BERRIES]) if (id !== undefined) RANDOM_TICK[id] = 1;
+  B.EMBER_ORE_LIT, B.BRAMBLE, B.MUSHROOM_BROWN, B.MUSHROOM_RED, B.GLOWSHROOM, B.FIRE, B.WATER, B.BLOODCAP, B.PORTAL, B.GLOW_VINE, B.GLOW_VINE_BERRIES, B.STARVINE]) if (id !== undefined) RANDOM_TICK[id] = 1;
 
 // ore values for the prospector's rod
 const PROSPECT = (() => {
@@ -29658,8 +30219,7 @@ class Game {
     if (w.time % 40 === 9) {
       if (!w.dim) { this.checkVillages(); this.checkVaults(); this.checkCities(); } else if (w.dim === 1) this.checkFortress();
       else if (w.dim === DIM_SIFT) this.checkRelics();
-      // until the Starwyrm guards it, the Star Well stands open as the way home
-      else if (w.dim === 2 && typeof Wyrm === 'undefined') Isles.setWell(w, true);
+      else if (w.dim === DIM_ISLES) this.checkObservatory();
     }
     Circuits.tickPlates(this);
     Hush.tick(this);
@@ -29673,6 +30233,7 @@ class Game {
     let fm = 1;
     if (p.flying) fm *= 1.1;
     if (p.sprinting) fm *= 1.15;
+    if (p.gliding) fm *= 1.05 + Math.min(0.2, Math.hypot(p.vx, p.vy, p.vz) * 0.12);
     if (p.effects.slow) fm *= 0.9;
     if (p.useItem && p.useItem.id === ITEM_IDS.bow) { let f = (p.useMax - p.useTime) / 20; f = f > 1 ? 1 : f * f; fm *= 1 - f * 0.15; }
     this.fovMod += (fm - this.fovMod) * 0.5;
@@ -29980,6 +30541,8 @@ class Game {
     a.loop('under_drone', w.dim === 1 ? 0.3 * this.settings.sound : 0);
     // the Far Isles: a cold breath of air and, now and then, the stars ringing
     a.loop('isles_air', w.dim === 2 ? 0.32 * this.settings.sound : 0);
+    // the rush of air past a glider
+    a.loop('glide_wind', p && p.gliding ? Math.min(1, Math.hypot(p.vx, p.vy, p.vz) * 0.9) * 0.8 * this.settings.sound : 0);
     // the Sift: wind over the dunes, and now and then a bell, very far away
     a.loop('sift_wind', w.dim === DIM_SIFT ? 0.4 * this.settings.sound : 0);
     // the deep caves have air of their own
@@ -30621,6 +31184,16 @@ class Game {
     this.hud.toast('Relic found', name, new ItemStack(B.SILTSTONE_BRICKS, 1, 2), '#d8d0f0');
     this.audio.play('discover', 0.7, 0.75);
     this.achieve('relic');
+  }
+  // coming upon one of the old observatories out on the Drift Isles
+  checkObservatory() {
+    const p = this.player, g = this.world.localGen;
+    if (p.achievements.observatory || !g.column || !g.isleKind) return;
+    const col = g.column(Math.floor(p.x), Math.floor(p.z)), d = col && col[2];
+    if (!d || g.isleKind(d) !== 'observatory' || (d.x - p.x) ** 2 + (d.z - p.z) ** 2 > 18 * 18) return;
+    this.hud.toast('Discovered', 'An old observatory', new ItemStack(ITEM_IDS.orrery_gear, 1, 0), '#d8d0f0');
+    this.audio.play('discover', 0.7, 0.9);
+    this.achieve('observatory');
   }
   // coming down into a forgotten city
   checkCities() {

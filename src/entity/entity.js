@@ -357,6 +357,7 @@ class Living extends Entity {
     this.vz += -forward * c - strafe * s;
   }
   travel(strafe, forward) {
+    if (this.gliding) { this.glide(); return; }
     if (this.flying) {
       this.moveFlying(strafe, forward, this.flySpeed * (this.sprinting ? 2 : 1));
       this.move(this.vx, this.vy, this.vz);
@@ -397,9 +398,33 @@ class Living extends Entity {
     }
     this.move(this.vx, this.vy, this.vz);
     if (this.collidedH && ladder) this.vy = 0.2;
-    if (!this.noGravity) this.vy -= 0.08;
+    const fx = this.effects;
+    // drift lifts you gently into the air; featherfall lets you down like a leaf
+    if (fx && fx.drift) this.vy += (0.05 * Brewing.level(this, 'drift') - this.vy) * 0.2;
+    else if (!this.noGravity) this.vy -= (fx && fx.featherfall && this.vy <= 0) ? 0.01 : 0.08;
+    if (fx && fx.featherfall) this.fallDistance = 0;
     this.vy *= 0.98;
     this.vx *= f4; this.vz *= f4;
+  }
+  // gliding on a drift glider: dive for speed, pull up to trade it for height (the classic way)
+  glide() {
+    const cp = Math.cos(this.pitch), lx = -Math.sin(this.yaw) * cp, ly = Math.sin(this.pitch), lz = -Math.cos(this.yaw) * cp;
+    const f = -this.pitch, hl = Math.sqrt(lx * lx + lz * lz), hv = Math.sqrt(this.vx * this.vx + this.vz * this.vz);
+    let k = Math.cos(f); k = k * k;
+    this.vy += -0.08 + k * 0.06;
+    if (this.vy < 0 && hl > 0) { const d = this.vy * -0.1 * k; this.vy += d; this.vx += lx * d / hl; this.vz += lz * d / hl; }
+    if (f < 0 && hl > 0) { const d = hv * -Math.sin(f) * 0.04; this.vy += d * 3.2; this.vx -= lx * d / hl; this.vz -= lz * d / hl; }
+    if (hl > 0) { this.vx += (lx / hl * hv - this.vx) * 0.1; this.vz += (lz / hl * hv - this.vz) * 0.1; }
+    this.vx *= 0.99; this.vy *= 0.98; this.vz *= 0.99;
+    void ly;
+    const before = Math.sqrt(this.vx * this.vx + this.vz * this.vz);
+    this.move(this.vx, this.vy, this.vz);
+    if (this.collidedH) {
+      const after = Math.sqrt(this.vx * this.vx + this.vz * this.vz), dmg = (before - after) * 10 - 3;
+      if (dmg > 0 && this.hurt) this.hurt(dmg, { type: 'wall' });
+    }
+    if (this.vy > -0.5) this.fallDistance = 1;
+    if (this.onGround || this.inWater || this.inLava) this.gliding = false;
   }
   moveSpeed() { let s = this.landSpeed; if (this.sprinting) s *= 1.3; if (this.effects.slow) s *= 1 - 0.15 * Brewing.level(this, 'slow') - 0.15; if (this.effects.speed) s *= 1 + 0.2 * Brewing.level(this, 'speed'); return s; }
   isFreeOffset(dx, dy, dz) {

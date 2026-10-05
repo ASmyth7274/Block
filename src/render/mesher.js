@@ -170,7 +170,7 @@ class Mesher {
           if (k === 1) return FIXED_TINT.spruce;
           if (k === 2) return FIXED_TINT.birch;
           if (k === 5) return FIXED_TINT.redwood;
-          if (k === 4 || k === 6) return FIXED_TINT.white;
+          if (k === 4 || k === 6 || k === 7) return FIXED_TINT.white;
         }
         return [tints[ci + 3], tints[ci + 4], tints[ci + 5]];
       case 3: return [tints[ci + 6], tints[ci + 7], tints[ci + 8]];

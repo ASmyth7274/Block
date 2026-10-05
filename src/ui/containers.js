@@ -290,6 +290,7 @@ function drawEffectList(gui, p, x, y) {
     const pi = POTIONS.findIndex((q) => q.effect === k);
     if (pi >= 0) gui.item(new ItemStack(ITEM_IDS.potion, 1, pi), x + 7, yy + 7);
     else if (k === 'darkness') gui.item(new ItemStack(ITEM_IDS.hush_shard, 1, 0), x + 7, yy + 7);
+    else if (k === 'drift') gui.item(new ItemStack(ITEM_IDS.orrery_gear, 1, 0), x + 7, yy + 7);
     const lvl = (p.effectAmp && p.effectAmp[k]) ? ' II' : '';
     gui.text(ef.name + lvl, x + 28, yy + 6, ef.bad ? '#ff8080' : '#ffffff');
     gui.text(fmtTicks(p.effects[k]), x + 28, yy + 16, '#7f7f7f');
@@ -572,6 +573,7 @@ const CREATIVE_TABS = (() => {
     blk(B.TORCH), blk(B.CHEST), blk(B.CRAFTING_TABLE), blk(B.FURNACE), blk(B.ENCHANTING_TABLE), blk(B.LADDER), blk(B.ROPE), blk(B.SNOW_LAYER), blk(B.CACTUS), blk(B.PUMPKIN), blk(B.JACK_O_LANTERN), blk(B.MELON), blk(B.VINE),
     blk(B.LILY_PAD), blk(B.CATTAIL), blk(B.BRAMBLE), blk(B.LEAF_LITTER), ...all(B.FENCE), blk(B.FENCE_GATE), blk(B.TRAPDOOR), blk(B.GLASS_PANE), ...all(B.CARPET), blk(B.LUMITE_LAMP), blk(B.MOB_SPAWNER), blk(B.BRIMSTONE_FENCE), [I.bloodcap, 0],
     blk(B.IRON_BARS), blk(B.RIFT_FRAME), ...all(B.INFESTED_BRICKS), [I.star_crystal, 0], blk(B.WYRM_EGG), [I.star_fragment, 0],
+    blk(B.STAR_MOSS), blk(B.GLIMMER_LEAVES), blk(B.MOONPETAL), blk(B.DRIFT_GRASS), blk(B.STARVINE), [I.drift_glider, 0], [I.orrery_gear, 0],
     blk(B.GLOW_VINE), blk(B.GLOW_VINE_BERRIES), blk(B.PALE_LANTERN), blk(B.HUSH_SENSOR), blk(B.HUSH_SHRIEKER), blk(B.GATE_KEYSTONE), blk(B.DUNE_GRASS),
     [I.door_wood, 0], [I.door_iron, 0], [I.bed, 0], ...WOOD.map((w, i) => [I.sign, i]), [I.painting, 0]] });
   T.push({ name: 'Tools', icon: [I.iron_axe, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ['shovel', 'pickaxe', 'axe', 'hoe'].map((k) => [I[m + '_' + k], 0])),
@@ -584,7 +586,7 @@ const CREATIVE_TABS = (() => {
   T.push({ name: 'Brewing', icon: [I.potion, 10], list: [blk(B.BREWING_STAND), [I.glass_bottle, 0], ...POTION_VARIANTS.map((d) => [I.potion, d]), ...POTION_VARIANTS.map((d) => [I.splash_potion, d]),
     ...items(['bloodcap', 'sugar', 'glistering_melon', 'spider_eye', 'fermented_spider_eye', 'wailer_tear', 'flare_powder', 'magma_cream', 'glimmerfin', 'pufferfish', 'slimeball', 'ember_dust', 'sunstone_dust', 'gunpowder'])] });
   T.push({ name: 'Foodstuffs', icon: [I.apple, 0], list: items(['apple', 'golden_apple', 'bread', 'porkchop', 'cooked_porkchop', 'beef', 'steak', 'chicken', 'cooked_chicken', 'mutton', 'cooked_mutton', 'venison', 'cooked_venison', 'jerky',
-    'fish', 'cooked_fish', 'salmon', 'cooked_salmon', 'sunfish', 'pufferfish', 'glimmerfin', 'carrot', 'potato', 'baked_potato', 'poison_potato', 'cookie', 'melon_slice', 'mushroom_stew', 'glow_berries', 'pumpkin_pie', 'berry_pie', 'berries', 'glowberry', 'rotten_flesh', 'spider_eye']) });
+    'fish', 'cooked_fish', 'salmon', 'cooked_salmon', 'sunfish', 'pufferfish', 'glimmerfin', 'carrot', 'potato', 'baked_potato', 'poison_potato', 'cookie', 'melon_slice', 'mushroom_stew', 'glow_berries', 'pumpkin_pie', 'berry_pie', 'berries', 'glowberry', 'starfruit', 'rotten_flesh', 'spider_eye']) });
   T.push({ name: 'Materials', icon: [I.stick, 0], list: [...items(['coal']), [I.coal, 1], ...items(['diamond', 'iron_ingot', 'gold_ingot', 'gold_nugget', 'cobalt_ingot', 'starmetal_ingot', 'jade', 'ember_dust', 'sulfur', 'lumite_shard', 'salt',
     'stick', 'bowl', 'string', 'cattail_fiber', 'feather', 'flint', 'gunpowder', 'leather', 'bone', 'clay_ball', 'brick', 'paper', 'book', 'slimeball', 'wheat', 'seeds', 'sugar', 'sugar_cane', 'wisp_essence',
       'sunstone_dust', 'smoky_quartz', 'brimstone_brick', 'wailer_tear', 'flare_rod', 'flare_powder', 'magma_cream', 'fire_charge', 'seeker_eye', 'hush_shard', 'echo_heart', 'sift_scale']),

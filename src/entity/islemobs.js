@@ -253,7 +253,8 @@ MobSpawner.prototype.tickIsles = function (rd, area) {
     const x = x0 + this.rnd(7) - 3, z = z0 + this.rnd(7) - 3;
     if (!w.isLoaded(x, z)) continue;
     const y = w.topSolidY(x, z) + 1;
-    if (y < 2 || w.getBlock(x, y - 1, z) !== B.STARSTONE) continue;
+    const ground = w.getBlock(x, y - 1, z);
+    if (y < 2 || (ground !== B.STARSTONE && ground !== B.STAR_MOSS)) continue;
     if ((x + 0.5 - p.x) ** 2 + (y - p.y) ** 2 + (z + 0.5 - p.z) ** 2 < 24 * 24) continue;
     if (!this.canStand(x, y, z, 3)) continue;
     g.spawnMob('gaunt', x + 0.5, y, z + 0.5);

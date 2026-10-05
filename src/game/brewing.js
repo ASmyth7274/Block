@@ -11,7 +11,7 @@ const Brewing = (() => {
   const BREW_TIME = 400;
   const AWKWARD = {
     sugar: 'swiftness', glistering_melon: 'healing', spider_eye: 'poison', wailer_tear: 'regeneration', flare_powder: 'strength',
-    magma_cream: 'fire_resistance', glimmerfin: 'night_vision', pufferfish: 'water_breathing', slimeball: 'leaping',
+    magma_cream: 'fire_resistance', glimmerfin: 'night_vision', pufferfish: 'water_breathing', slimeball: 'leaping', starfruit: 'featherfall',
   };
   const MUNDANE = ['sugar', 'glistering_melon', 'spider_eye', 'wailer_tear', 'flare_powder', 'magma_cream', 'ember_dust', 'slimeball'];
   const CORRUPT = {

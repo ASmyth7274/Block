@@ -21,7 +21,7 @@ const Recipes = (() => {
   function smelt(input, output, xp) { SMELTING.push({ input: ref(input), output: { id: output[0], count: output[1] || 1, dmg: output[2] || 0 }, xp: xp || 0.1 }); }
 
   // ---------------- wood basics ----------------
-  for (let t = 0; t < 6; t++) shapeless([B.PLANKS, 4, t], [[B.LOG, t]]);
+  for (let t = 0; t < 7; t++) shapeless([B.PLANKS, 4, t], [[B.LOG, t]]);
   shaped([I.stick, 4], ['#', '#'], { '#': B.PLANKS });
   shaped([B.CRAFTING_TABLE, 1], ['##', '##'], { '#': B.PLANKS });
   shaped([B.CHEST, 1], ['###', '# #', '###'], { '#': B.PLANKS });
@@ -35,6 +35,10 @@ const Recipes = (() => {
     shaped([B.SLAB, 6, t], ['###'], { '#': [B.PLANKS, t] });
     shaped([B.STAIRS, 4, t], ['#  ', '## ', '###'], { '#': [B.PLANKS, t] });
   }
+  // glimmerwood (its slabs and stairs are numbered after the stone ones)
+  shaped([B.FENCE, 3, 6], ['W#W', 'W#W'], { W: [B.PLANKS, 6], '#': I.stick });
+  shaped([B.SLAB, 6, 23], ['###'], { '#': [B.PLANKS, 6] });
+  shaped([B.STAIRS, 4, 23], ['#  ', '## ', '###'], { '#': [B.PLANKS, 6] });
   shaped([B.FENCE_GATE, 1], ['#W#', '#W#'], { W: B.PLANKS, '#': I.stick });
   shaped([I.door_wood, 3], ['##', '##', '##'], { '#': B.PLANKS });
   shaped([I.door_iron, 3], ['##', '##', '##'], { '#': I.iron_ingot });
@@ -65,7 +69,7 @@ const Recipes = (() => {
   shaped([I.bow], [' #S', '# S', ' #S'], { '#': I.stick, S: I.string });
   shaped([I.arrow, 4], ['F', '#', 'E'], { F: I.flint, '#': I.stick, E: I.feather });
   shaped([I.fishing_rod], ['  #', ' #S', '# S'], { '#': I.stick, S: I.string });
-  for (let t = 0; t < 6; t++) {
+  for (let t = 0; t < 7; t++) {
     shaped([I.boat, 1, t], ['P P', 'PPP'], { P: [B.PLANKS, t] });
     shaped([I.sign, 3, t], ['PPP', 'PPP', ' # '], { P: [B.PLANKS, t], '#': I.stick });
   }
@@ -204,6 +208,8 @@ const Recipes = (() => {
   // what the Starwyrm calls down: crystals to call it back with, and starmetal
   shaped([I.star_crystal], ['GGG', 'GFG', 'GTG'], { G: B.GLASS, F: I.star_fragment, T: I.wailer_tear });
   shaped([I.starmetal_ingot], ['FFF', 'FFF', 'FFF'], { F: I.star_fragment });
+  // ---------------- the Drift Isles ----------------
+  shapeless([I.dye, 2, 3], [B.MOONPETAL]);
   // ---------------- the Sift ----------------
   shaped([B.SILTSTONE_BRICKS, 4, 0], ['##', '##'], { '#': B.SILTSTONE });
   shaped([B.SILTSTONE_BRICKS, 4, 1], ['##', '##'], { '#': [B.SILTSTONE_BRICKS, 0] });
@@ -294,7 +300,21 @@ const Recipes = (() => {
     }
     return null;
   }
+  // mending: a worn drift glider and orrery gears to set its ribs right (a quarter each)
+  function mend(grid) {
+    let tool = null, gears = 0;
+    for (const s of grid) {
+      if (!s) continue;
+      if (s.id === ITEM_IDS.drift_glider && !tool) tool = s;
+      else if (s.id === ITEM_IDS.orrery_gear) gears++;
+      else return null;
+    }
+    if (!tool || !gears || tool.dmg <= 0) return null;
+    return new ItemStack(tool.id, 1, Math.max(0, tool.dmg - Math.ceil(maxDamageOf(tool.id) / 4) * gears));
+  }
   function result(grid, gw, gh) {
+    const fixed = mend(grid);
+    if (fixed) return fixed;
     const r = find(grid, gw, gh);
     if (!r) return null;
     return new ItemStack(r.result.id, r.result.count, r.result.dmg);

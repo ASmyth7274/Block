@@ -2055,6 +2055,8 @@ function WorldGenFactory(Noise, TAB) {
         sift: [[I.lost_letter, 1, 1, 14], [I.gold_ingot, 1, 4, 8], [I.iron_ingot, 1, 5, 8], [I.diamond, 1, 2, 3], [I.compass, 1, 1, 4], [I.clock, 1, 1, 4], [I.book, 1, 3, 6],
           [I.golden_apple, 1, 1, 2], [I.jade, 1, 3, 5], [I.bread, 1, 3, 5], [I.string, 2, 6, 5], [I.iron_sword, 1, 1, 3], [I.bow, 1, 1, 3], [I.arrow, 3, 9, 4], [I.wayback_compass, 1, 1, 2],
           [I.message_bottle, 1, 1, 3], [I.seeker_eye, 1, 1, 1], [I.gold_nugget, 3, 9, 6], [I.sift_scale, 1, 3, 4], [I.map, 1, 1, 2], [I.cobalt_ingot, 1, 3, 4], [B.PALE_LANTERN, 1, 2, 3], [I.wisp_essence, 1, 2, 3]],
+        observatory: [[I.book, 1, 3, 10], [I.paper, 2, 6, 8], [I.starfruit, 1, 4, 10], [I.star_fragment, 1, 3, 8], [I.compass, 1, 1, 4], [I.clock, 1, 1, 4], [I.map, 1, 1, 3],
+          [I.glass_bottle, 1, 3, 4], [I.gold_ingot, 1, 3, 6], [I.starmetal_ingot, 1, 1, 2], [B.SAPLING, 1, 2, 5, 7], [B.MOONPETAL, 1, 3, 5], [I.orrery_gear, 1, 2, 4], [I.star_crystal, 1, 1, 1], [I.diamond, 1, 2, 2]],
         city_keep: [[I.hush_shard, 2, 5, 10], [I.diamond, 1, 3, 6], [I.golden_apple, 1, 2, 4], [I.diamond_leggings, 1, 1, 2], [I.starmetal_ingot, 1, 1, 1], [I.gold_ingot, 2, 5, 6]],
         vault_library: [[I.book, 1, 3, 20], [I.paper, 2, 7, 20], [I.compass, 1, 1, 5], [I.wisp_essence, 1, 2, 4], [I.jade, 1, 2, 4], [I.dye, 2, 6, 6, 11], [I.glass_bottle, 1, 3, 4], [I.seeker_eye, 1, 1, 1]],
         fortress: [[I.gold_ingot, 1, 3, 15], [I.iron_ingot, 1, 5, 6], [I.diamond, 1, 3, 5], [I.gold_sword, 1, 1, 5], [I.gold_chestplate, 1, 1, 5], [I.gold_pickaxe, 1, 1, 3], [I.flint_and_steel, 1, 1, 5],
@@ -2074,7 +2076,7 @@ function WorldGenFactory(Noise, TAB) {
         if (pick[4] !== undefined) dmg = pick[4];
         else if (pick[0] === I.dye) dmg = rng.nextInt(16);
         if (pick[0] === B.WOOL) dmg = rng.nextInt(16);
-        if (pick[0] === B.SAPLING) dmg = rng.nextInt(7);
+        if (pick[0] === B.SAPLING && pick[4] === undefined) dmg = rng.nextInt(7);
         if (pick[0] === I.lost_letter) dmg = rng.nextInt(64);
         items.push({ slot: rng.nextInt(27), id: pick[0], c: count, d: dmg });
       }
@@ -2316,6 +2318,34 @@ function WorldGenFactory(Noise, TAB) {
       };
       const trunk = (h, wood) => { for (let k = 0; k < h; k++) W.set(x, y + k, z, LOG, wood, 3); W.setIf(x, y - 1, z, B.DIRT, 0, B.GRASS); };
       switch (kind) {
+        case 'glimmer': {
+          // a pale trunk that leans and twists as it climbs, under a wide, drooping canopy
+          // of glowing leaves strung with starvines
+          const h = 6 + rng.nextInt(4), lx = rng.nextInt(3) - 1, lz = rng.nextInt(3) - 1;
+          let tx = x, tz = z;
+          for (let k = 0; k < h; k++) {
+            if (k >= 3 && k < h - 1 && rng.nextInt(3) === 0) { tx += lx; tz += lz; }
+            W.set(tx, y + k, tz, LOG, 6, 3);
+          }
+          W.setIf(x, y - 1, z, B.STARSTONE, 0, B.STAR_MOSS);
+          const top = y + h;
+          for (let dy = -2; dy <= 1; dy++) {
+            const r = dy === 1 ? 1.6 : dy === 0 ? 2.9 : dy === -1 ? 3.4 : 2.6;
+            for (let dx = -4; dx <= 4; dx++) for (let dz = -4; dz <= 4; dz++) {
+              const d = Math.sqrt(dx * dx + dz * dz);
+              if (d > r || (d > r - 0.8 && rng.nextInt(3) === 0)) continue;
+              W.set(tx + dx, top + dy - 1, tz + dz, B.GLIMMER_LEAVES, 0, 1);
+            }
+          }
+          // starvines trailing from the underside of the canopy
+          for (let i = 0; i < 7; i++) {
+            const a = rng.nextFloat() * Math.PI * 2, r = 1.5 + rng.nextFloat() * 1.6;
+            const vx = tx + Math.round(Math.cos(a) * r), vz = tz + Math.round(Math.sin(a) * r), len = 1 + rng.nextInt(5);
+            const vy = Math.hypot(vx - tx, vz - tz) <= 2.5 ? top - 4 : top - 3;
+            for (let k = 0; k < len; k++) W.set(vx, vy - k, vz, B.STARVINE, k === len - 1 && rng.nextInt(3) === 0 ? 1 : 0, 1);
+          }
+          break;
+        }
         case 'oak': case 'birch': case 'maple': case 'gold_maple': {
           const wood = kind === 'birch' ? 2 : (kind === 'oak' ? 0 : 4);
           const leaf = kind === 'birch' ? 2 : kind === 'oak' ? 0 : kind === 'maple' ? 4 : 6;
@@ -3071,7 +3101,130 @@ function WorldGenFactory(Noise, TAB) {
         for (let y = col[0]; y <= col[1]; y++) blocks[IDX(x, y, z)] = B.STARSTONE;
       }
       if (Math.abs(cx) <= 9 && Math.abs(cz) <= 9) { this.spires(out); this.starWell(out); }
+      if ((x0 + 8) * (x0 + 8) + (z0 + 8) * (z0 + 8) > (ISLES.GULF - 120) * (ISLES.GULF - 120)) this.driftDecor(out);
       return out;
+    }
+    // ---------------------------------------------------------------- the Drift Isles
+    // each drift isle is bare rock, a mossy meadow, a glimmerwood grove, or (if it is big
+    // enough) the site of an old observatory
+    isleKind(d) {
+      if (d.kind) return d.kind;
+      const v = new Random(seedHash(this.seed, d.i, d.j, 0x15E)).nextFloat();
+      d.kind = d.R >= 17 && v < 0.24 ? 'observatory' : v < 0.48 ? 'grove' : v < 0.82 ? 'meadow' : 'bare';
+      return d.kind;
+    }
+    // where the glimmerwood grows on an isle
+    isleTrees(d) {
+      if (d.trees) return d.trees;
+      const kind = this.isleKind(d), rng = new Random(seedHash(this.seed, d.i, d.j, 0x7EE));
+      const n = kind === 'grove' ? Math.round(d.R * d.R / 45) + 2 : kind === 'meadow' ? rng.nextInt(3) : kind === 'observatory' ? 2 : 0;
+      const out = [];
+      for (let k = 0; k < n * 3 && out.length < n; k++) {
+        const a = rng.nextFloat() * Math.PI * 2, r = (kind === 'observatory' ? 10 : 3.5) + rng.nextFloat() * (d.R * 0.7 - 3);
+        const x = Math.round(d.x + Math.cos(a) * r), z = Math.round(d.z + Math.sin(a) * r), col = this.column(x, z);
+        if (!col || col[2] !== d || out.some((t) => (t.x - x) ** 2 + (t.z - z) ** 2 < 25)) continue;
+        out.push({ x, z, y: col[1] + 1, seed: rng.nextInt(0x7fffffff) });
+      }
+      return (d.trees = out);
+    }
+    driftDecor(out) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16;
+      const hash = (x, z) => { let h = Math.imul(x, 374761393) ^ Math.imul(z, 668265263) ^ this.seed; h = Math.imul(h ^ (h >>> 13), 1274126177); return (h ^ (h >>> 16)) >>> 0; };
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
+        const wx = X0 + x, wz = Z0 + z, col = this.column(wx, wz);
+        if (!col || !col[2]) continue;
+        const d = col[2], kind = this.isleKind(d), top = col[1], h = hash(wx, wz);
+        // starvines trail from the undersides
+        if ((h & 31) === 7 && col[0] > 6) {
+          const len = 1 + ((h >> 6) & 3) + ((h >> 8) & 1) * 2;
+          for (let k = 1; k <= len; k++) { const i = IDX(x, col[0] - k, z); blocks[i] = B.STARVINE; meta[i] = k === len && ((h >> 10) & 3) === 0 ? 1 : 0; }
+        }
+        if (kind === 'bare' || top + 1 >= H) continue;
+        if (kind !== 'grove' && this.iCluster.noise2(wx / 9 + 40, wz / 9) < -0.3) continue;
+        blocks[IDX(x, top, z)] = B.STAR_MOSS;
+        const r = (h >> 12) & 255, i = IDX(x, top + 1, z);
+        if (r < (kind === 'meadow' ? 46 : 26)) blocks[i] = B.DRIFT_GRASS;
+        else if (r < (kind === 'meadow' ? 58 : 30)) blocks[i] = B.MOONPETAL;
+      }
+      // glimmerwood and observatories, from every isle near enough to reach into this chunk
+      const W = new Writer(out.cx, out.cz, blocks, meta);
+      const i0 = Math.floor((X0 + 8) / 64), j0 = Math.floor((Z0 + 8) / 64);
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const d = this.driftIsle(i0 + di, j0 + dj);
+        if (!d || d.x + d.R * 1.4 + 8 < X0 || d.x - d.R * 1.4 - 8 > X0 + 15 || d.z + d.R * 1.4 + 8 < Z0 || d.z - d.R * 1.4 - 8 > Z0 + 15) continue;
+        for (const t of this.isleTrees(d)) {
+          if (t.x + 5 < X0 || t.x - 5 > X0 + 15 || t.z + 5 < Z0 || t.z - 5 > Z0 + 15) continue;
+          this.tree(W, new Random(t.seed), 'glimmer', t.x, t.y, t.z);
+        }
+        if (this.isleKind(d) === 'observatory') this.observatory(out, W, d);
+      }
+    }
+    // an old observatory: a round tower of starstone bricks on the crown of a large drift
+    // isle, three floors and a glass dome over its great brass telescope
+    observatory(out, W, d) {
+      const col = this.column(d.x, d.z);
+      if (!col || col[2] !== d) return;
+      const X0 = out.cx * 16, Z0 = out.cz * 16, cx = d.x, cz = d.z, y0 = col[1] + 1;
+      if (cx + 8 < X0 || cx - 8 > X0 + 15 || cz + 8 < Z0 || cz - 8 > Z0 + 15) return;
+      const rng = new Random(seedHash(this.seed, d.i, d.j, 0x0B5));
+      const R = 5, TOP = y0 + 18;
+      const inC = (x, z) => x >= X0 && x < X0 + 16 && z >= Z0 && z < Z0 + 16;
+      const put = (x, y, z, id, m) => W.set(x, y, z, id, m || 0, 0);
+      const chest = (x, y, z, table, extra) => { put(x, y, z, B.CHEST, 0); if (inC(x, z)) out.tiles.push({ type: 'chest', x, y, z, items: this.loot(rng, table).concat(extra || []) }); };
+      for (let dx = -R - 1; dx <= R + 1; dx++) for (let dz = -R - 1; dz <= R + 1; dz++) {
+        const r = Math.hypot(dx, dz), x = cx + dx, z = cz + dz;
+        if (r > R + 0.5 || !inC(x, z)) continue;
+        // a footing of brick down to the rock
+        for (let y = y0 - 1; y > y0 - 12 && y > 1; y--) { const id = W.get(x, y, z); if (id > 0 && SOLID[id] && id !== B.STAR_MOSS) break; put(x, y, z, B.STARSTONE_BRICKS); }
+        put(x, y0 - 1, z, B.STARSTONE_BRICKS);
+        for (let y = y0; y <= TOP + R + 1; y++) put(x, y, z, 0);
+        const wall = r > R - 0.5;
+        for (let y = y0; y <= TOP; y++) {
+          const f = (y - y0) % 6;
+          if (wall) {
+            const card = Math.abs(dx) <= 1 || Math.abs(dz) <= 1;
+            if (card && (f === 2 || f === 3) && y > y0 + 1 && !(dx === R && dz === 0)) put(x, y, z, B.GLASS_PANE);
+            else put(x, y, z, f === 0 ? B.STARSTONE : B.STARSTONE_BRICKS);
+          } else if (f === 0 && y > y0) put(x, y, z, y === TOP ? B.STARSTONE_BRICKS : B.PLANKS, y === TOP ? 0 : 6);
+        }
+        if (!wall) put(x, y0 - 1, z, B.PLANKS, 6);
+        // the dome, open in a slot for the telescope
+        for (let dy = 1; dy <= R + 1; dy++) {
+          const s = Math.hypot(dx, dz, dy);
+          if (s > R + 0.5 || s < R - 0.6) continue;
+          if (Math.abs(dx) <= 1 && dz > 0 && dy < R) continue;
+          put(x, TOP + dy, z, B.GLASS);
+        }
+      }
+      // a ladder up the inside of the east wall, through a hole in every floor
+      for (let y = y0; y <= TOP; y++) put(cx + R - 1, y, cz, B.LADDER, 2);
+      // the door, facing west, with a step
+      put(cx - R, y0, cz, 0); put(cx - R, y0 + 1, cz, 0); put(cx - R - 1, y0 - 1, cz, B.STARSTONE_BRICKS);
+      // the ground floor: a workroom
+      for (const [dx, dz] of [[-3, -3], [-3, 3], [3, -3], [3, 3]]) put(cx + dx, y0, cz + dz, B.PALE_LANTERN, 0);
+      put(cx + 2, y0, cz - 3, B.CRAFTING_TABLE); put(cx - 1, y0, cz - 4, B.BOOKSHELF); put(cx, y0, cz - 4, B.BOOKSHELF); put(cx + 1, y0, cz - 4, B.BOOKSHELF);
+      chest(cx - 2, y0, cz + 3, 'observatory');
+      // the library above
+      for (let k = -2; k <= 2; k++) { put(cx + k, y0 + 7, cz - 4, B.BOOKSHELF); put(cx + k, y0 + 8, cz - 4, B.BOOKSHELF); put(cx + k, y0 + 7, cz + 4, B.BOOKSHELF); }
+      put(cx, y0 + 11, cz, B.PALE_LANTERN, 1);
+      chest(cx - 3, y0 + 7, cz + 2, 'observatory');
+      // the star-gazer's room: a bed, a desk, a hanging lantern
+      put(cx - 3, y0 + 13, cz - 1, B.SLAB, 23); put(cx - 3, y0 + 13, cz, B.SLAB, 23);
+      put(cx, y0 + 17, cz, B.PALE_LANTERN, 1);
+      chest(cx - 2, y0 + 13, cz - 3, 'observatory');
+      // the deck: the great telescope on its stand, aimed out through the slot
+      put(cx, TOP + 1, cz, B.FENCE, 6);
+      put(cx, TOP + 2, cz - 1, B.IRON_BLOCK);
+      for (let k = 0; k < 4; k++) put(cx, TOP + 2 + Math.floor(k * 0.75), cz + k, B.GOLD_BLOCK);
+      put(cx, TOP + 5, cz + 4, B.GLASS);
+      // the treasure of the place: a glider, in the chest by the telescope
+      chest(cx + 2, TOP + 1, cz - 2, 'observatory', [{ slot: 13, id: I.drift_glider, c: 1, d: 0 }]);
+      // orrery sentinels keep watch round it
+      const n = 2 + rng.nextInt(2);
+      for (let k = 0; k < n; k++) {
+        const a = rng.nextFloat() * Math.PI * 2, ex = cx + 0.5 + Math.cos(a) * (R + 3), ez = cz + 0.5 + Math.sin(a) * (R + 3);
+        if (inC(Math.floor(ex), Math.floor(ez))) out.entities.push({ type: 'orrery', x: ex, y: y0 + 4 + k * 6 + rng.nextInt(3), z: ez });
+      }
     }
     // ten obsidian spires in a ring, tallest and widest at random; the two
     // shortest keep their crystals in iron cages
@@ -3110,7 +3263,7 @@ function WorldGenFactory(Noise, TAB) {
       const a = Math.PI * 2 * k / n, ca = Math.cos(a), sa = Math.sin(a);
       for (let r = ISLES.GULF - 50; r < ISLES.GULF + 1200; r += 6) {
         const x = Math.round(ca * r), z = Math.round(sa * r), col = this.column(x, z);
-        if (!col || !col[2]) continue;
+        if (!col || !col[2] || this.isleKind(col[2]) === 'observatory') continue;
         const d = col[2];
         let best = null, bs = -1e9;
         for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) {

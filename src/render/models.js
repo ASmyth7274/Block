@@ -241,6 +241,22 @@ const MODELS = (() => {
       finL: { pivot: [-4, 0, 0], boxes: [bx([-10, -0.5, -3], [10, 1, 6], [0, 18], { mirror: true })] },
     },
     wyrmTail: { fin: { pivot: [0, 0, 4], boxes: [bx([-0.5, -4, 0], [1, 8, 10], [36, 8])] } },
+    // an orrery sentinel: three brass rings turning round a burning core, and a pointer
+    orrery: (() => {
+      const ring = (r) => [bx([-r, -0.5, -r], [2 * r, 1, 1], [0, 0]), bx([-r, -0.5, r - 1], [2 * r, 1, 1], [0, 0]), bx([-r, -0.5, -r + 1], [1, 1, 2 * r - 2], [0, 0]), bx([r - 1, -0.5, -r + 1], [1, 1, 2 * r - 2], [0, 0])];
+      return {
+        core: { pivot: [0, 8, 0], boxes: [bx([-2, -2, -2], [4, 4, 4], [0, 0])] },
+        ringA: { pivot: [0, 8, 0], boxes: ring(8) },
+        ringB: { pivot: [0, 8, 0], boxes: ring(6) },
+        ringC: { pivot: [0, 8, 0], boxes: ring(4) },
+        arm: { pivot: [0, 8, 0], boxes: [bx([-0.5, -0.5, -11], [1, 1, 4], [0, 0])] },
+      };
+    })(),
+    // a drift glider: two silk wings hung from the shoulders, folded down the back
+    glider: {
+      wingR: { pivot: [1, 24, 2.3], boxes: [bx([-1, -20, 0], [10, 20, 2], [22, 0])] },
+      wingL: { pivot: [-1, 24, 2.3], boxes: [bx([-9, -20, 0], [10, 20, 2], [22, 0], { mirror: true })] },
+    },
   };
 })();
 

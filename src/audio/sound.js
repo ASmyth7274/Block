@@ -577,6 +577,23 @@ const SOUND_DEFS = (() => {
       return (s + lp.p(noise()) * 0.6) * sw;
     });
   };
+  // ----- the Drift Isles -----
+  // an orrery sentinel: the dry tick of its clockwork as it turns
+  S.orrery_tick = () => { const ck = []; for (let i = 0; i < 8; i++) ck.push([i * 0.11 + rnd() * 0.01, 2400 + (i % 2) * 700, 0.4, 0.004]); return render(1, (t) => ring(ck, t)); };
+  S.orrery_shoot = () => { let ph = 0; return render(0.7, (t) => { const f = 500 + t * 1800; ph += 2 * Math.PI * f / DSP.SR; return Math.sin(ph) * env(t, 0.01, 0.2) * 0.6 + Math.sin(ph * 2.01) * env(t, 0.01, 0.12) * 0.3; }); };
+  S.orrery_hurt = () => { const ck = []; for (let i = 0; i < 6; i++) ck.push([rnd() * 0.15, 1200 + rnd() * 2500, 0.5, 0.01]); return render(0.4, (t) => ring(ck, t) + Math.sin(2 * Math.PI * 330 * t) * env(t, 0.003, 0.06) * 0.5); };
+  S.orrery_death = () => {
+    const ck = []; for (let i = 0; i < 30; i++) ck.push([rnd() * 1.1, 900 + rnd() * 3000, 0.3, 0.01 + rnd() * 0.02]);
+    return render(1.6, (t) => ring(ck, t) + Math.sin(2 * Math.PI * (440 - t * 200) * t) * env(t, 0.01, 0.5) * 0.4);
+  };
+  S.mote_pop = () => render(0.4, (t) => Math.sin(2 * Math.PI * (1600 - t * 2000) * t) * env(t, 0.002, 0.08));
+  S.mote_hit = () => { let ph = 0; return render(1.1, (t) => { const f = 300 + t * 900; ph += 2 * Math.PI * f / DSP.SR; return Math.sin(ph) * env(t, 0.01, 0.4) * 0.6 + Math.sin(2 * Math.PI * 1318 * t) * env(t, 0.05, 0.3) * 0.2; }); };
+  // a glider snapping open, and the wind past it (looped)
+  S.glider_open = () => { const hp = new Biquad('hp', 900, 0.8); return render(0.45, (t) => hp.p(noise()) * env(t, 0.004, 0.08) * 1.2 + Math.sin(2 * Math.PI * 180 * t) * env(t, 0.004, 0.05) * 0.4); };
+  S.glide_wind = () => {
+    const bp = new Biquad('bp', 500, 0.7), lp = new Biquad('lp', 260, 0.7);
+    return render(6, (t) => { bp.set(420 + Math.sin(t * 2.1) * 160 + Math.sin(t * 5.3) * 60, 0.8); return (bp.p(noise()) * 0.9 + lp.p(noise()) * 1.4) * (0.75 + 0.25 * Math.sin(Math.PI * 2 * t / 6)); });
+  };
   // ----- the Hush -----
   // the air of the Hush: a pressure more than a sound, with something ticking far away (looped)
   S.hush_air = () => {

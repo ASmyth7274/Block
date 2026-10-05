@@ -31,7 +31,7 @@ class Particles {
     return atlas.face(id, meta, face === undefined ? 2 : face);
   }
   blockTint(id, meta) {
-    if (id === B.LEAVES) { const k = meta & 7; if (k === 4 || k === 6) return [1, 1, 1]; return [0.42, 0.68, 0.3]; }
+    if (id === B.LEAVES) { const k = meta & 7; if (k === 4 || k === 6 || k === 7) return [1, 1, 1]; return [0.42, 0.68, 0.3]; }
     if (id === B.TALL_GRASS && meta) return [0.5, 0.74, 0.35];
     return [1, 1, 1];
   }

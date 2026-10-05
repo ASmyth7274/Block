@@ -54,6 +54,8 @@ const MILESTONES = [
   { id: 'wyrm', name: 'Wyrmfall', desc: 'Bring down the Starwyrm', icon: () => [ITEM_IDS.star_fragment, 0] },
   { id: 'egg', name: 'Something Stirs', desc: 'Take the Starwyrm\'s egg', icon: () => [B.WYRM_EGG, 0] },
   { id: 'gateway', name: 'Over the Gulf', desc: 'Pass through a star gateway', icon: () => [B.STAR_GATEWAY, 0] },
+  { id: 'observatory', name: 'Stargazer', desc: 'Find an old observatory on the Drift Isles', icon: () => [ITEM_IDS.orrery_gear, 0] },
+  { id: 'glide', name: 'Wingspan', desc: 'Glide on a drift glider', icon: () => [ITEM_IDS.drift_glider, 0] },
   { id: 'city', name: 'Lost and Found', desc: 'Find a forgotten city deep in the Hush', icon: () => [B.DEEPSTONE_BRICKS, 2] },
   { id: 'gate', name: 'The Grey Door', desc: 'Wake a city gate with an Echo Heart', icon: () => [ITEM_IDS.echo_heart, 0] },
   { id: 'listener', name: 'Unheard Of', desc: 'Defeat the Listener', icon: () => [ITEM_IDS.hush_shard, 0] },
@@ -85,7 +87,7 @@ const BIOME_DESCRIPTIONS = {
   the_hush: 'Far below, the stone turns dark and the caves fall silent. Things here listen. Walk softly - and never wake the shriekers.',
   great_isle: 'Far Isles. Pale starstone ringed by obsidian spires, each crowned with a star crystal. Something vast circles overhead.',
   starlit_gulf: 'Far Isles. Nothing at all, for hundreds of blocks: just the void and the stars.',
-  drift_isles: 'Far Isles. Islands without number, scattered out across the void beyond the gulf.',
+  drift_isles: 'Far Isles. Islands without number beyond the gulf: mossy meadows, glimmerwood groves hung with starvines, and here and there an old observatory, still watched over by its orreries.',
 };
 class JournalScreen extends Screen {
   constructor(game, parent) { super(game); this.parent = parent; this.background = 'world'; this.tab = 0; this.page = 0; this.pauses = !!parent; }

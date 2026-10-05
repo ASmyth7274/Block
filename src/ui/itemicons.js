@@ -109,7 +109,7 @@ class ItemIcons {
     if (id === B.LEAVES) {
       const k = meta & 7;
       if (k === 1) return ICON_TINT.spruce; if (k === 2) return ICON_TINT.birch; if (k === 5) return ICON_TINT.redwood;
-      if (k === 4 || k === 6) return null;
+      if (k === 4 || k === 6 || k === 7) return null;
       return ICON_TINT.foliage;
     }
     if (id === B.WATER) return ICON_TINT.water;

@@ -526,6 +526,7 @@ const TexGen = (function () {
     jungle:  { plank: ['#80573a', '#8d6142', '#9a6b4a', '#a67452', '#b07d57'], bark: ['#463818', '#55451e', '#5f4f23', '#6e5f2a'], ring: ['#8d6142', '#a06e4b', '#b27c55'] },
     maple:   { plank: ['#94573d', '#a26043', '#b06a49', '#bc7451', '#c67e59'], bark: ['#4a3a34', '#594640', '#68534c', '#76615a'], ring: ['#a8684a', '#bf7856', '#d18a63'] },
     redwood: { plank: ['#6e2c1f', '#7b3324', '#8c3a2a', '#9a4230', '#a84a37'], bark: ['#5a2414', '#6c2e1a', '#7e3820', '#8f4227'], ring: ['#8c3a2a', '#a04634', '#b4523d'] },
+    glimmer: { plank: ['#7a7498', '#86809f', '#928cac', '#9e98b8', '#aaa4c4'], bark: ['#4c4670', '#5a547e', '#68628e', '#78729e'], ring: ['#8e88aa', '#a29cbe', '#b6b0d0'] },
   };
   function planks(w) {
     const P = pal(WOODPAL[w].plank);
@@ -569,6 +570,7 @@ const TexGen = (function () {
       }
     }
     if (w === 'jungle') { for (let k = 0; k < 10; k++) img.set(rng.nextInt(16), rng.nextInt(16), C(rng.nextBool() ? '#4c6b2a' : '#5d7d33')); }
+    if (w === 'glimmer') { for (let k = 0; k < 8; k++) img.set(rng.nextInt(16), rng.nextInt(16), C(k % 3 ? '#cfc4ff' : '#fff4c8')); }
     return img;
   }
   function logTop(w) {
