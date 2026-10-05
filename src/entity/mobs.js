@@ -1959,6 +1959,7 @@ class MobSpawner {
     const area = (rd * 2 + 1) * (rd * 2 + 1);
     if (w.dim === 1) { if (this.tickUnder) this.tickUnder(rd, area); return; }
     if (w.dim === 2) { if (this.tickIsles) this.tickIsles(rd, area); return; }
+    if (w.dim === 3) { if (this.tickSift) this.tickSift(rd, area); return; }
     const capMonster = Math.max(8, Math.round(48 * area / 169));
     if (w.difficulty > 0 && this.counts.monster < capMonster) {
       for (let i = 0; i < 2; i++) if (this.spawnMonsterPack(rd)) { this.counts.monster += 1; }

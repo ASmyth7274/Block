@@ -54,6 +54,7 @@ const SLAB_MATS = [
   { key: 'deepstone_brick', name: 'Deepstone Brick', tex: 'deepstone_bricks', tool: 'pickaxe', hard: 3.5, sound: 'stone' },
   { key: 'deepstone_tile', name: 'Deepstone Tile', tex: 'deepstone_tiles', tool: 'pickaxe', hard: 3.5, sound: 'stone' },
   { key: 'starstone_brick', name: 'Starstone Brick', tex: 'starstone_bricks', tool: 'pickaxe', hard: 3, sound: 'stone' },
+  { key: 'siltstone_brick', name: 'Siltstone Brick', tex: 'siltstone_bricks', tool: 'pickaxe', hard: 1.5, sound: 'stone' },
 ];
 
 // Block storage
@@ -778,6 +779,16 @@ defBlock(164, 'sift_gate', {
   // (drawn by the renderer's gate shader: a window onto the Sift, grains falling in its depths)
   model: (m) => [{ b: portalBox(m) }],
 });
+// --- the Sift ---------------------------------------------------------------
+defBlock(165, 'sift_sand', { name: 'Sift Sand', hardness: 0.5, tool: 'shovel', sound: 'sand', gravity: true });
+defBlock(166, 'siltstone', { name: 'Siltstone', tex: (m, f) => f <= 1 ? 'siltstone_top' : 'siltstone', hardness: 1.5, resistance: 20, tool: 'pickaxe', needsTool: true });
+defBlock(167, 'siltstone_bricks', {
+  name: (m) => ['Siltstone Bricks', 'Polished Siltstone', 'Carved Siltstone', 'Cracked Siltstone Bricks'][m & 3],
+  tex: (m) => ['siltstone_bricks', 'siltstone_polished', 'siltstone_carved', 'siltstone_cracked'][m & 3],
+  hardness: 1.5, resistance: 20, tool: 'pickaxe', needsTool: true, itemMetaMask: 3, variants: [0, 1, 2, 3],
+});
+defBlock(168, 'sift_glass', { name: 'Sift Glass', opaque: false, translucent: true, opacity: 0, light: 3, hardness: 0.3, sound: 'glass' });
+defBlock(169, 'dune_grass', Object.assign({}, plantBase, { name: 'Dune Grass', tex: 'dune_grass', itemSprite: 'dune_grass', replaceable: true, select: () => box16(2, 0, 2, 14, 12, 14), drops: () => [] }));
 // infested bricks: something lives inside
 defBlock(151, 'infested_bricks', {
   name: (m) => ['Stone Bricks', 'Mossy Stone Bricks', 'Cracked Stone Bricks', 'Chiseled Stone Bricks'][m & 3],

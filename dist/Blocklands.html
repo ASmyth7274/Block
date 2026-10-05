@@ -453,6 +453,7 @@ const SLAB_MATS = [
   { key: 'deepstone_brick', name: 'Deepstone Brick', tex: 'deepstone_bricks', tool: 'pickaxe', hard: 3.5, sound: 'stone' },
   { key: 'deepstone_tile', name: 'Deepstone Tile', tex: 'deepstone_tiles', tool: 'pickaxe', hard: 3.5, sound: 'stone' },
   { key: 'starstone_brick', name: 'Starstone Brick', tex: 'starstone_bricks', tool: 'pickaxe', hard: 3, sound: 'stone' },
+  { key: 'siltstone_brick', name: 'Siltstone Brick', tex: 'siltstone_bricks', tool: 'pickaxe', hard: 1.5, sound: 'stone' },
 ];
 
 // Block storage
@@ -1177,6 +1178,16 @@ defBlock(164, 'sift_gate', {
   // (drawn by the renderer's gate shader: a window onto the Sift, grains falling in its depths)
   model: (m) => [{ b: portalBox(m) }],
 });
+// --- the Sift ---------------------------------------------------------------
+defBlock(165, 'sift_sand', { name: 'Sift Sand', hardness: 0.5, tool: 'shovel', sound: 'sand', gravity: true });
+defBlock(166, 'siltstone', { name: 'Siltstone', tex: (m, f) => f <= 1 ? 'siltstone_top' : 'siltstone', hardness: 1.5, resistance: 20, tool: 'pickaxe', needsTool: true });
+defBlock(167, 'siltstone_bricks', {
+  name: (m) => ['Siltstone Bricks', 'Polished Siltstone', 'Carved Siltstone', 'Cracked Siltstone Bricks'][m & 3],
+  tex: (m) => ['siltstone_bricks', 'siltstone_polished', 'siltstone_carved', 'siltstone_cracked'][m & 3],
+  hardness: 1.5, resistance: 20, tool: 'pickaxe', needsTool: true, itemMetaMask: 3, variants: [0, 1, 2, 3],
+});
+defBlock(168, 'sift_glass', { name: 'Sift Glass', opaque: false, translucent: true, opacity: 0, light: 3, hardness: 0.3, sound: 'glass' });
+defBlock(169, 'dune_grass', Object.assign({}, plantBase, { name: 'Dune Grass', tex: 'dune_grass', itemSprite: 'dune_grass', replaceable: true, select: () => box16(2, 0, 2, 14, 12, 14), drops: () => [] }));
 // infested bricks: something lives inside
 defBlock(151, 'infested_bricks', {
   name: (m) => ['Stone Bricks', 'Mossy Stone Bricks', 'Cracked Stone Bricks', 'Chiseled Stone Bricks'][m & 3],
@@ -1474,6 +1485,14 @@ defItem('star_crystal', { name: 'Star Crystal', rare: true });
 defItem('glowberry', { name: 'Glow Berries', food: { hunger: 2, sat: 0.4 } });
 defItem('hush_shard', { name: 'Hush Shard', rare: true });
 defItem('echo_heart', { name: 'Echo Heart', rare: true, maxStack: 1 });
+// ---- the Sift ----
+// letters that went astray and ended up in the Sift (the damage value says which)
+defItem('lost_letter', { name: 'Lost Letter', maxStack: 1 });
+// points the way back to where you last fell
+defItem('wayback_compass', { name: 'Wayback Compass', maxStack: 1, rare: true });
+defItem('sift_scale', { name: 'Sifter Scale' });
+// scaled boots that make no sound at all: nothing hears you walk
+defItem('silent_boots', { name: 'Silent Boots', tex: 'silent_boots', maxDamage: 13 * 9, armor: { slot: 3, points: 1, mat: 'leather' }, silent: true, rare: true });
 // strike it and its note rings out wherever you point: a way to lead the Listener astray
 defItem('echo_fork', { name: 'Echo Fork', maxDamage: 48, handheld: true });
 
@@ -4422,6 +4441,89 @@ const TexGen = (function () {
     { o: '#161a1e', i: '#aab4be', l: '#e4ecf2', c: '#5ff7ee', h: '#2c4a4c' });
 })();
 
+// ---- src/render/siftart.js
+// ---------------------------------------------------------------------------
+// Artwork for the Sift, where lost things go: grey sift sand and the banded
+// siltstone beneath it, siltstone bricks, pale sift glass, dune grass, and
+// the odds and ends found there (lost letters, the wayback compass, sifter
+// scales, silent boots).
+// ---------------------------------------------------------------------------
+(function () {
+  const { Img, T, reg, sprite, rngFor, noiseImg, C, stoneBricks, normalize, fnoise, pal, pick } = TexGen;
+  // fine grey sand with a faint lavender cast, the odd grain catching the light
+  reg('sift_sand', (() => {
+    const img = noiseImg('sift_sand', ['#8c8898', '#94909f', '#9b97a6', '#a29eac', '#aaa6b4'], { scales: [4, 2, 1], weights: [0.25, 0.35, 0.4], jitter: 0.2 });
+    const rng = rngFor('sift_sand2');
+    for (let k = 0; k < 9; k++) img.set(rng.nextInt(16), rng.nextInt(16), C('#7a7686'));
+    for (let k = 0; k < 5; k++) img.set(rng.nextInt(16), rng.nextInt(16), C('#e6e2ee'));
+    return img;
+  })());
+  // siltstone: the sand pressed down into thin grey-violet layers
+  const BANDS = ['#6e6878', '#76707f', '#655f6e', '#7c7686', '#6a6474', '#726c7b', '#5f5968', '#78727f'];
+  reg('siltstone', (() => {
+    const img = new Img(), rng = rngFor('siltstone');
+    const n = normalize(fnoise(rng, 16, 16, [4, 2], [0.5, 0.5]));
+    for (let y = 0; y < 16; y++) {
+      const base = C(BANDS[(y >> 1) % BANDS.length]);
+      for (let x = 0; x < 16; x++) { const k = 0.9 + n[y * 16 + x] * 0.2; img.set(x, y, [base[0] * k, base[1] * k, base[2] * k]); }
+    }
+    for (let k = 0; k < 4; k++) { const x = rng.nextInt(14), y = rng.nextInt(16); img.set(x, y, C('#58525f')); img.set(x + 1, y, C('#58525f')); }
+    return img;
+  })());
+  reg('siltstone_top', noiseImg('siltstone_top', ['#625c6c', '#6a6474', '#716b7b', '#78727f', '#7e7886'], { scales: [4, 2, 1], weights: [0.3, 0.4, 0.3] }));
+  reg('siltstone_bricks', stoneBricks('siltbrick', ['#6c6676', '#736d7c', '#7a7483', '#807a89'], '#504a58', '#8e8898'));
+  reg('siltstone_polished', (() => {
+    const img = noiseImg('siltpol', ['#7a7484', '#7e7888', '#827c8c', '#86808f'], { scales: [8, 4], weights: [0.5, 0.5] });
+    for (let i = 0; i < 16; i++) { img.set(i, 0, C('#948ea0')); img.set(0, i, C('#948ea0')); img.set(i, 15, C('#5c5664')); img.set(15, i, C('#5c5664')); }
+    return img;
+  })());
+  // carved: a sun sinking into a line of dunes, the Sift's old sign
+  reg('siltstone_carved', (() => {
+    const img = T.siltstone_polished.copy(), D = C('#4c4654'), L = C('#a49eb0');
+    for (let y = 3; y <= 9; y++) for (let x = 3; x <= 12; x++) { const d = Math.hypot(x - 7.5, y - 9); if (d < 4.6 && d > 3.4) img.set(x, y, D); }
+    for (const [x, y] of [[7, 2], [8, 2], [3, 4], [12, 4], [1, 7], [14, 7]]) img.set(x, y, L);
+    for (let x = 2; x <= 13; x++) img.set(x, 10, D);
+    for (let x = 2; x <= 13; x++) img.set(x, 12 + ((x >> 2) & 1), D);
+    return img;
+  })());
+  reg('siltstone_cracked', (() => {
+    const img = T.siltstone_bricks.copy(), D = C('#423c4a');
+    for (const [x, y] of [[3, 1], [4, 2], [4, 3], [5, 4], [5, 5], [11, 9], [10, 10], [10, 11], [9, 12], [9, 13], [13, 3], [12, 4]]) img.set(x, y, D);
+    return img;
+  })());
+  // sift glass: sand that met the gate's light and turned to pale glass
+  reg('sift_glass', (() => {
+    const img = new Img(), rng = rngFor('sift_glass');
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const edge = x === 0 || y === 0 || x === 15 || y === 15;
+      const streak = (x + y * 2 + Math.floor(rng.nextFloat() * 2)) % 9 === 0;
+      img.set(x, y, edge ? C('#e8e4f8') : streak ? C('#f4f2ff') : C('#c8c2e6'), edge ? 200 : streak ? 170 : 80);
+    }
+    return img;
+  })());
+  sprite('dune_grass', [
+    '................', '................', '......w.........', '......w...w.....', '..w...w..w......', '...w..w.ww......', '...w.ww.w...w...', '....wwg.w..w....',
+    '.w..wgg.g.w.....', '..w.gg.gg.w.....', '..wwg..g.ww.....', '...gg..ggw......', '...g...gg.......', '..gg..gg........', '..g...g.........', '................'],
+    { w: '#c8c4d0', g: '#8e8a9a' });
+  // ---- items ----
+  sprite('lost_letter', [
+    '................', '................', '................', '..pppppppppppp..', '..pPPPPPPPPPPp..', '..ppPPPPPPPPpp..', '..pPpPPPPPPpPp..', '..pPPpPPPPpPPp..',
+    '..pPPPpPPpPPPp..', '..pPPPPrrPPPPp..', '..pPPPrRRrPPPp..', '..pPPPPrrPPPPp..', '..pppppppppppp..', '................', '................', '................'],
+    { p: '#9a8e72', P: '#e2d8bc', r: '#7a1a1a', R: '#b8302a' });
+  sprite('wayback_compass', [
+    '................', '................', '.....oooooo.....', '....oggggggo....', '...oggcccccgo...', '..ogcccccccccgo.', '..ogccccncccgo..', '..ogcccnncccgo..',
+    '..ogcccnnccccgo.', '..ogccccccccgo..', '...ogccccccgo...', '....oggggggo....', '.....oooooo.....', '................', '................', '................'],
+    { o: '#2a2632', g: '#8a84a0', c: '#cfc8e6', n: '#3fe0d6' });
+  sprite('sift_scale', [
+    '................', '................', '......oooo......', '....ooSSSSoo....', '...oSSsSSsSSo...', '..oSSsSSSSsSSo..', '..oSsSSllSSsSo..', '..oSSSSllSSSSo..',
+    '..oSsSSSSSSsSo..', '...oSSsSSsSSo...', '....oSSSSSSo....', '.....oSSSSo.....', '......oSSo......', '.......oo.......', '................', '................'],
+    { o: '#3c3846', S: '#9a94ae', s: '#7a748c', l: '#d8d2ec' });
+  sprite('silent_boots', [
+    '................', '................', '................', '................', '..oooo....oooo..', '..oLLo....oLLo..', '..oLLo....oLLo..', '..oLLo....oLLo..',
+    '..oLLo....oLLo..', '.ooLLo...ooLLo..', 'oLLLLo..oLLLLo..', 'oSSSSo..oSSSSo..', 'oooooo..oooooo..', '................', '................', '................'],
+    { o: '#2a2632', L: '#6a5a4a', S: '#9a94ae' });
+})();
+
 // ---- src/world/worldgen.js
 // ---------------------------------------------------------------------------
 // World generation. Self-contained factory (no outer references) so it can be
@@ -6476,6 +6578,9 @@ function WorldGenFactory(Noise, TAB) {
           [I.iron_sword, 1, 1, 5], [I.iron_chestplate, 1, 1, 5], [I.iron_helmet, 1, 1, 5], [I.iron_leggings, 1, 1, 5], [I.iron_boots, 1, 1, 5], [I.seeker_eye, 1, 1, 2], [I.wisp_essence, 1, 1, 3], [I.jade, 1, 3, 4]],
         city: [[I.hush_shard, 1, 3, 10], [I.bone, 2, 6, 10], [I.coal, 3, 8, 8], [I.iron_ingot, 1, 4, 8], [I.gold_ingot, 1, 3, 5], [I.diamond, 1, 2, 4], [I.golden_apple, 1, 1, 3],
           [I.iron_leggings, 1, 1, 3], [I.diamond_leggings, 1, 1, 1], [I.lumite_shard, 2, 5, 6], [I.glowberry, 2, 6, 8], [B.PALE_LANTERN, 1, 3, 4], [I.book, 1, 3, 6], [I.compass, 1, 1, 2], [I.echo_heart, 1, 1, 1]],
+        sift: [[I.lost_letter, 1, 1, 14], [I.gold_ingot, 1, 4, 8], [I.iron_ingot, 1, 5, 8], [I.diamond, 1, 2, 3], [I.compass, 1, 1, 4], [I.clock, 1, 1, 4], [I.book, 1, 3, 6],
+          [I.golden_apple, 1, 1, 2], [I.jade, 1, 3, 5], [I.bread, 1, 3, 5], [I.string, 2, 6, 5], [I.iron_sword, 1, 1, 3], [I.bow, 1, 1, 3], [I.arrow, 3, 9, 4], [I.wayback_compass, 1, 1, 2],
+          [I.message_bottle, 1, 1, 3], [I.seeker_eye, 1, 1, 1], [I.gold_nugget, 3, 9, 6], [I.sift_scale, 1, 3, 4], [I.map, 1, 1, 2], [I.cobalt_ingot, 1, 3, 4], [B.PALE_LANTERN, 1, 2, 3], [I.wisp_essence, 1, 2, 3]],
         city_keep: [[I.hush_shard, 2, 5, 10], [I.diamond, 1, 3, 6], [I.golden_apple, 1, 2, 4], [I.diamond_leggings, 1, 1, 2], [I.starmetal_ingot, 1, 1, 1], [I.gold_ingot, 2, 5, 6]],
         vault_library: [[I.book, 1, 3, 20], [I.paper, 2, 7, 20], [I.compass, 1, 1, 5], [I.wisp_essence, 1, 2, 4], [I.jade, 1, 2, 4], [I.dye, 2, 6, 6, 11], [I.glass_bottle, 1, 3, 4], [I.seeker_eye, 1, 1, 1]],
         fortress: [[I.gold_ingot, 1, 3, 15], [I.iron_ingot, 1, 5, 6], [I.diamond, 1, 3, 5], [I.gold_sword, 1, 1, 5], [I.gold_chestplate, 1, 1, 5], [I.gold_pickaxe, 1, 1, 3], [I.flint_and_steel, 1, 1, 5],
@@ -6496,6 +6601,7 @@ function WorldGenFactory(Noise, TAB) {
         else if (pick[0] === I.dye) dmg = rng.nextInt(16);
         if (pick[0] === B.WOOL) dmg = rng.nextInt(16);
         if (pick[0] === B.SAPLING) dmg = rng.nextInt(7);
+        if (pick[0] === I.lost_letter) dmg = rng.nextInt(64);
         items.push({ slot: rng.nextInt(27), id: pick[0], c: count, d: dmg });
       }
       return items;
@@ -7543,9 +7649,333 @@ function WorldGenFactory(Noise, TAB) {
       set(1, y0 + 3, 0, B.TORCH, 1); set(-1, y0 + 3, 0, B.TORCH, 2); set(0, y0 + 3, 1, B.TORCH, 3); set(0, y0 + 3, -1, B.TORCH, 4);
     }
   }
+
+  // ------------------------------------------------------------------ the Sift
+  // Where lost things go. Grey sand under a grey sky, sifting down for ever: long
+  // dunes rolling away from the gate, stepped shelves of siltstone, deep hollows
+  // where the sand pours into the dark, fields of pale glass, and everywhere,
+  // half-buried, the things the world has lost - houses, towers, ships, statues,
+  // bells - with whatever was left in them.
+  const sbiome = (id, key, name, fog, o) => biome(id, key, name, Object.assign({
+    dim: 3, temp: 0.5, rain: 0, depth: 0, top: B.SIFT_SAND, filler: B.SIFT_SAND, under: B.SILTSTONE, grass: '#9a96a6', foliage: '#9a96a6', water: '#a8a4c0',
+    tallGrass: 0, flowers: 0, cane: 0, pumpkins: false, animals: [], structures: [], fog,
+  }, o));
+  BI.S_DUNES = sbiome(47, 'grey_dunes', 'The Grey Dunes', [0.44, 0.42, 0.49]);
+  BI.S_RELICS = sbiome(48, 'relic_fields', 'The Relic Fields', [0.42, 0.4, 0.45]);
+  BI.S_GLASS = sbiome(49, 'glass_wastes', 'The Glass Wastes', [0.46, 0.44, 0.54]);
+  BI.S_SHELVES = sbiome(50, 'silent_shelves', 'The Silent Shelves', [0.4, 0.39, 0.45]);
+  BI.S_HOLLOWS = sbiome(51, 'the_hollows', 'The Hollows', [0.32, 0.31, 0.37]);
+  const SIFT = { CHEST: [3, 1, 2], RELIC_CELL: 40 };
+
+  class SiftGenerator extends Generator {
+    constructor(seed, opts) {
+      super(seed, opts);
+      const r = new Random(seedHash(this.seed, 3, 9191));
+      this.sA = new Octaves(r, 3); this.sB = new Octaves(r, 3); this.sDune = new Octaves(r, 3); this.sWarp = new Octaves(r, 2);
+      this.sShelf = new Octaves(r, 3); this.sDetail = new Octaves(r, 2); this.sCave = new Octaves(r, 3); this.sCave2 = new Octaves(r, 2);
+      this.hollowCache = new Map(); this.relicCache = new Map();
+    }
+    villageAt() { return null; }
+    mineshaftAt() { return null; }
+    findSpawn() { return { x: 0, z: 3 }; }
+    tempAt() { return 0.5; }
+    regions(x, z) { return [this.sA.noise2(x / 420, z / 420), this.sB.noise2(x / 300 + 7.7, z / 300 - 3.1)]; }
+    biomeAt(x, z) {
+      if (x * x + z * z < 56 * 56) return BI.S_DUNES.id;
+      const [a, b] = this.regions(x, z);
+      if (a > 0.3) return BI.S_SHELVES.id;
+      if (a < -0.3) return BI.S_HOLLOWS.id;
+      if (b > 0.24) return BI.S_GLASS.id;
+      if (b < -0.18) return BI.S_RELICS.id;
+      return BI.S_DUNES.id;
+    }
+    // long transverse dunes: a gentle slope up into the wind, a steep slip face down
+    dune(x, z) {
+      const w = this.sWarp.noise2(x / 90, z / 90) * 30 + this.sWarp.noise2(z / 37 + 5.3, x / 37) * 6;
+      const lam = 34 + this.sDetail.noise2(x / 210, z / 210) * 10;
+      const u = (x + w) / lam, s = u - Math.floor(u);
+      const prof = s < 0.78 ? s / 0.78 : (1 - s) / 0.22;
+      return Math.pow(prof, 1.4) * (0.55 + 0.45 * this.sDune.noise2(x / 140, z / 140));
+    }
+    // a hollow somewhere in a 64-block cell (only where the hollows run)
+    hollowAt(i, j) {
+      const key = i + ',' + j;
+      if (this.hollowCache.has(key)) return this.hollowCache.get(key);
+      let H0 = null;
+      const rng = new Random(seedHash(this.seed, i, j, 0x5011));
+      const x = i * 64 + 16 + rng.nextInt(32), z = j * 64 + 16 + rng.nextInt(32);
+      if (this.regions(x, z)[0] < -0.26 && x * x + z * z > 120 * 120 && rng.nextFloat() < 0.75) H0 = { x, z, R: 9 + rng.nextInt(9), D: 26 + rng.nextInt(18) };
+      if (this.hollowCache.size > 4000) this.hollowCache.clear();
+      this.hollowCache.set(key, H0);
+      return H0;
+    }
+    hollowDepth(x, z) {
+      const i0 = Math.floor(x / 64), j0 = Math.floor(z / 64);
+      let best = 0;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const h = this.hollowAt(i0 + di, j0 + dj);
+        if (!h) continue;
+        const d = Math.hypot(x - h.x, z - h.z) / h.R;
+        if (d < 1.35) best = Math.max(best, d < 1 ? h.D * (1 - Math.pow(d, 5)) : (1.35 - d) * 6);
+      }
+      return best;
+    }
+    // the shape of the land at a column: surface height and how deep the loose sand lies
+    shape(x, z) {
+      const [a, b] = this.regions(x, z);
+      const calm = smooth(26, 90, Math.hypot(x, z));
+      let h = 60 + this.sDetail.noise2(x / 70, z / 70) * 3 * calm;
+      const glass = smooth(0.14, 0.3, b), relic = smooth(-0.1, -0.24, b);
+      const dn = this.dune(x, z);
+      h += dn * 13 * (1 - glass * 0.85) * (1 - relic * 0.55) * calm;
+      let sand = 3 + Math.floor(dn * 5 * (1 - glass));
+      const shelf = smooth(0.2, 0.36, a) * calm;
+      if (shelf > 0.01) {
+        const raw = 60 + (16 + this.sShelf.noise2(x / 90, z / 90) * 16) * shelf;
+        const t = Math.floor(raw / 6) * 6;
+        if (t > h) { h = t; sand = 1; }
+      }
+      if (a < -0.2) { const hd = this.hollowDepth(x, z); if (hd > 0) { h -= hd; sand = hd > 6 ? 2 : sand; } }
+      return { h: Math.floor(h), sand, glass, relic, a, b };
+    }
+    arrivalY() { return this.shape(0, 0).h + 1; }
+    generate(cx, cz) {
+      const blocks = new Uint8Array(16 * 16 * H), meta = new Uint8Array(16 * 16 * H), biomes = new Uint8Array(256);
+      const out = { cx, cz, blocks, meta, biomes, entities: [], tiles: [], ticks: [] };
+      const x0 = cx * 16, z0 = cz * 16;
+      const rng = new Random(seedHash(this.seed, cx, cz, 0x51F7));
+      const tops = new Int16Array(256);
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
+        const wx = x0 + x, wz = z0 + z;
+        biomes[z * 16 + x] = this.biomeAt(wx, wz);
+        const s = this.shape(wx, wz);
+        tops[z * 16 + x] = s.h;
+        blocks[IDX(x, 0, z)] = B.BEDROCK;
+        if (rng.nextInt(2)) blocks[IDX(x, 1, z)] = B.BEDROCK;
+        for (let y = blocks[IDX(x, 1, z)] ? 2 : 1; y <= s.h; y++) blocks[IDX(x, y, z)] = y > s.h - s.sand ? B.SIFT_SAND : B.SILTSTONE;
+        // a little sift glass grown through the siltstone of the wastes
+        if (s.glass > 0.5 && s.h > 4 && rng.nextInt(5) === 0) blocks[IDX(x, s.h - s.sand, z)] = B.SIFT_GLASS;
+      }
+      this.siftCaves(out, tops);
+      this.siftSurface(out, tops, rng);
+      if (this.structuresOn !== false) this.relics(out);
+      if (Math.abs(cx) <= 1 && Math.abs(cz) <= 1) this.farGate(out);
+      return out;
+    }
+    // the undersift: wide, low caverns under the sand
+    siftCaves(out, tops) {
+      const { blocks } = out, X0 = out.cx * 16, Z0 = out.cz * 16;
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
+        const wx = X0 + x, wz = Z0 + z, top = tops[z * 16 + x];
+        if (wx * wx + wz * wz < 40 * 40) continue;
+        for (let y = 8; y < Math.min(54, top - 7); y++) {
+          const n = this.sCave.noise3(wx / 48, y / 18, wz / 48) + this.sCave2.noise3(wx / 16, y / 9, wz / 16) * 0.3 - Math.abs(y - 28) / 60;
+          if (n > 0.42) { const i = IDX(x, y, z); if (blocks[i] === B.SILTSTONE) blocks[i] = 0; }
+        }
+      }
+    }
+    // dune grass, glass spires and fallen shards
+    siftSurface(out, tops, rng) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16;
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
+        const y = tops[z * 16 + x], top = blocks[IDX(x, y, z)];
+        if (y < 2 || y >= H - 30) continue;
+        const bio = out.biomes[z * 16 + x];
+        if (top === B.SIFT_SAND && blocks[IDX(x, y + 1, z)] === 0 && rng.nextInt(bio === BI.S_RELICS.id ? 14 : 36) === 0) blocks[IDX(x, y + 1, z)] = B.DUNE_GRASS;
+      }
+      // spires of sift glass in the wastes, one per 11-block cell at most
+      for (let j = Math.floor(Z0 / 11) - 1; j <= Math.floor((Z0 + 15) / 11) + 1; j++) for (let i = Math.floor(X0 / 11) - 1; i <= Math.floor((X0 + 15) / 11) + 1; i++) {
+        const r = new Random(seedHash(this.seed, i, j, 0x6A55));
+        const sx = i * 11 + r.nextInt(11), sz = j * 11 + r.nextInt(11);
+        const s = this.shape(sx, sz);
+        if (s.glass < 0.4 || r.nextFloat() > 0.55 * s.glass) continue;
+        const hgt = 4 + r.nextInt(r.nextInt(3) === 0 ? 20 : 9), rad = hgt > 14 ? 1.6 : 0.9, lean = (r.nextFloat() - 0.5) * 0.25, leanZ = (r.nextFloat() - 0.5) * 0.25;
+        for (let y = -3; y < hgt; y++) {
+          const k = 1 - Math.max(0, y) / hgt, rr = rad * (0.4 + 0.6 * k) + 0.3;
+          const ccx = sx + lean * Math.max(0, y), ccz = sz + leanZ * Math.max(0, y);
+          for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+            const wx = Math.floor(ccx) + dx, wz = Math.floor(ccz) + dz;
+            if (wx < X0 || wx >= X0 + 16 || wz < Z0 || wz >= Z0 + 16) continue;
+            if ((wx + 0.5 - ccx) ** 2 + (wz + 0.5 - ccz) ** 2 > rr * rr) continue;
+            const yy = s.h + 1 + y;
+            if (yy > 1 && yy < H - 1) { blocks[IDX(wx - X0, yy, wz - Z0)] = B.SIFT_GLASS; meta[IDX(wx - X0, yy, wz - Z0)] = 0; }
+          }
+        }
+      }
+    }
+    // ---- relics: the lost things, half sunk in the sand ----
+    relicAt(i, j) {
+      const key = i + ',' + j;
+      if (this.relicCache.has(key)) return this.relicCache.get(key);
+      let L = null;
+      const C = SIFT.RELIC_CELL, rng = new Random(seedHash(this.seed, i, j, 0x2E11C));
+      const x = i * C + 8 + rng.nextInt(C - 16), z = j * C + 8 + rng.nextInt(C - 16);
+      if (x * x + z * z > 60 * 60) {
+        const bio = this.biomeAt(x, z);
+        const chance = bio === BI.S_RELICS.id ? 0.8 : bio === BI.S_GLASS.id ? 0.22 : bio === BI.S_DUNES.id ? 0.24 : 0.12;
+        if (rng.nextFloat() < chance) {
+          const kinds = ['house', 'house', 'tower', 'ship', 'statue', 'arch', 'bell', 'cart'];
+          const kind = kinds[rng.nextInt(kinds.length)];
+          L = { kind, x, z, rot: rng.nextInt(4), y: this.shape(x, z).h, seed: rng.nextInt(0x7fffffff), wood: rng.nextInt(3), sink: 1 + rng.nextInt(3) };
+        }
+      }
+      if (this.relicCache.size > 4000) this.relicCache.clear();
+      this.relicCache.set(key, L);
+      return L;
+    }
+    nearestRelic(x, z) {
+      let best = null, bd = Infinity;
+      const C = SIFT.RELIC_CELL, i0 = Math.floor(x / C), j0 = Math.floor(z / C);
+      for (let j = j0 - 1; j <= j0 + 1; j++) for (let i = i0 - 1; i <= i0 + 1; i++) { const L = this.relicAt(i, j); if (!L) continue; const d = (L.x - x) ** 2 + (L.z - z) ** 2; if (d < bd) { bd = d; best = L; } }
+      return best;
+    }
+    relics(out) {
+      const X0 = out.cx * 16, Z0 = out.cz * 16, C = SIFT.RELIC_CELL;
+      for (let j = Math.floor((Z0 - 16) / C); j <= Math.floor((Z0 + 31) / C); j++) for (let i = Math.floor((X0 - 16) / C); i <= Math.floor((X0 + 31) / C); i++) {
+        const L = this.relicAt(i, j);
+        if (!L || L.x + 16 < X0 || L.x - 16 > X0 + 15 || L.z + 16 < Z0 || L.z - 16 > Z0 + 15) continue;
+        this.buildRelic(out, L);
+      }
+    }
+    buildRelic(out, L) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16;
+      const rng = new Random(L.seed);
+      const R = L.rot, cs = [[1, 0], [0, 1], [-1, 0], [0, -1]][R];
+      // local (u along, v across, y up) -> world
+      const W = (u, v) => [L.x + u * cs[0] - v * cs[1], L.z + u * cs[1] + v * cs[0]];
+      const inC = (x, z) => x >= X0 && x < X0 + 16 && z >= Z0 && z < Z0 + 16;
+      const set = (u, v, y, id, m) => { const [x, z] = W(u, v); if (!inC(x, z) || y < 2 || y >= H - 1) return; const i = IDX(x - X0, y, z - Z0); blocks[i] = id; meta[i] = m || 0; };
+      const get = (u, v, y) => { const [x, z] = W(u, v); return !inC(x, z) || y < 0 || y >= H ? -1 : blocks[IDX(x - X0, y, z - Z0)]; };
+      // broken: some blocks are simply gone, worn away (but never from below the sand line)
+      const worn = (u, v, y, p) => ((Math.imul(u * 73 + 1000, 9301) ^ Math.imul(v * 31 + 1000, 4973) ^ Math.imul(y, 1597) ^ L.seed) >>> 0) % 100 < p;
+      const chest = (u, v, y, table) => {
+        const [x, z] = W(u, v);
+        if (!inC(x, z)) return;
+        set(u, v, y, B.CHEST, [2, 3, 1, 0][R]);
+        out.tiles.push({ type: 'chest', x, y, z, items: this.loot(rng, table) });
+      };
+      const sand = (u, v, y) => { if (y <= L.y - 1 && get(u, v, y) === 0) set(u, v, y, B.SIFT_SAND); };
+      const PL = [0, 1, 2][L.wood], base = L.y - L.sink;
+      switch (L.kind) {
+        case 'house': {
+          // a cottage sunk to its sills: cobbled footing, plank walls, a pitched roof
+          for (let u = -3; u <= 3; u++) for (let v = -3; v <= 3; v++) {
+            const edge = Math.abs(u) === 3 || Math.abs(v) === 3, corner = Math.abs(u) === 3 && Math.abs(v) === 3;
+            set(u, v, base - 1, B.COBBLESTONE);
+            for (let y = base; y < base + 4; y++) {
+              if (!edge) { if (y <= L.y - 1) set(u, v, y, B.SIFT_SAND); else set(u, v, y, 0); continue; }
+              if (y > L.y && worn(u, v, y, 18)) { set(u, v, y, 0); continue; }
+              if (corner) set(u, v, y, B.LOG, PL);
+              else if (y === base + 2 && (u === 0 || v === 0) && Math.abs(u) + Math.abs(v) === 3 && !(u === 3 && v === 0)) set(u, v, y, B.GLASS_PANE);
+              else if (u === 3 && v === 0 && y < base + 3) set(u, v, y, 0);
+              else set(u, v, y, B.PLANKS, PL);
+            }
+          }
+          for (let k = 0; k <= 3; k++) for (let v = -4; v <= 4; v++) {
+            if (worn(k, v, 9, 12)) continue;
+            set(k - 4 + 0, v, base + 4 + k, B.STAIRS, (R === 0 ? 3 : R === 1 ? 1 : R === 2 ? 2 : 0) | (PL << 3));
+            set(4 - k, v, base + 4 + k, B.STAIRS, (R === 0 ? 2 : R === 1 ? 0 : R === 2 ? 3 : 1) | (PL << 3));
+            if (k < 3 && Math.abs(v) === 3) for (let u = -3 + k + 1; u <= 3 - k - 1; u++) set(u, v, base + 4 + k, B.PLANKS, PL);
+          }
+          for (let v = -4; v <= 4; v++) if (!worn(0, v, 11, 15)) set(0, v, base + 7, B.SLAB, PL);
+          chest(-2, 2, Math.max(base, L.y), 'sift');
+          break;
+        }
+        case 'tower': {
+          // a round tower that fell long ago, lying on its side, half swallowed
+          const len = 13 + rng.nextInt(5);
+          for (let u = -6; u <= len - 6; u++) for (let v = -3; v <= 3; v++) for (let dy = -3; dy <= 3; dy++) {
+            const d = Math.hypot(v, dy);
+            if (d > 3.4) continue;
+            const y = L.y + dy - 1;
+            if (d > 2.4) { if (dy > 0 && worn(u, v, y, 14)) continue; set(u, v, y, B.STONE_BRICKS, rng.nextInt(5) === 0 ? 2 : rng.nextInt(4) === 0 ? 1 : 0); }
+            else if (y <= L.y - 2) set(u, v, y, B.SIFT_SAND); else set(u, v, y, 0);
+          }
+          // the crown of the tower, and the room at its top
+          for (let v = -4; v <= 4; v++) for (let dy = -4; dy <= 4; dy++) if (Math.hypot(v, dy) <= 4.4 && Math.hypot(v, dy) > 3.4 && (v + dy) % 2 === 0) set(len - 6, v, L.y + dy - 1, B.STONE_BRICKS, 3);
+          chest(len - 8, 0, L.y - 1, 'sift');
+          break;
+        }
+        case 'ship': {
+          // a ship's hull, bow raised out of the sand as if it were still sailing
+          const len = 15;
+          for (let u = -7; u <= len - 8; u++) {
+            const rise = Math.max(0, u - 2) >> 1, half = u < -5 ? 1 : u > len - 11 ? Math.max(0, len - 8 - u) : 2;
+            for (let v = -half - 1; v <= half + 1; v++) for (let dy = 0; dy <= 4; dy++) {
+              const y = base - 1 + dy + rise;
+              const shell = Math.abs(v) === half + 1 || dy === 0;
+              if (dy > 3 && Math.abs(v) <= half) continue;
+              if (shell) { if (y > L.y && worn(u, v, y, 10)) continue; set(u, v, y, B.PLANKS, 1); }
+              else if (y <= L.y - 1) set(u, v, y, B.SIFT_SAND); else set(u, v, y, 0);
+            }
+          }
+          for (let y = base; y < base + 11; y++) set(0, 0, y, B.FENCE, 1);
+          for (let y = base + 5; y < base + 10; y++) for (let v = -2; v <= 2; v++) if (!worn(1, v, y, 30)) set(1, v, y, B.WOOL, 0);
+          chest(-3, 0, base, 'sift');
+          break;
+        }
+        case 'statue': {
+          // a great stone head, sunk to the chin, staring at nothing
+          for (let u = -3; u <= 3; u++) for (let v = -3; v <= 3; v++) for (let dy = 0; dy < 8; dy++) {
+            const y = L.y - 2 + dy;
+            if (dy === 7 && (Math.abs(u) === 3 || Math.abs(v) === 3)) continue;
+            set(u, v, y, B.STONE_BRICKS, worn(u, v, y, 20) ? 2 : 0);
+          }
+          for (const v of [-2, -1, 1, 2]) set(4, v, L.y + 3, B.SIFT_GLASS);
+          for (const v of [-1, 0, 1]) set(4, v, L.y + 1, B.STONE_BRICKS, 3);
+          set(4, 0, L.y + 2, B.STONE_BRICKS, 3);
+          for (let u = -2; u <= 2; u++) for (let v = -2; v <= 2; v++) for (let dy = 1; dy < 6; dy++) set(u, v, L.y - 2 + dy, 0);
+          chest(0, 0, L.y - 1, 'sift');
+          break;
+        }
+        case 'arch': {
+          // a doorway with nothing on either side of it
+          for (const v of [-3, 3]) for (let y = base; y < L.y + 6; y++) { set(0, v, y, B.STONE_BRICKS, y % 4 === 0 ? 3 : 0); set(0, v + (v > 0 ? 1 : -1), y, B.STONE_BRICKS, 0); }
+          for (let v = -4; v <= 4; v++) set(0, v, L.y + 6, B.STONE_BRICKS, 3);
+          set(0, 0, L.y + 5, B.PALE_LANTERN, 1);
+          break;
+        }
+        case 'bell': {
+          // a bell of gold in a frame of black beams, sunk to its lip
+          for (const v of [-3, 3]) for (let y = base; y < L.y + 7; y++) set(0, v, y, B.LOG, 1);
+          for (let v = -3; v <= 3; v++) set(0, v, L.y + 7, B.LOG, 1 | ((R % 2 === 0 ? 2 : 1) << 3));
+          set(0, 0, L.y + 6, B.FENCE, 1);
+          for (let u = -1; u <= 1; u++) for (let v = -1; v <= 1; v++) { set(u, v, L.y + 5, B.GOLD_BLOCK); for (let y = L.y + 2; y < L.y + 5; y++) if (Math.abs(u) + Math.abs(v) > 0) set(u, v, y, B.GOLD_BLOCK); }
+          for (let u = -2; u <= 2; u++) for (let v = -2; v <= 2; v++) if (Math.max(Math.abs(u), Math.abs(v)) === 2) set(u, v, L.y + 1, B.GOLD_BLOCK);
+          break;
+        }
+        case 'cart': {
+          // a length of track running down into the sand, a loaded cart at its end
+          for (let u = -5; u <= 5; u++) { const y = L.y + 1 - (u < 0 ? 0 : Math.floor(u / 2)); set(u, 0, y - 1, B.PLANKS, 1); if (!worn(u, 0, y, 25)) set(u, 0, y, B.RAIL, 0); }
+          const [cxw, czw] = W(-4, 0);
+          if (inC(cxw, czw)) out.entities.push({ type: 'minecart', x: cxw + 0.5, y: L.y + 1.0625, z: czw + 0.5, kind: 1, items: this.loot(rng, 'sift') });
+          break;
+        }
+      }
+    }
+    // the Far Gate: where the city gates open onto the Sift, on a plinth by a lost-and-found chest
+    farGate(out) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16;
+      const y0 = this.arrivalY() - 1;
+      const set = (x, y, z, id, m) => { if (x < X0 || x >= X0 + 16 || z < Z0 || z >= Z0 + 16 || y < 1 || y >= H - 1) return; const i = IDX(x - X0, y, z - Z0); blocks[i] = id; meta[i] = m || 0; };
+      for (let x = -6; x <= 6; x++) for (let z = -4; z <= 5; z++) {
+        const edge = Math.abs(x) === 6 || z === -4 || z === 5;
+        for (let y = y0 - 3; y <= y0; y++) set(x, y, z, B.SILTSTONE_BRICKS, y === y0 ? (edge ? 0 : 1) : 0);
+        for (let y = y0 + 1; y <= y0 + 9; y++) set(x, y, z, 0);
+      }
+      for (let x = -3; x <= 3; x++) for (let y = y0 + 1; y <= y0 + 7; y++) {
+        const ring = Math.abs(x) === 3 || y === y0 + 7;
+        set(x, y, 0, ring ? B.REINFORCED_DEEPSTONE : B.SIFT_GATE, 0);
+      }
+      set(0, y0 + 8, 0, B.SILTSTONE_BRICKS, 2);
+      for (const [x, z] of [[-6, -4], [6, -4], [-6, 5], [6, 5]]) { set(x, y0 + 1, z, B.SILTSTONE_BRICKS, 0); set(x, y0 + 2, z, B.PALE_LANTERN, 0); }
+      const [cx, , cz] = SIFT.CHEST;
+      if (cx >= X0 && cx < X0 + 16 && cz >= Z0 && cz < Z0 + 16) { set(cx, y0 + 1, cz, B.CHEST, 2); out.tiles.push({ type: 'chest', x: cx, y: y0 + 1, z: cz, items: [] }); }
+    }
+  }
   function makeGenerator(seed, opts) {
     const dim = opts && opts.dim;
-    return dim === 1 ? new UnderGenerator(seed, opts) : dim === 2 ? new IslesGenerator(seed, opts) : new Generator(seed, opts);
+    return dim === 1 ? new UnderGenerator(seed, opts) : dim === 2 ? new IslesGenerator(seed, opts) : dim === 3 ? new SiftGenerator(seed, opts) : new Generator(seed, opts);
   }
 
   // Writer that clips feature writes to one chunk.
@@ -7568,7 +7998,7 @@ function WorldGenFactory(Noise, TAB) {
     setIf(x, y, z, id, m, ifId) { if (this.get(x, y, z) === ifId) this.set(x, y, z, id, m, 0); }
   }
 
-  return { BIOMES, BI, Generator, UnderGenerator, IslesGenerator, makeGenerator, SEA, H, LAVA_SEA, ISLES };
+  return { BIOMES, BI, Generator, UnderGenerator, IslesGenerator, SiftGenerator, makeGenerator, SEA, H, LAVA_SEA, ISLES, SIFT };
 }
 
 // ---- src/world/chunk.js
@@ -8129,7 +8559,7 @@ class World {
     return Math.max((l >> 4) - this.skyDarken(), l & 15);
   }
   skyDarken() {
-    if (this.dim) return 11;   // no sun reaches the Underworld or the Far Isles
+    if (this.dim) return this.dim === 3 ? 5 : 11;   // no sun reaches the Underworld or the Far Isles; the Sift lies in a grey half-light
     // 0 at noon, 11 at midnight (rain/thunder darken further)
     const a = this.celestialAngle(1);
     let f = 1 - (Math.cos(a * TAU) * 2 + 0.5);
@@ -8671,7 +9101,7 @@ void main() { vNdc = aPos; gl_Position = vec4(aPos, 0.9999, 1.0); }`,
   skyFS: `#version 300 es
 precision highp float;
 uniform mat4 uInvVP; uniform vec3 uSky; uniform vec3 uFogColor; uniform vec3 uSunDir; uniform vec4 uSunrise; uniform vec3 uVoid; uniform float uIsles;
-uniform mat3 uCel; uniform float uNight; uniform float uTime; uniform float uAurora;
+uniform mat3 uCel; uniform float uNight; uniform float uTime; uniform float uAurora; uniform float uSift;
 in vec2 vNdc; out vec4 o;
 // the Milky Way's plane and its bright heart, in the stars' own frame (match buildStars)
 const vec3 MW_N = vec3(0.5009, 0.3506, 0.7913);
@@ -8726,6 +9156,18 @@ void main() {
         ac += mix(vec3(0.2, 1.0, 0.55), vec3(0.72, 0.32, 1.0), clamp(h / 0.34, 0.0, 1.0)) * fall * rays * win * (0.85 - fk * 0.3);
       }
       col += ac * uAurora * 0.6 * smoothstep(0.0, 0.08, e);
+    }
+  }
+  if (uSift > 0.0) {
+    // the Sift: a pale, sunless glow low in one quarter of the sky, and grains falling everywhere
+    float g = max(0.0, dot(d, normalize(vec3(0.35, 0.32, -0.88))));
+    col += vec3(0.85, 0.83, 0.95) * (pow(g, 60.0) * 0.45 + pow(g, 7.0) * 0.14);
+    float az = atan(d.x, d.z), el = asin(clamp(e, -1.0, 1.0));
+    vec2 q = floor(vec2(az * 110.0, el * 110.0));
+    float cr = h3(vec3(q.x, 7.0, 1.0));
+    if (cr > 0.8 && e > 0.0) {
+      float yy = fract(el * (2.0 + cr * 2.0) + uTime * (0.03 + cr * 0.04) + cr * 13.0);
+      col += vec3(0.16, 0.16, 0.19) * smoothstep(0.03, 0.0, yy) * smoothstep(0.0, 0.25, e);
     }
   }
   if (e < 0.0) col = mix(uFogColor, uVoid, smoothstep(0.0, -0.25, e));
@@ -9896,6 +10338,20 @@ class Renderer {
       this.celestial = ((world.time + partial) % 192000) / 192000;
       return;
     }
+    if (world.dim === 3) {
+      // the Sift: a pale sky without a sun, its haze shifting from dune to hollow
+      const b = BIOMES[world.biomeAt(Math.floor(camera.x), Math.floor(camera.z))];
+      const want = (b && b.fog) || [0.44, 0.42, 0.49];
+      const now = performance.now(), dt = Math.min(1, ((now - (this.fogT || now)) / 1000));
+      this.fogT = now;
+      if (!this.uFog || this.uFogWorld !== world) { this.uFog = want.slice(); this.uFogWorld = world; }
+      for (let i = 0; i < 3; i++) this.uFog[i] += (want[i] - this.uFog[i]) * Math.min(1, dt * 1.2);
+      this.fogColor = this.uFog.slice();
+      this.skyColor = [this.uFog[0] * 0.55, this.uFog[1] * 0.53, this.uFog[2] * 0.66];
+      this.sunrise = null; this.sunDir = [0.35, 0.32, -0.88]; this.dayFactor = 0.6; this.rain = 0;
+      this.celestial = 0; this.nightK = 0; this.aurora = 0;
+      return;
+    }
     if (world.dim) {
       // no sky below: the air takes the colour of the region's haze
       const b = BIOMES[world.biomeAt(Math.floor(camera.x), Math.floor(camera.z))];
@@ -9964,9 +10420,9 @@ class Renderer {
     return null;
   }
   updateLightmap(world, partial, extra) {
-    const under = world.dim === 1, isles = world.dim === 2;
-    const sunB = world.menu ? 1 : under ? 0 : isles ? 0.66 : world.sunBrightness(partial) * 0.95 + 0.05;
-    const BR = under || isles ? BRIGHTNESS_UNDER : BRIGHTNESS;
+    const under = world.dim === 1, isles = world.dim === 2, sift = world.dim === 3;
+    const sunB = world.menu ? 1 : under ? 0 : isles ? 0.66 : sift ? 0.62 : world.sunBrightness(partial) * 0.95 + 0.05;
+    const BR = under || isles || sift ? BRIGHTNESS_UNDER : BRIGHTNESS;
     this.flickerT += (Math.random() - Math.random()) * Math.random() * Math.random() * 0.1;
     this.flickerT *= 0.9;
     this.flicker = 1 + this.flickerT;
@@ -9980,6 +10436,7 @@ class Renderer {
       const blkL = BR[bl] * (this.flicker * 0.1 + 1.4);
       let skyR = skyL * (sunB * 0.65 + 0.35), skyG = skyR, skyB = skyL;
       if (isles) { skyR = skyL * 0.9; skyG = skyL * 0.82; skyB = skyL * 1.04; }   // a cold violet twilight
+      else if (sift) { skyR = skyL * 0.93; skyG = skyL * 0.91; skyB = skyL * 1.0; }   // grey, with a little lavender
       const bG = blkL * ((blkL * 0.6 + 0.4) * 0.6 + 0.4), bB = blkL * (blkL * blkL * 0.6 + 0.4);
       let r = skyR + blkL, g = skyG + bG, b = skyB + bB;
       r = r * 0.96 + 0.03; g = g * 0.96 + 0.03; b = b * 0.96 + 0.03;
@@ -10130,6 +10587,7 @@ class Renderer {
     let fogStart = rd * 0.6, fogEnd = rd;
     if (world.dim === 1) { fogStart = rd * 0.08; fogEnd = Math.min(rd, 192) * 0.62; }   // thick, hot haze
     else if (world.dim === 2) { fogStart = rd * 0.25; fogEnd = rd * 0.92; }             // a thin starlit mist
+    else if (world.dim === 3) { fogStart = rd * 0.12; fogEnd = Math.min(rd, 224) * 0.8; }  // the grey haze of the Sift
     let fogColor = this.fogColor;
     const inFluid = hooks && hooks.inFluid;
     if (inFluid === 'water') {
@@ -10166,8 +10624,10 @@ class Renderer {
       // the dark "void" below the horizon only shows when you are below sea level
       const vk = clamp((SEA_LEVEL + 1 - cam.y) / 16, 0, 1);
       if (isles) gl.uniform3fv(ps.u.uVoid, [0.022, 0.014, 0.045]);
+      else if (world.dim === 3) gl.uniform3fv(ps.u.uVoid, [fogColor[0] * 0.6, fogColor[1] * 0.58, fogColor[2] * 0.66]);
       else gl.uniform3fv(ps.u.uVoid, [lerp(fogColor[0], this.skyColor[0] * 0.2 + 0.04, vk), lerp(fogColor[1], this.skyColor[1] * 0.2 + 0.04, vk), lerp(fogColor[2], this.skyColor[2] * 0.6 + 0.1, vk)]);
       gl.uniform1f(ps.u.uIsles, isles ? 1 : 0);
+      gl.uniform1f(ps.u.uSift, world.dim === 3 ? 1 : 0);
       const ca = Math.cos(this.celestial * TAU), sa = Math.sin(this.celestial * TAU);
       gl.uniformMatrix3fv(ps.u.uCel, false, [ca, -sa, 0, sa, ca, 0, 0, 0, 1]);
       gl.uniform1f(ps.u.uNight, isles || world.menu ? 0 : this.nightK);
@@ -10273,6 +10733,7 @@ class Renderer {
 
   drawCelestial(world, partial) {
     const gl = this.gl;
+    if (world.dim === 3) return;   // the Sift has no sun, moon or stars: only its glow, in the sky shader
     const a = this.celestial;
     const rainF = 1 - this.rain;
     const m = Mat4.create();
@@ -11787,7 +12248,8 @@ class ItemEntity extends Entity {
         this.age = Math.min(this.age, e.age);
       }
     }
-    if (this.age >= this.lifetime) this.removed = true;
+    // left lying too long, or fallen out of the world: lost, and on its way to the Sift
+    if (this.age >= this.lifetime || this.y < -64) { this.removed = true; Sift.lose(this.world, this.stack); }
   }
   groundSlip() { const d = BLOCKS[this.world.getBlock(Math.floor(this.x), Math.floor(this.y - 0.1), Math.floor(this.z))]; return d ? d.slip : 0.6; }
   pushOutOfBlocksItem() {
@@ -13051,6 +13513,7 @@ class Player extends Living {
       gameMode: this.gameMode, flying: this.flying, inventory: this.inventory.toJSON(), spawnPoint: this.spawnPoint, fire: this.fire,
       fallDistance: this.fallDistance, stats: this.stats, discovered: this.discovered, achievements: this.achievements, effects: this.effects,
       enchantSeed: this.enchantSeed, dim: (this.world && this.world.dim) || 0, effectAmp: this.effectAmp, seenEnding: this.seenEnding || undefined,
+      lastDeath: this.lastDeath || undefined,
     };
   }
   load(d) {
@@ -13072,6 +13535,7 @@ class Player extends Living {
     if (d.effects) this.effects = d.effects;
     if (d.effectAmp) this.effectAmp = d.effectAmp;
     this.seenEnding = !!d.seenEnding;
+    this.lastDeath = d.lastDeath || null;
     if (d.enchantSeed !== undefined) this.enchantSeed = d.enchantSeed;
     this.pendingMount = d.mount ? { x: d.mount.x, y: d.mount.y, z: d.mount.z, t: 200 } : null;
   }
@@ -13230,7 +13694,7 @@ const Recipes = (() => {
   // slabs & stairs for stone-like materials
   const mats = [[6, [B.STONE, ANY]], [7, [B.COBBLESTONE, ANY]], [8, [B.STONE_BRICKS, 0]], [9, [B.BRICKS, ANY]], [10, [B.SANDSTONE, ANY]], [11, [B.RED_SANDSTONE, ANY]],
     [12, [B.SLATE_BRICKS, ANY]], [13, [B.MARBLE_BRICKS, 0]], [14, [B.POLISHED_BASALT, ANY]], [15, [B.MOSSY_COBBLESTONE, ANY]], [16, [B.THATCH, ANY]],
-    [17, [B.BRIMSTONE_BRICKS, ANY]], [18, [B.QUARTZ_BLOCK, ANY]], [19, [B.DEEPSTONE_BRICKS, 0]], [20, [B.DEEPSTONE_BRICKS, 1]], [21, [B.STARSTONE_BRICKS, ANY]]];
+    [17, [B.BRIMSTONE_BRICKS, ANY]], [18, [B.QUARTZ_BLOCK, ANY]], [19, [B.DEEPSTONE_BRICKS, 0]], [20, [B.DEEPSTONE_BRICKS, 1]], [21, [B.STARSTONE_BRICKS, ANY]], [22, [B.SILTSTONE_BRICKS, 0]]];
   for (const [m, x] of mats) {
     shaped([B.SLAB, 6, m], ['###'], { '#': x });
     if (m !== 6) shaped([B.STAIRS, 4, m], ['#  ', '## ', '###'], { '#': x });
@@ -13280,6 +13744,12 @@ const Recipes = (() => {
   // ---------------- the Far Isles ----------------
   shaped([B.STARSTONE_BRICKS, 4], ['##', '##'], { '#': B.STARSTONE });
   shaped([I.star_crystal], ['GGG', 'GEG', 'GTG'], { G: B.GLASS, E: I.seeker_eye, T: I.wailer_tear });
+  // ---------------- the Sift ----------------
+  shaped([B.SILTSTONE_BRICKS, 4, 0], ['##', '##'], { '#': B.SILTSTONE });
+  shaped([B.SILTSTONE_BRICKS, 4, 1], ['##', '##'], { '#': [B.SILTSTONE_BRICKS, 0] });
+  shaped([B.SILTSTONE_BRICKS, 1, 2], ['#', '#'], { '#': [B.SLAB, 22] });
+  shaped([I.silent_boots], [' S ', 'SBS', ' S '], { S: I.sift_scale, B: I.leather_boots });
+  shaped([I.wayback_compass], [' S ', 'SCS', ' S '], { S: I.sift_scale, C: I.compass });
   // ---------------- the deep caves ----------------
   shaped([B.DEEPSTONE_BRICKS, 4, 0], ['##', '##'], { '#': B.DEEPSTONE });
   shaped([B.DEEPSTONE_BRICKS, 4, 1], ['##', '##'], { '#': [B.DEEPSTONE_BRICKS, 0] });
@@ -13320,6 +13790,8 @@ const Recipes = (() => {
   smelt(B.QUICKSAND, [B.SAND], 0.1);
   smelt(B.SLATE, [B.SLATE_BRICKS], 0.1);
   smelt([B.DEEPSTONE_BRICKS, 0], [B.DEEPSTONE_BRICKS, 1, 3], 0.1);
+  smelt([B.SILTSTONE_BRICKS, 0], [B.SILTSTONE_BRICKS, 1, 3], 0.1);
+  smelt(B.SIFT_SAND, [B.SIFT_GLASS], 0.1);
 
   // ---------------- matching ----------------
   function matches(r, s) {
@@ -15940,6 +16412,8 @@ const Hush = (() => {
   // which loaded chunks hold sensors or shriekers, and how many Listeners are about:
   // refreshed every couple of seconds so wandering creatures can skip the work
   let hot = new Set(), listeners = 0;
+  // the creatures that hunt by ear: the Listener, and the sifters under the sand of the Sift
+  const HEARS = { listener: true, sifter: true };
   const ckey = (cx, cz) => (cx + 32768) * 65536 + (cz + 32768);
   function scan(w) {
     hot = new Set(); listeners = 0;
@@ -15947,12 +16421,12 @@ const Hush = (() => {
       if (!c.tiles.size) continue;
       for (const te of c.tiles.values()) if (te.type === 'sensor' || te.type === 'shrieker') { hot.add(ckey(c.cx, c.cz)); break; }
     }
-    for (const e of w.entities) if (e.type === 'listener' && !e.removed) listeners++;
+    for (const e of w.entities) if (HEARS[e.type] && !e.removed) listeners++;
   }
   // something made a sound at (x,y,z); src is whoever made it (a player, a creature, or null)
   function vibrate(game, x, y, z, kind, src) {
     const w = game.world;
-    if (!w || w.menu || w.dim || !game.player) return;
+    if (!w || w.menu || !game.player) return;
     if (src && src.type === 'player' && (src.gameMode === 'spectator' || src.dead)) return;
     const loud = LOUDNESS[kind] || 8;
     const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4;
@@ -15967,11 +16441,11 @@ const Hush = (() => {
         else if (src && src.type === 'player') shriek(game, te, src);
       }
     }
-    if (listeners) for (const e of w.entities) if (e.type === 'listener' && e !== src && !e.dead && !e.removed && e.distanceSq(x, y, z) < (loud + 10) ** 2) e.hear(game, x, y, z, loud, src);
+    if (listeners) for (const e of w.entities) if (HEARS[e.type] && e !== src && !e.dead && !e.removed && e.distanceSq(x, y, z) < (loud + 10) ** 2) e.hear(game, x, y, z, loud, src);
   }
   // creatures' footsteps: only worth listening for near sensors or a Listener
   function step(game, e) {
-    if ((!listeners && !hot.size) || !e.onGround || e.type === 'listener') return;
+    if ((!listeners && !hot.size) || !e.onGround || HEARS[e.type]) return;
     const dx = e.x - e.px, dz = e.z - e.pz;
     if (dx === 0 && dz === 0) return;
     e.stepAcc = (e.stepAcc || 0) + Math.sqrt(dx * dx + dz * dz);
@@ -16080,12 +16554,57 @@ const Hush = (() => {
   // each game tick: the sensors' glow fades, warnings fade, the darkness pulses
   function tick(game) {
     const w = game.world;
-    if (!w || w.dim) return;
+    if (!w || w.menu) return;
     if (w.time % 40 === 3) scan(w);
     const st = w.info.hush;
     if (st && st.level > 0 && w.time - st.t > 12000) { st.level--; st.t = w.time; }
   }
   return { vibrate, step, sense, shriek, summon, useKeystone, openGate, tick, state, LOUDNESS, muffled, noteListener: () => { listeners++; } };
+})();
+
+// ---- src/world/sift.js
+// ---------------------------------------------------------------------------
+// The Sift: where lost things go. Anything left lying in the world until it
+// fades away, or dropped into the void, sifts down here in time and turns up
+// in the lost-and-found chest beside the Far Gate. The Sift also remembers
+// which city gate you came through, so it can send you back there.
+// ---------------------------------------------------------------------------
+const Sift = (() => {
+  const MAX_LOST = 160;
+  function state(info) {
+    if (!info.sift) info.sift = { lost: [], back: null, visits: 0, found: 0 };
+    return info.sift;
+  }
+  // something was lost to the world: it begins its long fall
+  function lose(w, stack) {
+    if (!w || w.menu || !stack || stack.count <= 0 || w.dim === DIM_SIFT) return;   // what is lost in the Sift stays lost
+    const st = state(w.info);
+    st.lost.push(stack.toJSON());
+    if (st.lost.length > MAX_LOST) st.lost.splice(0, st.lost.length - MAX_LOST);
+  }
+  function arrival(w) {
+    const y = w.localGen.arrivalY ? w.localGen.arrivalY() : 61;
+    return [0.5, y, 3.5];
+  }
+  // the lost-and-found by the Far Gate: whatever has come down since you were last here
+  function fillChest(game) {
+    const w = game.world, st = state(w.info);
+    const y = w.localGen.arrivalY ? w.localGen.arrivalY() : 61;
+    const [cx, , cz] = WG.SIFT.CHEST;
+    const te = w.getTile(cx, y, cz);
+    if (!te || !te.items) return 0;
+    let n = 0;
+    while (st.lost.length) {
+      const slot = te.items.findIndex((s) => !s);
+      if (slot < 0) break;
+      const s = ItemStack.fromJSON(st.lost.shift());
+      if (!s || !itemExists(s.id)) continue;
+      te.items[slot] = s; n++;
+    }
+    if (n) { w.markTileChanged(cx, cz); st.found += n; }
+    return n;
+  }
+  return { state, lose, arrival, fillChest };
 })();
 
 // ---- src/game/interact.js
@@ -16388,6 +16907,7 @@ class Interaction {
     if (held.id === I.prospector_rod) { g.useProspectorRod(); return; }
     if (held.id === I.wayfinder) { g.useWayfinder(); return; }
     if (held.id === I.echo_fork) { this.noRepeat = true; this.strikeFork(); return; }
+    if (held.id === I.lost_letter) { this.noRepeat = true; g.openScreen(new LetterScreen(g, held.dmg)); g.audio.play('page', 0.6, 1); g.achieve('letter'); return; }
     if (held.id === I.journal) { g.openJournal(); return; }
     if (held.id === I.map) { g.openMap(); return; }
     if (held.id === I.wisp_essence) { if (g.releaseWisp()) { if (!p.creative) p.inventory.decrementHeld(1); p.swing(); } return; }
@@ -17157,6 +17677,44 @@ const Skins = (() => {
       if (y === 3 && (x === 2 || x === 5)) return [150, 90, 220];
       return null;
     });
+    return s;
+  })();
+
+  // ------------------------------------------------------------ the Sift
+  // the gleaner: dusty grey-brown fur, a pale belly, big amber eyes, a burlap sack
+  S.gleaner = (() => {
+    const s = new Skin(); const r = rng('gleaner');
+    const fur = C('#7e735f'), dark = C('#5e5546'), belly = C('#b8ad96'), sack = C('#8a6a40'), sackD = C('#6a4e2c');
+    s.box(0, 0, 6, 5, 9, (f, x, y) => f === 'bottom' ? vary(r, belly, 0.08) : ((x + y * 3) % 7 === 0 ? vary(r, dark, 0.1) : vary(r, fur, 0.1)));
+    s.box(30, 0, 6, 5, 5, (f, x, y) => {
+      if (f === 'front') {
+        if (y === 1 && (x === 1 || x === 4)) return C('#ffcf5a');
+        if (y === 1 && (x === 0 || x === 5)) return C('#3a2a10');
+        if (y === 3 && (x === 2 || x === 3)) return C('#3a2e26');
+        if (y >= 3) return vary(r, belly, 0.08);
+      }
+      return vary(r, fur, 0.1);
+    });
+    s.box(52, 0, 1, 5, 3, (f, x, y) => (f === 'left' || f === 'right') && y > 0 && x > 0 ? C('#c8a0b0') : vary(r, fur, 0.1));
+    s.box(0, 14, 2, 6, 2, (f, x, y) => y >= 5 ? C('#3a3228') : vary(r, dark, 0.1));
+    s.box(8, 14, 3, 3, 7, (f, x, y) => (x + y) % 3 === 0 ? vary(r, belly, 0.1) : vary(r, fur, 0.12));
+    s.box(28, 14, 5, 4, 5, (f, x, y) => (x + y) % 2 === 0 ? vary(r, sack, 0.1) : vary(r, sackD, 0.1));
+    return s;
+  })();
+  // the sifter: grey-lavender scales in rows, a pale belly, small black eyes
+  S.sifter = (() => {
+    const s = new Skin(); const r = rng('sifter');
+    const sc = C('#a29cb4'), scD = C('#827c94'), belly = C('#d4cee4'), fin = C('#8a849e');
+    const scale = (f, x, y) => f === 'bottom' ? vary(r, belly, 0.06) : ((x + (y >> 1)) % 2 === 0 ? vary(r, sc, 0.08) : vary(r, scD, 0.08));
+    s.box(0, 0, 6, 5, 6, (f, x, y) => (f === 'front' && y === 1 && (x === 0 || x === 5)) ? C('#101014') : (f === 'front' && y >= 3) ? C('#2a2430') : scale(f, x, y));
+    s.box(24, 0, 5, 2, 5, (f, x, y) => f === 'top' ? ((x + y) % 2 ? C('#e8e4f0') : C('#5a2430')) : vary(r, belly, 0.08));
+    s.box(0, 11, 5, 5, 6, scale);
+    s.box(22, 11, 4, 4, 6, scale);
+    s.box(0, 22, 3, 3, 6, scale);
+    s.box(18, 22, 1, 6, 3, () => vary(r, fin, 0.12));
+    s.box(44, 0, 2, 4, 6, (f, x, y) => (x + y) % 3 === 0 ? vary(r, C('#9a94ae'), 0.1) : vary(r, fin, 0.12));
+    s.box(44, 20, 2, 3, 3, (f, x, y) => y < 1 ? vary(r, C('#5a546c'), 0.1) : vary(r, fin, 0.12));
+    s.box(44, 13, 3, 1, 3, () => vary(r, fin, 0.12));
     return s;
   })();
 
@@ -18020,6 +18578,31 @@ const MODELS = (() => {
       leg1: { pivot: [-1.5, 8, 7], boxes: [bx([-1, -8, -1], [2, 8, 2], [0, 18], { mirror: true })] },
       leg2: { pivot: [1.5, 8, -4], boxes: [bx([-1, -8, -1], [2, 8, 2], [0, 18])] },
       leg3: { pivot: [-1.5, 8, -4], boxes: [bx([-1, -8, -1], [2, 8, 2], [0, 18], { mirror: true })] },
+    },
+    // a gleaner: low and quick, all ears, with a sack for the things it finds
+    gleaner: {
+      body: { pivot: [0, 6, 0], boxes: [bx([-3, 0, -4], [6, 5, 9], [0, 0])] },
+      head: { pivot: [0, 9, -4], boxes: [bx([-3, -2, -5], [6, 5, 5], [30, 0])] },
+      earR: { pivot: [2, 11, -6], rot0: [0.15, 0, -0.45], boxes: [bx([0, 0, -1], [1, 5, 3], [52, 0])], follow: 'head' },
+      earL: { pivot: [-2, 11, -6], rot0: [0.15, 0, 0.45], boxes: [bx([-1, 0, -1], [1, 5, 3], [52, 0], { mirror: true })], follow: 'head' },
+      leg0: { pivot: [2, 6, 3], boxes: [bx([-1, -6, -1], [2, 6, 2], [0, 14])] },
+      leg1: { pivot: [-2, 6, 3], boxes: [bx([-1, -6, -1], [2, 6, 2], [0, 14], { mirror: true })] },
+      leg2: { pivot: [2, 6, -2], boxes: [bx([-1, -6, -1], [2, 6, 2], [0, 14])] },
+      leg3: { pivot: [-2, 6, -2], boxes: [bx([-1, -6, -1], [2, 6, 2], [0, 14], { mirror: true })] },
+      tail: { pivot: [0, 9, 5], rot0: [-0.7, 0, 0], boxes: [bx([-1.5, -1, 0], [3, 3, 7], [8, 14])] },
+      sack: { pivot: [0, 11, 1], boxes: [bx([-2.5, 0, -2], [5, 4, 5], [28, 14])] },
+    },
+    // a sifter: a long, finned body made for swimming through sand
+    sifter: {
+      head: { pivot: [0, 4, -6], boxes: [bx([-3, -2.5, -6], [6, 5, 6], [0, 0])] },
+      jaw: { pivot: [0, 2, -6], boxes: [bx([-2.5, -1.5, -5], [5, 2, 5], [24, 0])] },
+      s1: { pivot: [0, 4, -6], boxes: [bx([-2.5, -2.5, 0], [5, 5, 6], [0, 11])] },
+      s2: { pivot: [0, 4, 0], boxes: [bx([-2, -2, 0], [4, 4, 6], [22, 11])] },
+      s3: { pivot: [0, 4, 6], boxes: [bx([-1.5, -1.5, 0], [3, 3, 6], [0, 22])] },
+      tailfin: { pivot: [0, 4, 12], boxes: [bx([-0.5, -3, 0], [1, 6, 3], [18, 22])] },
+      fin: { pivot: [0, 6.5, -4], boxes: [bx([-1, 0, -1], [2, 4, 6], [44, 0]), bx([-1, 4, 1.5], [2, 3, 3], [44, 20])] },
+      finR: { pivot: [2.5, 2, -3], boxes: [bx([0, -0.5, -1], [3, 1, 3], [44, 13])] },
+      finL: { pivot: [-2.5, 2, -3], boxes: [bx([-3, -0.5, -1], [3, 1, 3], [44, 13], { mirror: true })] },
     },
     // a squid is built around its middle so it can tumble freely
     squid: (() => {
@@ -19110,8 +19693,9 @@ class EntityRenderer {
 // ground alike (the shared texture layer is rewritten in place).
 // ---------------------------------------------------------------------------
 const DynamicItems = (() => {
-  let compassBase = null, clockBase = null;
+  let compassBase = null, clockBase = null, waybackBase = null;
   let angle = 0, delta = 0, lastC = null, lastK = null, clockSpin = 0;
+  let wAngle = 0, wDelta = 0, lastW = null;
   function bases() {
     if (compassBase) return;
     // compass: iron rim, pale face, small cardinal ticks
@@ -19126,6 +19710,21 @@ const DynamicItems = (() => {
       else if (d >= 5.7 && d < 6.6) clockBase.set(x, y, [82, 62, 6]);
     }
     for (const [x, y] of [[7, 3], [8, 3], [12, 7], [12, 8], [7, 12], [8, 12], [3, 7], [3, 8]]) compassBase.set(x, y, [150, 140, 120]);
+    // the wayback compass: a dark rim of sifter scale round a pale violet face
+    waybackBase = new TexGen.Img();
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const d = Math.hypot(x - 7.5, y - 7.5);
+      if (d < 4.6) waybackBase.set(x, y, [206, 200, 228]);
+      else if (d < 5.7) waybackBase.set(x, y, (x + y) % 3 === 0 ? [154, 148, 174] : [122, 116, 140]);
+      else if (d < 6.6) waybackBase.set(x, y, [42, 38, 50]);
+    }
+  }
+  function drawWayback(img, a) {
+    img.d.set(waybackBase.d);
+    const s = Math.sin(a), c = Math.cos(a);
+    for (let k = 0; k <= 12; k++) { const t = k / 12 * 3.2; img.set(Math.round(7.5 - s * t), Math.round(7.5 + c * t), [70, 66, 84]); }
+    for (let k = 0; k <= 16; k++) { const t = k / 16 * 4.2; img.set(Math.round(7.5 + s * t), Math.round(7.5 - c * t), k > 13 ? [200, 255, 250] : [63, 224, 214]); }
+    img.set(7, 7, [40, 36, 48]); img.set(8, 8, [40, 36, 48]);
   }
   function drawCompass(img, a) {
     img.d.set(compassBase.d);
@@ -19180,6 +19779,19 @@ const DynamicItems = (() => {
       drawCompass(img, cq / 64 * Math.PI * 2);
       atlas.upload(atlas.layer('compass'), img);
       invalidate(game, ITEM_IDS.compass);
+    }
+    // wayback compass: towards where you last fell, if it was in this world
+    const ld = p.lastDeath;
+    const wt = (!ld || ld.dim !== w.dim) ? wAngle + (Math.random() - 0.5) * 6 : ((ld.x + 0.5 - p.x) ** 2 + (ld.z + 0.5 - p.z) ** 2 < 0.5 ? wAngle + 0.3 : Math.atan2((ld.x + 0.5 - p.x) * rx + (ld.z + 0.5 - p.z) * rz, (ld.x + 0.5 - p.x) * fx + (ld.z + 0.5 - p.z) * fz));
+    let wd = clamp(wrapRadians(wt - wAngle), -1, 1);
+    wDelta += wd * 0.1; wDelta *= 0.8; wAngle = wrapRadians(wAngle + wDelta);
+    const wq = Math.round(wAngle / (Math.PI * 2) * 64);
+    if (wq !== lastW && TexGen.T.wayback_compass) {
+      lastW = wq;
+      const img = TexGen.T.wayback_compass;
+      drawWayback(img, wq / 64 * Math.PI * 2);
+      atlas.upload(atlas.layer('wayback_compass'), img);
+      invalidate(game, ITEM_IDS.wayback_compass);
     }
     // clock: dial follows the sun
     if (w.dim) { clockSpin = (clockSpin + (Math.random() - 0.3) * 0.08 + 1) % 1; }
@@ -19785,6 +20397,35 @@ const SOUND_DEFS = (() => {
       return s * sw + hp.p(noise()) * 0.25 * sw * (0.5 + 0.5 * Math.sin(t * 7));
     });
   };
+  // the gleaner chitters; the sifter hisses like pouring sand, and bursts out of it
+  S.gleaner_say = () => { const ck = []; for (let i = 0; i < 6; i++) ck.push([i * 0.05 + rnd() * 0.02, 1800 + rnd() * 1400, 0.4, 0.012]); return render(0.4, (t) => ring(ck, t)); };
+  S.gleaner_hurt = () => render(0.25, (t) => Math.sin(2 * Math.PI * (1400 - t * 2400) * t) * env(t, 0.004, 0.06));
+  S.gleaner_death = () => render(0.6, (t) => Math.sin(2 * Math.PI * (1100 - t * 1300) * t) * env(t, 0.01, 0.2));
+  S.sifter_say = () => { const bp = new Biquad('bp', 2500, 1.5); return render(1.2, (t) => bp.p(noise()) * Math.sin(Math.PI * t / 1.2) * (0.6 + 0.4 * Math.sin(t * 30))); };
+  S.sifter_hurt = () => { const lp = new Biquad('lp', 900, 0.8); return render(0.4, (t) => lp.p(noise()) * 2 * env(t, 0.005, 0.08) + Math.sin(2 * Math.PI * 180 * t) * env(t, 0.005, 0.1) * 0.5); };
+  S.sifter_death = () => { const bp = new Biquad('bp', 1500, 1); return render(1.4, (t) => bp.p(noise()) * env(t, 0.02, 0.4) + Math.sin(2 * Math.PI * (160 - t * 60) * t) * env(t, 0.01, 0.5) * 0.5); };
+  S.sifter_lunge = () => { const hp = new Biquad('hp', 1200, 0.7), lp = new Biquad('lp', 300, 0.8); return render(0.7, (t) => hp.p(noise()) * env(t, 0.005, 0.18) + lp.p(noise()) * 3 * env(t, 0.003, 0.06) + (t > 0.25 && t < 0.27 ? Math.sin(2 * Math.PI * 900 * t) : 0)); };
+  S.sifter_dive = () => { const hp = new Biquad('hp', 1500, 0.7); return render(0.6, (t) => hp.p(noise()) * env(t, 0.03, 0.2)); };
+  // a sheet of paper unfolded
+  S.page = () => { const bp = new Biquad('bp', 3000, 0.9); let g = 0, gt = 0; return render(0.35, (t) => { if (t > gt) { g = rnd(); gt = t + 0.005 + rnd() * 0.02; } return bp.p(noise()) * g * Math.sin(Math.PI * t / 0.35); }); };
+  // the Sift: wind over the dunes, hissing with sand (looped), and the sunken bells
+  S.sift_wind = () => {
+    const bp = new Biquad('bp', 900, 1.2), hp = new Biquad('hp', 4000, 0.7);
+    return render(8, (t) => {
+      const w = Math.sin(Math.PI * 2 * t / 8), w2 = Math.sin(Math.PI * 2 * t / 4 + 2);
+      bp.set(500 + 300 * w, 1.4);
+      return bp.p(noise()) * (0.7 + 0.3 * w) + hp.p(noise()) * 0.12 * (0.6 + 0.4 * w2);
+    });
+  };
+  S.sift_bell = () => {
+    const f = 110 * (0.9 + rnd() * 0.2), parts = [[1, 0.6, 3.5], [2.0, 0.35, 2.4], [2.76, 0.25, 1.6], [5.4, 0.12, 0.8], [8.9, 0.06, 0.4]];
+    const dl = new Float32Array(Math.floor(DSP.SR * 0.31)); let di = 0;
+    return render(6, (t) => {
+      let s = 0; for (const [k, a, d] of parts) s += Math.sin(2 * Math.PI * f * k * t * (1 + k * 0.0004)) * a * Math.exp(-t / d) * (t < 0.004 ? t / 0.004 : 1);
+      const out = s + dl[di] * 0.45; dl[di] = out; di = (di + 1) % dl.length;
+      return out;
+    });
+  };
   // the Sift gate: grains pouring through grey light, and a low note beneath
   S.sift_hum = () => {
     const hp = new Biquad('hp', 3000, 0.7), bp = new Biquad('bp', 5000, 2);
@@ -20042,6 +20683,7 @@ class MusicEngine {
     const p = g.player, w = g.world;
     if (this.forceMood) return this.forceMood;
     if (w.dim === 2) return 'isles';
+    if (w.dim === 3) return 'sift';
     if (w.dim) return 'underworld';
     if (p && p.creative) return Math.random() < 0.5 ? 'creative' : 'day';
     if (p && p.y < 72) {
@@ -20057,7 +20699,7 @@ class MusicEngine {
     const R = Math.random, pick = (a) => a[Math.floor(R() * a.length)];
     const MODES = { ionian: [0, 2, 4, 5, 7, 9, 11], lydian: [0, 2, 4, 6, 7, 9, 11], mixolydian: [0, 2, 4, 5, 7, 9, 10], dorian: [0, 2, 3, 5, 7, 9, 10], aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10] };
     // the deep caves borrow from the others: the Hush is sparser and lower than any cave, mossglow gentler
-    if (mood === 'hush' || mood === 'mossglow') return this.composeCave(mood);
+    if (mood === 'hush' || mood === 'mossglow' || mood === 'sift') return this.composeCave(mood);
     const under = mood === 'underworld', isles = mood === 'isles', wyrm = mood === 'wyrm', ending = mood === 'ending';
     const modeName = under ? pick(['phrygian', 'aeolian', 'phrygian']) : mood === 'night' ? pick(['dorian', 'aeolian', 'ionian', 'lydian']) : mood === 'underground' ? pick(['aeolian', 'dorian', 'aeolian'])
       : isles ? pick(['lydian', 'dorian', 'lydian', 'ionian']) : wyrm ? pick(['aeolian', 'phrygian', 'aeolian']) : ending ? pick(['ionian', 'lydian'])
@@ -20151,6 +20793,20 @@ class MusicEngine {
         t += bar;
       }
       return { events: ev.sort((a, b) => a.t - b.t), length: t + bar * 2, mood, mode: 'locrian', bpm: Math.round(bpm) };
+    }
+    if (mood === 'sift') {
+      // the Sift: a slow music-box tune, falling a step at a time, each phrase echoing back fainter
+      const scale = pick([[0, 2, 3, 5, 7, 9, 10], [0, 2, 4, 7, 9, 11, 12]]), tonic = 60 + Math.floor(R() * 5), bpm = 44 + R() * 8, beat = 60 / bpm;
+      const deg = (d) => tonic + scale[((d % 7) + 7) % 7] + 12 * Math.floor(d / 7);
+      for (let ph = 0; ph < 5; ph++) {
+        const top = 7 + Math.floor(R() * 4), len = 4 + Math.floor(R() * 3);
+        for (let k = 0; k < len; k++) for (let echo = 0; echo < 2; echo++) add(t + k * beat + echo * beat * 0.75, deg(top - k) + (echo ? 12 : 0), (0.36 - k * 0.03) * (echo ? 0.35 : 1), beat * 2);
+        add(t, deg(0) - 12, 0.26, beat * len * 1.2);
+        if (R() < 0.6) add(t + beat * len * 0.5, deg(4) - 12, 0.2, beat * len);
+        t += beat * (len + 3 + Math.floor(R() * 3));
+      }
+      add(t, deg(0) - 12, 0.28, beat * 6); add(t + 0.15, deg(2), 0.2, beat * 6); add(t + 0.3, deg(4), 0.18, beat * 6);
+      return { events: ev.sort((a, b) => a.t - b.t), length: t + beat * 8, mood, mode: 'sift', bpm: Math.round(bpm) };
     }
     const scale = pick([[0, 2, 4, 6, 7, 9, 11], [0, 2, 3, 5, 7, 9, 10]]), tonic = 55 + Math.floor(R() * 6), bpm = 50 + R() * 8, beat = 60 / bpm, bar = beat * 4;
     const deg = (d) => tonic + scale[((d % 7) + 7) % 7] + 12 * Math.floor(d / 7);
@@ -20781,7 +21437,7 @@ class Hud {
       'Chunk: ' + (bx & 15) + ' ' + (by & 15) + ' ' + (bz & 15) + ' in ' + (bx >> 4) + ' ' + (by >> 4) + ' ' + (bz >> 4),
       'Facing: ' + facing + ' (' + wrapDegrees(-p.yaw * 180 / Math.PI + 180).toFixed(1) + ' / ' + (-p.pitch * 180 / Math.PI).toFixed(1) + ')',
       'Light: ' + Math.max(l >> 4, l & 15) + ' (' + (l >> 4) + ' sky, ' + (l & 15) + ' block)',
-      'Biome: ' + (b ? b.name : '?') + (w.dim === 1 ? ' (Underworld)' : w.dim === 2 ? ' (Far Isles)' : ''),
+      'Biome: ' + (b ? b.name : '?') + (w.dim === 1 ? ' (Underworld)' : w.dim === 2 ? ' (Far Isles)' : w.dim === 3 ? ' (The Sift)' : ''),
       'Day ' + Math.floor(w.dayTime / 24000) + ', time ' + (w.dayTime % 24000) + (w.raining ? (w.thundering ? ', thunder' : ', rain') : ''),
       'Seed: ' + w.seed,
     ];
@@ -22204,18 +22860,18 @@ const CREATIVE_TABS = (() => {
     ...all(B.STONE_BRICKS), blk(B.SNOW), blk(B.ICE), blk(B.PACKED_ICE), blk(B.CLAY), ...all(B.TERRACOTTA), ...all(B.STAINED_GLASS), blk(B.SLATE), blk(B.SLATE_BRICKS), blk(B.MARBLE), ...all(B.MARBLE_BRICKS),
     blk(B.BASALT), blk(B.POLISHED_BASALT), blk(B.ASH), blk(B.PEAT), blk(B.SALT), blk(B.SCORCHED_STONE), blk(B.THATCH), blk(B.QUICKSAND), blk(B.HAY_BALE), blk(B.HUGE_MUSHROOM_BROWN), blk(B.HUGE_MUSHROOM_RED), blk(B.RUNESTONE),
     blk(B.BRIMSTONE), blk(B.BONESAND), blk(B.QUARTZ_ORE), blk(B.SUNSTONE), ...all(B.QUARTZ_BLOCK), blk(B.BRIMSTONE_BRICKS), blk(B.BONE_BLOCK), blk(B.STARSTONE), blk(B.STARSTONE_BRICKS),
-    blk(B.DEEPSTONE), ...all(B.DEEPSTONE_BRICKS), blk(B.REINFORCED_DEEPSTONE), blk(B.CAVE_MOSS), blk(B.HUSHMOSS)] });
+    blk(B.DEEPSTONE), ...all(B.DEEPSTONE_BRICKS), blk(B.REINFORCED_DEEPSTONE), blk(B.CAVE_MOSS), blk(B.HUSHMOSS), blk(B.SIFT_SAND), blk(B.SILTSTONE), ...all(B.SILTSTONE_BRICKS), blk(B.SIFT_GLASS)] });
   T.push({ name: 'Decoration', icon: [B.FLOWER, 0], list: [
     ...all(B.SAPLING), ...all(B.LEAVES), blk(B.COBWEB), ...all(B.TALL_GRASS), blk(B.DEAD_BUSH), ...all(B.FLOWER), blk(B.MUSHROOM_BROWN), blk(B.MUSHROOM_RED), blk(B.GLOWSHROOM), blk(B.LUMITE_CRYSTAL),
     blk(B.TORCH), blk(B.CHEST), blk(B.CRAFTING_TABLE), blk(B.FURNACE), blk(B.ENCHANTING_TABLE), blk(B.LADDER), blk(B.ROPE), blk(B.SNOW_LAYER), blk(B.CACTUS), blk(B.PUMPKIN), blk(B.JACK_O_LANTERN), blk(B.MELON), blk(B.VINE),
     blk(B.LILY_PAD), blk(B.CATTAIL), blk(B.BRAMBLE), blk(B.LEAF_LITTER), ...all(B.FENCE), blk(B.FENCE_GATE), blk(B.TRAPDOOR), blk(B.GLASS_PANE), ...all(B.CARPET), blk(B.LUMITE_LAMP), blk(B.MOB_SPAWNER), blk(B.BRIMSTONE_FENCE), [I.bloodcap, 0],
     blk(B.IRON_BARS), blk(B.RIFT_FRAME), ...all(B.INFESTED_BRICKS), [I.star_crystal, 0],
-    blk(B.GLOW_VINE), blk(B.GLOW_VINE_BERRIES), blk(B.PALE_LANTERN), blk(B.HUSH_SENSOR), blk(B.HUSH_SHRIEKER), blk(B.GATE_KEYSTONE),
+    blk(B.GLOW_VINE), blk(B.GLOW_VINE_BERRIES), blk(B.PALE_LANTERN), blk(B.HUSH_SENSOR), blk(B.HUSH_SHRIEKER), blk(B.GATE_KEYSTONE), blk(B.DUNE_GRASS),
     [I.door_wood, 0], [I.door_iron, 0], [I.bed, 0], ...WOOD.map((w, i) => [I.sign, i]), [I.painting, 0]] });
   T.push({ name: 'Tools', icon: [I.iron_axe, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ['shovel', 'pickaxe', 'axe', 'hoe'].map((k) => [I[m + '_' + k], 0])),
-    ...items(['flint_and_steel', 'shears', 'fishing_rod', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'compass', 'clock', 'map', 'prospector_rod', 'wayfinder', 'journal', 'message_bottle', 'echo_fork'])] });
+    ...items(['flint_and_steel', 'shears', 'fishing_rod', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'compass', 'clock', 'map', 'prospector_rod', 'wayfinder', 'journal', 'message_bottle', 'echo_fork', 'wayback_compass', 'lost_letter'])] });
   T.push({ name: 'Combat', icon: [I.gold_sword, 0], list: [...['wood', 'stone', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].map((m) => [I[m + '_sword'], 0]), [I.bow, 0], [I.arrow, 0],
-    ...['leather', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ARMOR_SLOTS.map((s) => [I[m + '_' + s], 0])), [I.snowball, 0], [I.egg, 0]] });
+    ...['leather', 'iron', 'gold', 'cobalt', 'diamond', 'starmetal'].flatMap((m) => ARMOR_SLOTS.map((s) => [I[m + '_' + s], 0])), [I.silent_boots, 0], [I.snowball, 0], [I.egg, 0]] });
   T.push({ name: 'Ember Circuits', icon: [I.ember_dust, 0], list: [[I.ember_dust, 0], blk(B.EMBER_TORCH), blk(B.LEVER), blk(B.STONE_BUTTON), blk(B.WOOD_BUTTON), blk(B.STONE_PLATE), blk(B.WOOD_PLATE),
     [I.relay, 0], blk(B.PISTON), blk(B.STICKY_PISTON), blk(B.EMBER_LAMP), blk(B.NOTE_BLOCK), blk(B.EMBER_BLOCK), blk(B.HUSH_SENSOR), blk(B.TNT), [I.door_wood, 0], [I.door_iron, 0], blk(B.TRAPDOOR), blk(B.FENCE_GATE), blk(B.DETECTOR_RAIL)] });
   T.push({ name: 'Transportation', icon: [B.BOOSTER_RAIL, 0], list: [blk(B.RAIL), blk(B.BOOSTER_RAIL), blk(B.DETECTOR_RAIL), [I.minecart, 0], [I.chest_minecart, 0], ...WOOD.map((w, i) => [I.boat, i])] });
@@ -22225,7 +22881,7 @@ const CREATIVE_TABS = (() => {
     'fish', 'cooked_fish', 'salmon', 'cooked_salmon', 'sunfish', 'pufferfish', 'glimmerfin', 'carrot', 'potato', 'baked_potato', 'poison_potato', 'cookie', 'melon_slice', 'mushroom_stew', 'glow_berries', 'pumpkin_pie', 'berry_pie', 'berries', 'glowberry', 'rotten_flesh', 'spider_eye']) });
   T.push({ name: 'Materials', icon: [I.stick, 0], list: [...items(['coal']), [I.coal, 1], ...items(['diamond', 'iron_ingot', 'gold_ingot', 'gold_nugget', 'cobalt_ingot', 'starmetal_ingot', 'jade', 'ember_dust', 'sulfur', 'lumite_shard', 'salt',
     'stick', 'bowl', 'string', 'cattail_fiber', 'feather', 'flint', 'gunpowder', 'leather', 'bone', 'clay_ball', 'brick', 'paper', 'book', 'slimeball', 'wheat', 'seeds', 'sugar', 'sugar_cane', 'wisp_essence',
-      'sunstone_dust', 'smoky_quartz', 'brimstone_brick', 'wailer_tear', 'flare_rod', 'flare_powder', 'magma_cream', 'fire_charge', 'seeker_eye', 'hush_shard', 'echo_heart']),
+      'sunstone_dust', 'smoky_quartz', 'brimstone_brick', 'wailer_tear', 'flare_rod', 'flare_powder', 'magma_cream', 'fire_charge', 'seeker_eye', 'hush_shard', 'echo_heart', 'sift_scale']),
     ...[...Array(16).keys()].map((d) => [I.dye, d])] });
   T.push({ name: 'Creatures', icon: [I.spawn_egg, 1], list: [] });   // filled when mobs load
   T.push({ name: 'Search', icon: [I.compass, 0], list: [], search: true });
@@ -22610,6 +23266,9 @@ const MILESTONES = [
   { id: 'city', name: 'Lost and Found', desc: 'Find a forgotten city deep in the Hush', icon: () => [B.DEEPSTONE_BRICKS, 2] },
   { id: 'gate', name: 'The Grey Door', desc: 'Wake a city gate with an Echo Heart', icon: () => [ITEM_IDS.echo_heart, 0] },
   { id: 'listener', name: 'Unheard Of', desc: 'Defeat the Listener', icon: () => [ITEM_IDS.hush_shard, 0] },
+  { id: 'sift', name: 'Where Lost Things Go', desc: 'Step through a city gate into the Sift', icon: () => [B.SIFT_SAND, 0] },
+  { id: 'relic', name: 'Finders Keepers', desc: 'Come upon a relic half-buried in the Sift', icon: () => [B.SILTSTONE_BRICKS, 2] },
+  { id: 'letter', name: 'Return to Sender', desc: 'Read a lost letter', icon: () => [ITEM_IDS.lost_letter, 0] },
 ];
 const BIOME_DESCRIPTIONS = {
   ocean: 'Endless water. Sunken ruins rest on the sea floor.', deep_ocean: 'The water grows dark and cold.', plains: 'Rolling grass, wildflowers and the occasional lonely oak.',
@@ -22626,6 +23285,11 @@ const BIOME_DESCRIPTIONS = {
   spire_woods: 'Thick woods among towering stone pillars, each crowned with its own little forest.',
   tablelands: 'Flat-topped mesas with sheer sides, stepping up out of the plains.',
   glacier: 'An old sheet of packed ice split by crevasses, bristling with spikes of ice.',
+  grey_dunes: 'The Sift. Long grey dunes under a sunless sky, the sand forever falling.',
+  relic_fields: 'The Sift. Flat sand littered with the lost: houses, ships, carts and towers, half sunk.',
+  glass_wastes: 'The Sift. A hardpan of siltstone where pale sift glass grows in spires.',
+  silent_shelves: 'The Sift. Great stepped shelves of siltstone rising out of the dunes. Nothing moves up there.',
+  the_hollows: 'The Sift. Deep round pits where the sand pours down into caverns below.',
   mossglow_caves: 'Deep under the woods, great caverns carpeted in moss, hung with glowing vines heavy with berries.',
   the_hush: 'Far below, the stone turns dark and the caves fall silent. Things here listen. Walk softly - and never wake the shriekers.',
   great_isle: 'Far Isles. Pale starstone ringed by obsidian spires, each crowned with a star crystal. Something vast circles overhead.',
@@ -22920,6 +23584,67 @@ class SignEditScreen extends Screen {
     }
     for (const wd of this.widgets) wd.draw(gui, mx, my);
   }
+}
+
+// ---- src/ui/letter.js
+// ---------------------------------------------------------------------------
+// Lost letters: notes, lists and love letters that went astray and sifted
+// down into the Sift. Each letter's damage value says which one it is.
+// ---------------------------------------------------------------------------
+const LOST_LETTERS = [
+  ['To whoever finds this -', 'I left my pickaxe by the river, the good one, the one with the chip in the handle. If you see it, it\'s yours now. I\'ve made peace with it. Mostly.', '- R.'],
+  ['Dear Mum,', 'The village here trades in jade, of all things. I bought a map off a fisherman. It shows an X on a beach. I am going to dig until I find it or the sun comes up. Don\'t worry.', '- your loving Tam'],
+  ['Note to self:', 'Do NOT dig straight down.', 'Do NOT dig straight down.', '(I dug straight down.)'],
+  ['Wren,', 'The city under the hill is not empty. Something down there is listening. We took off our boots and walked on wool, and still the floor clicked under us like teeth. Don\'t follow.', '- Ash'],
+  ['To buy:', 'Wool (lots)', 'Torches', 'Bread', 'Something for the noise', 'A better door'],
+  ['If you are reading this, the Sift has you too. Don\'t panic. Sit by the gate. Things come down from above in their own time - buckets, boots, a whole cart once. Someone up there is very careless. I like them.'],
+  ['To the one who keeps leaving torches in my cave:', 'Thank you.', '- the bat'],
+  ['I named the wolf Biscuit. Biscuit does not answer to Biscuit. Biscuit answers to bones. We understand each other.'],
+  ['Dear Stranger,', 'I see you at the edge of the trees every evening. You never come closer. I\'ve left a chair out on the porch. It is a nice chair.', '- the house on the hill'],
+  ['Day forty on the isles. The tall black spires sing when the wind moves. Something circles overhead, too big to be a bird. I have stopped looking up.'],
+  ['Bramble Pie, as my grandmother made it (she never measured anything):', 'berries, enough', 'sugar, more than that', 'an egg, if the hens agree'],
+  ['To the cartographers\' guild:', 'Your map of the eastern moors is wrong. The stones move. Please stop sending people out there with it.', '- a concerned shepherd'],
+  ['I followed the light over the swamp for three nights. On the fourth it stopped, and hovered, and waited for me to dig. I found a chest of gold and a very rude note from a pirate.'],
+  ['My dearest -', 'The Underworld is hot and loud and the wailers cry all night. But I brought you a flower from the bone shoals. It is red, and it bites. I think you\'ll like it.'],
+  ['Lost: one saddle, brown leather, well loved. Last seen on a pig that is no longer speaking to me.'],
+  ['To whoever built the stone circle on the moor:', 'Please put my sheep back.'],
+  ['They say if you drop something and walk away long enough, it ends up here. So here is my letter, dropped on purpose. Hello, future me. Did you ever finish the castle?'],
+  ['There is a door in the dunes with nothing behind it. I walked through it twelve times. On the thirteenth I came out somewhere else. I am writing this from somewhere else.'],
+  ['The grains fall here as they fall in the gate. Look closely: every speck is something somebody lost. Most of them are socks.'],
+  ['To the miner who keeps blowing up the hill by my house:', 'I have counted eleven craters.', 'This is not a cave. It is my garden.'],
+  ['Ma, I\'m fine. The Listener didn\'t hear me. Well - it heard me, but I was faster. Mostly faster. Please send more wool.'],
+  ['Somewhere under the deepest hollow in the Sift there is a cave full of bells. When the sand shifts, they ring. I have never found it. I have heard it every night.'],
+  ['If found, please return to:', 'the second village past the big oak,', 'the house with the blue door,', 'care of Old Marrow.', '(He\'ll know.)'],
+  ['Do not trust the gleaners. They are small and they are sweet and they will take your boots while you are still in them.'],
+];
+function lostLetter(d) { return LOST_LETTERS[(d >>> 0) % LOST_LETTERS.length]; }
+
+class LetterScreen extends Screen {
+  constructor(game, d) {
+    super(game);
+    this.background = 'world';
+    this.lines = lostLetter(d);
+    this.pauses = false;
+  }
+  draw(gui, mx, my) {
+    gui.worldOverlay();
+    const W = 230, font = gui.font;
+    const wrapped = [];
+    this.lines.forEach((l, i) => { if (i) wrapped.push(''); for (const s of font.wrap(l, W - 30)) wrapped.push(s); });
+    const H = wrapped.length * 10 + 46, x = Math.floor(this.W / 2 - W / 2), y = Math.floor(Math.max(8, this.H / 2 - H / 2));
+    // a sheet of old paper, a little foxed at the edges
+    gui.rect(x - 1, y - 1, W + 2, H + 2, '#5a4a30');
+    gui.rect(x, y, W, H, '#e2d6b4');
+    gui.rect(x + 2, y + 2, W - 4, H - 4, '#e9dec0');
+    for (let k = 0; k < 18; k++) { const px = x + 3 + ((k * 53) % (W - 8)), py = y + 3 + ((k * 31) % (H - 8)); gui.rect(px, py, 2, 1, '#d4c6a0'); }
+    gui.textCentered('A Lost Letter', this.W / 2, y + 8, '#6a4a22');
+    wrapped.forEach((s, i) => gui.text(s, x + 15, y + 24 + i * 10, '#3a2a18'));
+    // a broken wax seal
+    gui.rect(x + W - 22, y + H - 20, 10, 10, '#8a1a1a'); gui.rect(x + W - 20, y + H - 18, 6, 6, '#b8302a'); gui.rect(x + W - 18, y + H - 16, 2, 2, '#e0605a');
+    gui.textCentered(this.game.touch && this.game.touch.active ? 'Tap to put it away' : 'Click or press Esc to put it away', this.W / 2, y + H + 8, '#bbbbbb', true);
+  }
+  keyDown(e) { if (e.key === 'Escape' || e.key === 'e' || e.key === 'E') this.game.closeScreen(); }
+  mouseDown() { this.game.closeScreen(); return true; }
 }
 
 // ---- src/ui/enchantscreen.js
@@ -25473,6 +26198,7 @@ class MobSpawner {
     const area = (rd * 2 + 1) * (rd * 2 + 1);
     if (w.dim === 1) { if (this.tickUnder) this.tickUnder(rd, area); return; }
     if (w.dim === 2) { if (this.tickIsles) this.tickIsles(rd, area); return; }
+    if (w.dim === 3) { if (this.tickSift) this.tickSift(rd, area); return; }
     const capMonster = Math.max(8, Math.round(48 * area / 169));
     if (w.difficulty > 0 && this.counts.monster < capMonster) {
       for (let i = 0; i < 2; i++) if (this.spawnMonsterPack(rd)) { this.counts.monster += 1; }
@@ -26690,6 +27416,274 @@ class Listener extends Monster {
 }
 MOB_CLASSES.listener = Listener;
 
+// ---- src/entity/siftmobs.js
+// ---------------------------------------------------------------------------
+// Creatures of the Sift. The gleaner: small, quick, all ears, gathering
+// whatever it finds lying about (or digs up) and running off with it. The
+// sifter: swims through the sand like water, a fin and a ripple the only
+// sign of it, and hunts by sound - sneak, or keep to stone, and it loses you.
+// ---------------------------------------------------------------------------
+MOB_TYPES.push(
+  { key: 'gleaner', name: 'Gleaner', egg: ['#7e735f', '#ffcf5a'], cat: 'creature', lore: 'A small, quick, big-eared scavenger of the Sift. It gathers anything it finds lying about - or digs up - and runs. It will not fight unless cornered. Whatever it carries, it drops when it falls.' },
+  { key: 'sifter', name: 'Sifter', egg: ['#8a849c', '#3c3846'], cat: 'monster', lore: 'Swims through the sand of the Sift like water, with only a fin and a ripple to show where it is. It hunts by sound: sneak, or keep to stone, and it loses you. Its scales make the softest boots.' },
+);
+MOB_TYPES.forEach((m, i) => { if (m) { m.index = i; MOB_INDEX[m.key] = m; } });
+
+// what a gleaner might dig out of the sand, when nothing lost is waiting to be found
+// how far below the top of the sand a swimming sifter rides: deep enough that only its fin shows
+const SIFTER_SUNK = 0.72, SIFTER_SCALE = 1.3;
+const GLEANINGS = () => [[ITEM_IDS.gold_nugget, 1, 4], [ITEM_IDS.string, 1, 3], [ITEM_IDS.bone, 1, 2], [ITEM_IDS.coal, 1, 3], [ITEM_IDS.lost_letter, 1, 1], [ITEM_IDS.sift_scale, 1, 2], [ITEM_IDS.gold_ingot, 1, 1], [ITEM_IDS.jade, 1, 1], [ITEM_IDS.paper, 1, 3], [ITEM_IDS.arrow, 2, 6]];
+
+class Gleaner extends Mob {
+  constructor(world) {
+    super(world, 'gleaner');
+    this.category = 'creature';
+    this.maxHealth = this.health = 8;
+    this.w = 0.5; this.h = 0.9; this.eye = 0.75;
+    this.baseSpeed = 0.32;
+    this.carried = null;
+    this.flee = 0; this.dig = 0; this.cornered = 0;
+    this.talkInterval = 160;
+    this.xpValue = 2;
+  }
+  aiTick(game) {
+    const w = this.world, p = game.player;
+    if (this.dig > 0) {
+      // scrabbling in the sand
+      this.dig--;
+      if (this.age % 4 === 0) this.sandSpray(game, 3);
+      if (this.dig === 0) this.finishDig(game);
+      if (p && !p.dead && !p.creative && this.distSqTo(p) < 16) { this.dig = 0; this.flee = 60; } else return;
+    }
+    // a person coming close: off it runs, faster if it has something to lose
+    if (p && !p.dead && !p.creative && p.gameMode !== 'spectator') {
+      const d2 = this.distSqTo(p), wary = p.sneaking ? 9 : this.carried ? 100 : 49;
+      if (d2 < wary) { this.flee = Math.max(this.flee, 30); if (d2 < 2.2 && this.cornered <= 0 && this.flee > 0 && this.pathDone) { this.tryMelee(p, d2, 2); this.cornered = 40; } }
+    }
+    if (this.cornered > 0) this.cornered--;
+    if (this.flee > 0) {
+      this.flee--;
+      if (this.pathDone || this.age % 20 === 0) this.fleeFrom(p);
+      return;
+    }
+    // something lying about? go and get it
+    if (!this.carried && this.age % 10 === 0) {
+      let best = null, bd = 14 * 14;
+      for (const e of w.entitiesInBox(this.x - 14, this.y - 4, this.z - 14, this.x + 14, this.y + 4, this.z + 14, (e) => e.type === 'item' && !e.removed && e.pickupDelay <= 0)) {
+        const d2 = this.distSqTo(e); if (d2 < bd) { bd = d2; best = e; }
+      }
+      this.goal = best;
+    }
+    const g = this.goal;
+    if (g && !this.carried) {
+      if (g.removed) { this.goal = null; return; }
+      if (this.distSqTo(g) < 1.4) { this.carried = g.stack; g.removed = true; this.goal = null; game.audio.play('gleaner_say', 0.6, 1.3, this.x, this.y, this.z); this.flee = 40; return; }
+      if (this.pathDone || this.age % 20 === 0) this.navigateTo(g.x, g.y, g.z, 1.2, 16);
+      return;
+    }
+    // now and then it stops to dig
+    if (!this.carried && this.pathDone && Math.random() < 1 / 300 && w.getBlock(Math.floor(this.x), Math.floor(this.y - 0.5), Math.floor(this.z)) === B.SIFT_SAND) { this.dig = 50 + this.rnd(40); this.clearPath(); return; }
+    if (this.pathDone && Math.random() < 1 / 80) this.wander(10, 3, 0.9);
+    this.idleLook(game);
+  }
+  finishDig(game) {
+    if (Math.random() > 0.5) return;
+    // sometimes it finds something of yours that sifted down; otherwise, some old bit of something
+    const st = Sift.state(this.world.info);
+    if (st.lost.length && Math.random() < 0.4) { this.carried = ItemStack.fromJSON(st.lost.shift()); }
+    else { const pool = GLEANINGS(), e = pool[this.rnd(pool.length)]; if (e[0] !== undefined) this.carried = new ItemStack(e[0], e[1] + this.rnd(e[2] - e[1] + 1), e[0] === ITEM_IDS.lost_letter ? this.rnd(64) : 0); }
+    if (this.carried) game.audio.play('gleaner_say', 0.7, 1.5, this.x, this.y, this.z);
+  }
+  sandSpray(game, n) {
+    if (game.settings.particles === 'minimal') return;
+    const tex = game.particles.blockTexture(B.SIFT_SAND, 0, 1), tint = game.particles.blockTint(B.SIFT_SAND, 0);
+    for (let i = 0; i < n; i++) game.particles.digging(this.x + (Math.random() - 0.5) * 0.5, this.y + 0.1, this.z + (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.15, 0.15 + Math.random() * 0.15, (Math.random() - 0.5) * 0.15, tex, tint);
+  }
+  fleeFrom(p) {
+    if (!p) { this.wander(10, 3, 1.6); return; }
+    const dx = this.x - p.x, dz = this.z - p.z, d = Math.sqrt(dx * dx + dz * dz) || 1;
+    const tx = this.x + dx / d * 12 + (Math.random() - 0.5) * 6, tz = this.z + dz / d * 12 + (Math.random() - 0.5) * 6;
+    for (let dy = 4; dy >= -4; dy--) {
+      const y = Math.floor(this.y) + dy;
+      if (PathFinder.valid(this.world, Math.floor(tx), y, Math.floor(tz), 1)) { this.navigateTo(tx, y, tz, this.carried ? 1.9 : 1.6, 18); return; }
+    }
+    this.wander(8, 3, 1.6);
+  }
+  onRevenge() { this.flee = 100; this.clearPath(); }
+  checkDespawn(game) {
+    const p = game.player;
+    if (p && this.distSqTo(p) > 128 * 128 && !this.carried) this.removed = true;
+  }
+  dropLoot(game, byPlayer) {
+    if (this.carried) { this.drop(this.carried.id, this.carried.count, this.carried.dmg); this.carried = null; }
+    if (Math.random() < 0.5) this.drop(ITEM_IDS.string, 1);
+  }
+  soundVolume() { return 0.6; }
+  soundPitch() { return 1.1 + Math.random() * 0.3; }
+  render(er, rx, ry, rz, partial) {
+    const [sky, blk] = er.lightAt(this.x, this.y + 0.5, this.z);
+    const pose = this.quadPose(partial);
+    const t = this.age + partial;
+    pose.tail = [Math.sin(t * 0.25) * 0.2 + (this.flee > 0 ? -0.4 : 0), Math.sin(t * 0.15) * 0.3, 0];
+    if (this.dig > 0) { pose.leg2 = [Math.sin(t * 1.5) * 0.9, 0, 0]; pose.leg3 = [-Math.sin(t * 1.5) * 0.9, 0, 0]; pose.head = [0.5, pose.head[1] || 0, 0]; }
+    const base = er.baseMatrix(this, rx, ry, rz, partial);
+    er.drawModel(MODELS.gleaner, 'gleaner', base, pose, er.entColor(this), sky, blk);
+    // what it is carrying, held in its teeth
+    if (this.carried) {
+      let m = M3.mul(base, M3.trans(0, 4, -10));
+      m = M3.mul(m, M3.ry(Math.PI / 2));
+      m = M3.mul(m, M3.scale(6, 6, 6));
+      m = M3.mul(m, M3.trans(-0.5, 0, -0.03));
+      er.drawItem(this.carried, m, sky, blk, 255);
+    }
+  }
+  save() { const d = super.save(); if (this.carried) d.carried = this.carried.toJSON(); return d; }
+  load(d) { super.load(d); this.carried = d.carried ? ItemStack.fromJSON(d.carried) : null; this.persistent = !!this.carried; }
+}
+MOB_CLASSES.gleaner = Gleaner;
+
+class Sifter extends Monster {
+  constructor(world) {
+    super(world, 'sifter');
+    this.maxHealth = this.health = 16;
+    this.w = 0.8; this.h = 0.7; this.eye = 0.45;
+    this.baseSpeed = 0.2; this.damage = 4;
+    this.under = true; this.outT = 0; this.goalXZ = null; this.heardT = 0; this.prey = null; this.restT = 0;
+    this.talkInterval = 260; this.xpValue = 5;
+    this.swims = false;
+  }
+  // the top of the sand in a column, or -1 if there is no sand at the top to swim in
+  sandTop(x, z) {
+    const w = this.world, bx = Math.floor(x), bz = Math.floor(z);
+    if (!w.isLoaded(bx, bz)) return -1;
+    const y = w.topSolidY(bx, bz);
+    return y > 1 && w.getBlock(bx, y, bz) === B.SIFT_SAND && w.getBlock(bx, y - 1, bz) === B.SIFT_SAND ? y : -1;
+  }
+  // it feels sound through the sand: steps on stone or wood never reach it, but a blast does
+  hear(game, x, y, z, loud, src) {
+    if (this.dead || this.distanceSq(x, y, z) > (loud + 6) ** 2) return;
+    const id = this.world.getBlock(Math.floor(x), Math.floor(y - 0.2), Math.floor(z));
+    if (loud < 30 && id !== B.SIFT_SAND && id !== B.SAND && id !== B.GRAVEL) return;
+    this.goalXZ = [x, z]; this.heardT = 200;
+    if (Sifter.isPrey(src)) this.prey = src;
+  }
+  static isPrey(e) { return !!e && !e.dead && !e.removed && (e.type === 'player' ? e.survivalLike : e.type === 'gleaner'); }
+  travel(strafe, forward) {
+    if (!this.under) { super.travel(strafe, forward); return; }
+    // swimming through the sand: slide along just under its surface, never out of it
+    const nx = this.x + this.vx, nz = this.z + this.vz;
+    const top = this.sandTop(nx, nz);
+    if (top < 0) { this.vx = this.vz = 0; this.goalXZ = null; return; }
+    this.x = nx; this.z = nz;
+    this.y += (top + 1 - SIFTER_SUNK - this.y) * 0.35;
+    this.vy = 0; this.onGround = true; this.fallDistance = 0;
+    this.updateBox();
+  }
+  pushOutOfBlocks() { if (!this.under) super.pushOutOfBlocks(); }
+  aiTick(game) {
+    const w = this.world, p = game.player;
+    if (this.heardT > 0) this.heardT--; else this.prey = null;
+    if (this.restT > 0) this.restT--;
+    if (this.under) {
+      // sand pours off its fin as it goes
+      if (game.settings.particles !== 'minimal' && (this.vx || this.vz) && this.age % 3 === 0) {
+        const tex = game.particles.blockTexture(B.SIFT_SAND, 0, 1), tint = game.particles.blockTint(B.SIFT_SAND, 0);
+        game.particles.digging(this.x, this.y + SIFTER_SUNK + 0.05, this.z, (Math.random() - 0.5) * 0.1, 0.12, (Math.random() - 0.5) * 0.1, tex, tint);
+      }
+      let tx = null, tz = null;
+      const prey = this.prey;
+      if (Sifter.isPrey(prey) && this.distSqTo(prey) < 24 * 24) { tx = prey.x; tz = prey.z; }
+      else if (this.goalXZ) { [tx, tz] = this.goalXZ; if ((tx - this.x) ** 2 + (tz - this.z) ** 2 < 2) this.goalXZ = null; }
+      else if (this.age % 60 === 0 && Math.random() < 0.5) { const a = Math.random() * TAU; this.goalXZ = [this.x + Math.cos(a) * 8, this.z + Math.sin(a) * 8]; }
+      if (tx !== null) {
+        const dx = tx - this.x, dz = tz - this.z, d = Math.sqrt(dx * dx + dz * dz) || 1, sp = prey ? 0.21 : 0.12;
+        this.vx = dx / d * sp; this.vz = dz / d * sp;
+        this.yaw = this.bodyYaw = this.headYaw = Math.atan2(-dx, -dz);
+        // close enough, and the prey standing on sand: out it bursts
+        if (prey && this.restT <= 0 && d < 2.4 && Math.abs(prey.y - (this.y + SIFTER_SUNK)) < 2.5 && w.getBlock(Math.floor(prey.x), Math.floor(prey.y - 0.2), Math.floor(prey.z)) === B.SIFT_SAND) { this.surface(game, prey); return; }
+      } else { this.vx *= 0.8; this.vz *= 0.8; }
+      return;
+    }
+    // out of the sand: snap at whoever is near, then back under
+    this.outT--;
+    const t = this.prey;
+    // one bite, a moment thrashing in the open (your chance to strike back), and it is gone again
+    if (Sifter.isPrey(t)) { const dd = this.distSqTo(t); this.lookAtEntity(t, 2); if (this.onGround) this.steerTo(t.x, t.y, t.z, 1.2); if (this.tryMelee(t, dd, this.damage)) this.outT = Math.min(this.outT, 16); }
+    if (this.outT <= 0 && (this.onGround || this.vy <= 0) && w.getBlock(Math.floor(this.x), Math.floor(this.y - 0.2), Math.floor(this.z)) === B.SIFT_SAND) this.dive(game);
+    else if (this.outT < -200) this.dive(game);
+  }
+  surface(game, prey) {
+    this.under = false; this.outT = 40;
+    this.y = Math.floor(this.y) + 1.2;
+    const dx = prey.x - this.x, dz = prey.z - this.z, d = Math.sqrt(dx * dx + dz * dz) || 1;
+    this.vy = 0.55; this.vx = dx / d * 0.3; this.vz = dz / d * 0.3;
+    this.attackTimer = 4;
+    game.audio.play('sifter_lunge', 1.3, 0.9 + Math.random() * 0.2, this.x, this.y, this.z);
+    if (game.settings.particles !== 'minimal') { const tex = game.particles.blockTexture(B.SIFT_SAND, 0, 1), tint = game.particles.blockTint(B.SIFT_SAND, 0); for (let i = 0; i < 24; i++) game.particles.digging(this.x + (Math.random() - 0.5), this.y, this.z + (Math.random() - 0.5), (Math.random() - 0.5) * 0.3, 0.2 + Math.random() * 0.3, (Math.random() - 0.5) * 0.3, tex, tint); }
+  }
+  dive(game) {
+    const top = this.sandTop(this.x, this.z);
+    if (top < 0) { this.outT = 20; return; }
+    this.under = true; this.y = top + 1 - SIFTER_SUNK; this.vx = this.vy = this.vz = 0; this.clearPath();
+    // back under, it has to hear you again before it strikes
+    this.prey = null; this.goalXZ = null; this.heardT = 0; this.restT = 40;
+    game.audio.play('sifter_dive', 1, 1, this.x, this.y + 1, this.z);
+  }
+  // under the sand nothing can reach it but a blast
+  hurt(amount, src) { if (this.under && src && src.type !== 'explosion' && src.type !== 'void' && src.type !== 'command') return false; return super.hurt(amount, src); }
+  checkDespawn(game) { super.checkDespawn(game); }
+  dropLoot(game, byPlayer) { this.drop(ITEM_IDS.sift_scale, 1 + this.rnd(2)); if (Math.random() < 0.4) this.drop(ITEM_IDS.bone, 1); }
+  saySound() { return this.under ? null : 'sifter_say'; }
+  render(er, rx, ry, rz, partial) {
+    const [sky, blk] = er.lightAt(this.x, this.y + (this.under ? SIFTER_SUNK + 0.3 : 0.4), this.z);
+    const t = this.age + partial, ph = t * (this.under ? 0.35 : 0.5);
+    const a1 = Math.sin(ph) * 0.15, a2 = Math.sin(ph - 0.9) * 0.3, a3 = Math.sin(ph - 1.8) * 0.45, a4 = Math.sin(ph - 2.7) * 0.6;
+    const o2 = 6 * Math.sin(a1), o3 = o2 + 6 * Math.sin(a2), o4 = o3 + 6 * Math.sin(a3);
+    const pose = { s1: [0, a1, 0], s2: { rot: [0, a2, 0], off: [o2, 0, 0] }, s3: { rot: [0, a3, 0], off: [o3, 0, 0] }, tailfin: { rot: [0, a4, 0], off: [o4, 0, 0] },
+      jaw: [!this.under && this.outT > 30 ? 0.6 : Math.max(0, Math.sin(t * 0.08)) * 0.15, 0, 0], finR: [0, 0, Math.sin(ph) * 0.3], finL: [0, 0, -Math.sin(ph) * 0.3] };
+    er.drawModel(MODELS.sifter, 'sifter', er.baseMatrix(this, rx, ry, rz, partial, SIFTER_SCALE), pose, er.entColor(this), sky, blk);
+    // a low hump of sand rides along over it as it swims
+    if (this.under && !this.dead) {
+      const yaw = this.pbodyYaw + wrapRadians(this.bodyYaw - this.pbodyYaw) * partial, k = 1 + Math.sin(t * 0.3) * 0.08;
+      let m = M3.mul(M3.trans(rx, ry + SIFTER_SUNK, rz), M3.ry(yaw));
+      m = M3.mul(m, M3.trans(0, 0, -0.15));
+      const sand = new ItemStack(B.SIFT_SAND, 1, 0);
+      er.drawItem(sand, M3.mul(M3.mul(m, M3.trans(0, 0.02, 0)), M3.scale(0.9 * k, 0.1, 1.7 * k)), sky, blk, 255);
+      er.drawItem(sand, M3.mul(M3.mul(m, M3.trans(0, 0.06, 0.1)), M3.scale(0.55 * k, 0.12, 1.1 * k)), sky, blk, 255);
+    }
+  }
+  save() { const d = super.save(); d.under = this.under; return d; }
+  load(d) { super.load(d); this.under = d.under !== false; }
+}
+MOB_CLASSES.sifter = Sifter;
+
+// ---------------------------------------------------------------------------
+// Natural spawning in the Sift: sifters under the open sand, gleaners about the
+// relics and dunes
+// ---------------------------------------------------------------------------
+MobSpawner.prototype.tickSift = function (rd, area) {
+  const g = this.game, w = g.world, p = g.player;
+  if (this.t % 5) return;
+  const pcx = Math.floor(p.x) >> 4, pcz = Math.floor(p.z) >> 4;
+  const cx = pcx + this.rnd(rd * 2 + 1) - rd, cz = pcz + this.rnd(rd * 2 + 1) - rd;
+  if (!w.getChunk(cx, cz)) return;
+  const x = cx * 16 + this.rnd(16), z = cz * 16 + this.rnd(16);
+  if ((x + 0.5 - p.x) ** 2 + (z + 0.5 - p.z) ** 2 < 24 * 24 || x * x + z * z < 40 * 40) return;
+  const y = w.topSolidY(x, z);
+  if (y < 2 || w.getBlock(x, y, z) !== B.SIFT_SAND) return;
+  const count = (type) => w.entities.reduce((n, e) => n + (e.type === type && !e.removed ? 1 : 0), 0);
+  if (w.difficulty > 0 && Math.random() < 0.6) {
+    if (count('sifter') >= Math.max(3, Math.round(6 * area / 169))) return;
+    if (w.getBlock(x, y - 1, z) !== B.SIFT_SAND) return;
+    const m = g.spawnMob('sifter', x + 0.5, y + 1 - SIFTER_SUNK, z + 0.5);
+    if (m) m.under = true;
+  } else {
+    if (count('gleaner') >= Math.max(3, Math.round(5 * area / 169))) return;
+    if (BT.solid[w.getBlock(x, y + 1, z)]) return;
+    g.spawnMob('gleaner', x + 0.5, y + 1, z + 0.5);
+  }
+};
+
 // ---- src/main.js
 // ---------------------------------------------------------------------------
 // Blocklands: the game shell. Main loop, camera, world lifecycle & saving,
@@ -27064,6 +28058,17 @@ class Game {
       info.travel = { dim, isles: true };
       const a = Isles.ARRIVE;
       pd.x = a[0] + 0.5; pd.y = a[1] + 1; pd.z = a[2] + 0.5;
+    } else if (dim === DIM_SIFT) {
+      // through a city gate: remember the way back (a couple of steps out of the gate)
+      const st = Sift.state(info);
+      st.back = [p.x + Math.sin(p.yaw) * 2.5, p.y, p.z + Math.cos(p.yaw) * 2.5];
+      info.travel = { dim, sift: true };
+      const g = WG.makeGenerator(w.seed, { dim: DIM_SIFT, type: 'default', structures: true });
+      pd.x = 0.5; pd.y = g.arrivalY(); pd.z = 3.5;
+    } else if (opts.fromSift) {
+      const back = Sift.state(info).back || this.homeSpot();
+      info.travel = { fromSift: true };
+      pd.x = back[0]; pd.y = back[1]; pd.z = back[2];
     } else {
       const [tx, tz] = Portals.target(w.dim, p.x, p.z);
       const link = Portals.nearest(info, dim, tx, tz, dim === 0 ? 128 : 16);
@@ -27071,7 +28076,7 @@ class Game {
       pd.x = link ? link[1] + 0.5 : tx; pd.y = link ? link[2] : p.y; pd.z = link ? link[3] + 0.5 : tz;
     }
     const title = opts.respawn ? 'Respawning' : dim === DIM_ISLES ? 'Entering the Far Isles' : w.dim === DIM_ISLES ? 'Leaving the Far Isles'
-      : dim === 1 ? 'Entering the Underworld' : 'Leaving the Underworld';
+      : dim === DIM_SIFT ? 'Entering the Sift' : w.dim === DIM_SIFT ? 'Leaving the Sift' : dim === 1 ? 'Entering the Underworld' : 'Leaving the Underworld';
     const ls = new LoadingScreen(this, title);
     ls.sub = 'Building terrain';
     this.openScreen(ls);
@@ -27083,6 +28088,23 @@ class Game {
   arrive(t) {
     const w = this.world, p = this.player;
     if (t.respawn) { this.respawn(true); return; }
+    if (t.sift || t.fromSift) {
+      if (t.sift) {
+        const a = Sift.arrival(w);
+        p.setPos(a[0], a[1], a[2]); p.yaw = p.pyaw = Math.PI; p.pitch = 0;
+        const st = Sift.state(w.info); st.visits = (st.visits || 0) + 1;
+        const n = Sift.fillChest(this);
+        if (st.visits === 1) this.hud.message('§7Grey sand, falling for ever. Things lost in your world sift down here, in time.');
+        if (n) this.hud.message('§eThe lost-and-found by the gate holds ' + n + ' thing' + (n > 1 ? 's' : '') + ' that went astray.');
+        this.achieve('sift');
+      }
+      p.vx = p.vy = p.vz = 0; p.fallDistance = 0;
+      p.portalLock = true; p.portalTime = 0;
+      this.portalFx = 1;
+      this.ambienceTimer = 200 + Math.floor(Math.random() * 300);
+      this.audio.play('sift_gate_open', 1.2, 1.1);
+      return;
+    }
     if (t.home || t.isles) {
       if (t.home) this.placeHome(true);
       else { const a = Isles.platform(w); p.setPos(a[0], a[1], a[2]); p.yaw = p.pyaw = Math.PI / 2; p.pitch = 0; this.achieve('isles'); }
@@ -27118,8 +28140,8 @@ class Game {
     // a city gate, once woken, opens on the Sift
     if (inGate && !p.portalLock) {
       p.portalLock = true;
-      if (typeof Sift !== 'undefined') this.travel(DIM_SIFT);
-      else this.hud.showAction('§7The grey light is cold, and will not take you. Not yet.');
+      if (w.dim === DIM_SIFT) this.travel(0, { fromSift: true });
+      else if (!w.dim) this.travel(DIM_SIFT);
       return;
     }
     // a rift takes you at once: out to the Far Isles, or home through the Star Well
@@ -27412,6 +28434,7 @@ class Game {
     this.tickWaterways();
     if (w.time % 40 === 9) {
       if (!w.dim) { this.checkVillages(); this.checkVaults(); this.checkCities(); } else if (w.dim === 1) this.checkFortress();
+      else if (w.dim === DIM_SIFT) this.checkRelics();
       // until the Starwyrm guards it, the Star Well stands open as the way home
       else if (w.dim === 2 && typeof Wyrm === 'undefined') Isles.setWell(w, true);
     }
@@ -27733,6 +28756,8 @@ class Game {
     a.loop('under_drone', w.dim === 1 ? 0.3 * this.settings.sound : 0);
     // the Far Isles: a cold breath of air and, now and then, the stars ringing
     a.loop('isles_air', w.dim === 2 ? 0.32 * this.settings.sound : 0);
+    // the Sift: wind over the dunes, and now and then a bell, very far away
+    a.loop('sift_wind', w.dim === DIM_SIFT ? 0.4 * this.settings.sound : 0);
     // the deep caves have air of their own
     if (w.time % 10 === 0) { const cb = w.dim ? -1 : w.biomeAt3(bx, by, bz); this.caveAir = cb === HUSH_BIOME ? 1 : cb === MOSSGLOW_BIOME ? 2 : 0; }
     this.caveAirV = this.caveAirV || [0, 0];
@@ -27745,6 +28770,12 @@ class Game {
         const ang = Math.random() * TAU;
         a.play('under_moan', 0.9, 0.7 + Math.random() * 0.4, p.x + Math.sin(ang) * 12, p.y + 4, p.z + Math.cos(ang) * 12);
         this.ambienceTimer = 600 + Math.floor(Math.random() * 1400);
+      }
+    } else if (w.dim === DIM_SIFT) {
+      if (--this.ambienceTimer <= 0) {
+        const ang = Math.random() * TAU;
+        a.play('sift_bell', 0.5, 0.7 + Math.random() * 0.3, p.x + Math.sin(ang) * 14, p.y + 4, p.z + Math.cos(ang) * 14);
+        this.ambienceTimer = 700 + Math.floor(Math.random() * 1500);
       }
     } else if (w.dim === 2) {
       if (--this.ambienceTimer <= 0) {
@@ -27846,7 +28877,8 @@ class Game {
     const d = BLOCKS[id];
     if (!d || BT.fluid[id]) return;
     this.audio.playBlock(d.sound, 'step', p.x, p.y, p.z);
-    if (id !== B.WOOL && id !== B.CARPET) this.noise(p.x, p.y, p.z, landing ? 'land' : 'step', p);
+    const boots = p.inventory.armor.items[3];
+    if (id !== B.WOOL && id !== B.CARPET && !(boots && ITEMS[boots.id] && ITEMS[boots.id].silent)) this.noise(p.x, p.y, p.z, landing ? 'land' : 'step', p);
     if (landing) this.audio.playBlock(d.sound, 'step', p.x, p.y, p.z);
   }
   onBiomeEnter(b) {
@@ -27874,6 +28906,7 @@ class Game {
       brimstone_depths: [B.BRIMSTONE, 0], bone_shoals: [B.BONESAND, 0], cinder_hollows: [B.BASALT, 0], glimmering_grotto: [B.SUNSTONE, 0],
       great_isle: [B.STARSTONE, 0], starlit_gulf: [B.OBSIDIAN, 0], drift_isles: [B.STARSTONE_BRICKS, 0],
       the_hush: [B.HUSHMOSS, 0], mossglow_caves: [B.GLOW_VINE_BERRIES, 0],
+      grey_dunes: [B.SIFT_SAND, 0], relic_fields: [B.SILTSTONE_BRICKS, 2], glass_wastes: [B.SIFT_GLASS, 0], silent_shelves: [B.SILTSTONE, 0], the_hollows: [B.SILTSTONE_BRICKS, 3],
       grand_peaks: [B.SNOW, 0], highlands: [B.TALL_GRASS, 1], spire_woods: [B.MOSSY_COBBLESTONE, 0], tablelands: [B.STONE, 0], glacier: [B.PACKED_ICE, 0],
     };
     const e = map[key] || [B.GRASS, 0];
@@ -27899,6 +28932,7 @@ class Game {
     if (p.riding) p.riding.dismount();
     this.deathMessage = this.deathText(src);
     this.hud.message(this.deathMessage);
+    p.lastDeath = { dim: w.dim, x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) };
     if (p.sleeping) this.wakeUp();
     if (!w.gameRules.keepInventory) {
       for (const s of p.inventory.dropAll()) {
@@ -28329,6 +29363,20 @@ class Game {
       return;
     }
   }
+  // stumbling on one of the lost things half-buried in the Sift
+  checkRelics() {
+    const p = this.player, w = this.world;
+    const L = w.localGen.nearestRelic && w.localGen.nearestRelic(p.x, p.z);
+    if (!L || (L.x - p.x) ** 2 + (L.z - p.z) ** 2 > 12 * 12) return;
+    const st = Sift.state(w.info), key = L.x + ',' + L.z;
+    st.relics = st.relics || [];
+    if (st.relics.includes(key)) return;
+    st.relics.push(key);
+    const name = { house: 'A sunken cottage', tower: 'A fallen tower', ship: 'A stranded ship', statue: 'A buried colossus', arch: 'A door to nowhere', bell: 'The sunken bell', cart: 'A runaway cart' }[L.kind] || 'Something lost';
+    this.hud.toast('Relic found', name, new ItemStack(B.SILTSTONE_BRICKS, 1, 2), '#d8d0f0');
+    this.audio.play('discover', 0.7, 0.75);
+    this.achieve('relic');
+  }
   // coming down into a forgotten city
   checkCities() {
     const p = this.player, w = this.world;
@@ -28546,7 +29594,8 @@ class Game {
   }
   drawWeather(r, partial) {
     const w = this.world, cam = this.camera;
-    const rain = w.prevRainStrength + (w.rainStrength - w.prevRainStrength) * partial;
+    const sift = w.dim === 3;
+    const rain = sift ? 0.3 : w.prevRainStrength + (w.rainStrength - w.prevRainStrength) * partial;
     if (rain <= 0.01) return;
     const gl = r.gl, b = r.batch, er = this.entityRenderer;
     b.reset();
@@ -28558,14 +29607,14 @@ class Game {
       const x = cx + dx, z = cz + dz;
       if (!w.isLoaded(x, z)) continue;
       const bid = w.biomeAt(x, z), bi = BIOMES[bid];
-      if (!bi || bi.rain <= 0) continue;
+      if (!bi || (bi.rain <= 0 && !sift)) continue;
       const top = w.heightAt(x, z);
       const y0 = Math.max(top, cy - R), y1 = Math.max(top, cy + R);
       if (y1 <= y0) continue;
       const ddx = x + 0.5 - cam.x, ddz = z + 0.5 - cam.z, dist2 = ddx * ddx + ddz * ddz;
       const alpha = ((1 - dist2 / (R * R)) * 0.5 + 0.5) * rain;
       if (alpha <= 0.02) continue;
-      const snow = w.localGen.tempAt(bid, top) < 0.15;
+      const snow = sift || w.localGen.tempAt(bid, top) < 0.15;
       const dl = Math.sqrt(dist2) || 1;
       const ox = -ddz / dl * 0.5, oz = ddx / dl * 0.5;
       const px = x + 0.5 - cam.x, pz = z + 0.5 - cam.z, yb = y0 - cam.y, yt = y1 - cam.y;
@@ -28573,7 +29622,7 @@ class Game {
       // the 16px weather tiles repeat 4x across each column for thin streaks / small flakes
       let v0, v1, u0 = 0, u1 = 4;
       if (snow) {
-        const f = (t + rnd) / 512 * 6;
+        const f = (t + rnd) / 512 * (sift ? 2.2 : 6);
         v0 = y1 * 2 - f * 4; v1 = y0 * 2 - f * 4;
         const drift = Math.sin((t + rnd * 7) * 0.01) * 1.5 + rnd * 0.1;
         u0 += drift; u1 += drift;
@@ -28583,7 +29632,7 @@ class Game {
         u0 += rnd * 0.37; u1 += rnd * 0.37;
       }
       const l = w.getLightRaw(x, Math.max(top, cy), z);
-      const col = snow ? [255, 255, 255, Math.round(alpha * 255)] : [255, 255, 255, Math.round(alpha * 210)];
+      const col = sift ? [196, 192, 214, Math.round(alpha * 200)] : snow ? [255, 255, 255, Math.round(alpha * 255)] : [255, 255, 255, Math.round(alpha * 210)];
       er.quadOut(b, [[px - ox, yb, pz - oz], [px + ox, yb, pz + oz], [px + ox, yt, pz + oz], [px - ox, yt, pz - oz]], [[u0, v1], [u1, v1], [u1, v0], [u0, v0]], snow ? snowL : rainL, col, (l >> 4) / 15, (l & 15) / 15);
     }
     if (!b.n) return;

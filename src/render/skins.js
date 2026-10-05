@@ -453,6 +453,44 @@ const Skins = (() => {
     return s;
   })();
 
+  // ------------------------------------------------------------ the Sift
+  // the gleaner: dusty grey-brown fur, a pale belly, big amber eyes, a burlap sack
+  S.gleaner = (() => {
+    const s = new Skin(); const r = rng('gleaner');
+    const fur = C('#7e735f'), dark = C('#5e5546'), belly = C('#b8ad96'), sack = C('#8a6a40'), sackD = C('#6a4e2c');
+    s.box(0, 0, 6, 5, 9, (f, x, y) => f === 'bottom' ? vary(r, belly, 0.08) : ((x + y * 3) % 7 === 0 ? vary(r, dark, 0.1) : vary(r, fur, 0.1)));
+    s.box(30, 0, 6, 5, 5, (f, x, y) => {
+      if (f === 'front') {
+        if (y === 1 && (x === 1 || x === 4)) return C('#ffcf5a');
+        if (y === 1 && (x === 0 || x === 5)) return C('#3a2a10');
+        if (y === 3 && (x === 2 || x === 3)) return C('#3a2e26');
+        if (y >= 3) return vary(r, belly, 0.08);
+      }
+      return vary(r, fur, 0.1);
+    });
+    s.box(52, 0, 1, 5, 3, (f, x, y) => (f === 'left' || f === 'right') && y > 0 && x > 0 ? C('#c8a0b0') : vary(r, fur, 0.1));
+    s.box(0, 14, 2, 6, 2, (f, x, y) => y >= 5 ? C('#3a3228') : vary(r, dark, 0.1));
+    s.box(8, 14, 3, 3, 7, (f, x, y) => (x + y) % 3 === 0 ? vary(r, belly, 0.1) : vary(r, fur, 0.12));
+    s.box(28, 14, 5, 4, 5, (f, x, y) => (x + y) % 2 === 0 ? vary(r, sack, 0.1) : vary(r, sackD, 0.1));
+    return s;
+  })();
+  // the sifter: grey-lavender scales in rows, a pale belly, small black eyes
+  S.sifter = (() => {
+    const s = new Skin(); const r = rng('sifter');
+    const sc = C('#a29cb4'), scD = C('#827c94'), belly = C('#d4cee4'), fin = C('#8a849e');
+    const scale = (f, x, y) => f === 'bottom' ? vary(r, belly, 0.06) : ((x + (y >> 1)) % 2 === 0 ? vary(r, sc, 0.08) : vary(r, scD, 0.08));
+    s.box(0, 0, 6, 5, 6, (f, x, y) => (f === 'front' && y === 1 && (x === 0 || x === 5)) ? C('#101014') : (f === 'front' && y >= 3) ? C('#2a2430') : scale(f, x, y));
+    s.box(24, 0, 5, 2, 5, (f, x, y) => f === 'top' ? ((x + y) % 2 ? C('#e8e4f0') : C('#5a2430')) : vary(r, belly, 0.08));
+    s.box(0, 11, 5, 5, 6, scale);
+    s.box(22, 11, 4, 4, 6, scale);
+    s.box(0, 22, 3, 3, 6, scale);
+    s.box(18, 22, 1, 6, 3, () => vary(r, fin, 0.12));
+    s.box(44, 0, 2, 4, 6, (f, x, y) => (x + y) % 3 === 0 ? vary(r, C('#9a94ae'), 0.1) : vary(r, fin, 0.12));
+    s.box(44, 20, 2, 3, 3, (f, x, y) => y < 1 ? vary(r, C('#5a546c'), 0.1) : vary(r, fin, 0.12));
+    s.box(44, 13, 3, 1, 3, () => vary(r, fin, 0.12));
+    return s;
+  })();
+
   // ------------------------------------------------------------ the Hush
   // the Listener: slate-dark hide over a cage of ribs that glow when its heart beats,
   // and no face at all - only a dish of an ear, whorled like a shell

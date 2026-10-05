@@ -38,7 +38,8 @@ class ItemEntity extends Entity {
         this.age = Math.min(this.age, e.age);
       }
     }
-    if (this.age >= this.lifetime) this.removed = true;
+    // left lying too long, or fallen out of the world: lost, and on its way to the Sift
+    if (this.age >= this.lifetime || this.y < -64) { this.removed = true; Sift.lose(this.world, this.stack); }
   }
   groundSlip() { const d = BLOCKS[this.world.getBlock(Math.floor(this.x), Math.floor(this.y - 0.1), Math.floor(this.z))]; return d ? d.slip : 0.6; }
   pushOutOfBlocksItem() {

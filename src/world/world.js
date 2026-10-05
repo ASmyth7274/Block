@@ -176,7 +176,7 @@ class World {
     return Math.max((l >> 4) - this.skyDarken(), l & 15);
   }
   skyDarken() {
-    if (this.dim) return 11;   // no sun reaches the Underworld or the Far Isles
+    if (this.dim) return this.dim === 3 ? 5 : 11;   // no sun reaches the Underworld or the Far Isles; the Sift lies in a grey half-light
     // 0 at noon, 11 at midnight (rain/thunder darken further)
     const a = this.celestialAngle(1);
     let f = 1 - (Math.cos(a * TAU) * 2 + 0.5);

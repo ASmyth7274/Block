@@ -326,6 +326,7 @@ class Player extends Living {
       gameMode: this.gameMode, flying: this.flying, inventory: this.inventory.toJSON(), spawnPoint: this.spawnPoint, fire: this.fire,
       fallDistance: this.fallDistance, stats: this.stats, discovered: this.discovered, achievements: this.achievements, effects: this.effects,
       enchantSeed: this.enchantSeed, dim: (this.world && this.world.dim) || 0, effectAmp: this.effectAmp, seenEnding: this.seenEnding || undefined,
+      lastDeath: this.lastDeath || undefined,
     };
   }
   load(d) {
@@ -347,6 +348,7 @@ class Player extends Living {
     if (d.effects) this.effects = d.effects;
     if (d.effectAmp) this.effectAmp = d.effectAmp;
     this.seenEnding = !!d.seenEnding;
+    this.lastDeath = d.lastDeath || null;
     if (d.enchantSeed !== undefined) this.enchantSeed = d.enchantSeed;
     this.pendingMount = d.mount ? { x: d.mount.x, y: d.mount.y, z: d.mount.z, t: 200 } : null;
   }

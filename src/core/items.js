@@ -246,6 +246,14 @@ defItem('star_crystal', { name: 'Star Crystal', rare: true });
 defItem('glowberry', { name: 'Glow Berries', food: { hunger: 2, sat: 0.4 } });
 defItem('hush_shard', { name: 'Hush Shard', rare: true });
 defItem('echo_heart', { name: 'Echo Heart', rare: true, maxStack: 1 });
+// ---- the Sift ----
+// letters that went astray and ended up in the Sift (the damage value says which)
+defItem('lost_letter', { name: 'Lost Letter', maxStack: 1 });
+// points the way back to where you last fell
+defItem('wayback_compass', { name: 'Wayback Compass', maxStack: 1, rare: true });
+defItem('sift_scale', { name: 'Sifter Scale' });
+// scaled boots that make no sound at all: nothing hears you walk
+defItem('silent_boots', { name: 'Silent Boots', tex: 'silent_boots', maxDamage: 13 * 9, armor: { slot: 3, points: 1, mat: 'leather' }, silent: true, rare: true });
 // strike it and its note rings out wherever you point: a way to lead the Listener astray
 defItem('echo_fork', { name: 'Echo Fork', maxDamage: 48, handheld: true });
 

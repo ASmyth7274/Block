@@ -43,7 +43,7 @@ void main() { vNdc = aPos; gl_Position = vec4(aPos, 0.9999, 1.0); }`,
   skyFS: `#version 300 es
 precision highp float;
 uniform mat4 uInvVP; uniform vec3 uSky; uniform vec3 uFogColor; uniform vec3 uSunDir; uniform vec4 uSunrise; uniform vec3 uVoid; uniform float uIsles;
-uniform mat3 uCel; uniform float uNight; uniform float uTime; uniform float uAurora;
+uniform mat3 uCel; uniform float uNight; uniform float uTime; uniform float uAurora; uniform float uSift;
 in vec2 vNdc; out vec4 o;
 // the Milky Way's plane and its bright heart, in the stars' own frame (match buildStars)
 const vec3 MW_N = vec3(0.5009, 0.3506, 0.7913);
@@ -98,6 +98,18 @@ void main() {
         ac += mix(vec3(0.2, 1.0, 0.55), vec3(0.72, 0.32, 1.0), clamp(h / 0.34, 0.0, 1.0)) * fall * rays * win * (0.85 - fk * 0.3);
       }
       col += ac * uAurora * 0.6 * smoothstep(0.0, 0.08, e);
+    }
+  }
+  if (uSift > 0.0) {
+    // the Sift: a pale, sunless glow low in one quarter of the sky, and grains falling everywhere
+    float g = max(0.0, dot(d, normalize(vec3(0.35, 0.32, -0.88))));
+    col += vec3(0.85, 0.83, 0.95) * (pow(g, 60.0) * 0.45 + pow(g, 7.0) * 0.14);
+    float az = atan(d.x, d.z), el = asin(clamp(e, -1.0, 1.0));
+    vec2 q = floor(vec2(az * 110.0, el * 110.0));
+    float cr = h3(vec3(q.x, 7.0, 1.0));
+    if (cr > 0.8 && e > 0.0) {
+      float yy = fract(el * (2.0 + cr * 2.0) + uTime * (0.03 + cr * 0.04) + cr * 13.0);
+      col += vec3(0.16, 0.16, 0.19) * smoothstep(0.03, 0.0, yy) * smoothstep(0.0, 0.25, e);
     }
   }
   if (e < 0.0) col = mix(uFogColor, uVoid, smoothstep(0.0, -0.25, e));

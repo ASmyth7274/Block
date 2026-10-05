@@ -5,8 +5,9 @@
 // ground alike (the shared texture layer is rewritten in place).
 // ---------------------------------------------------------------------------
 const DynamicItems = (() => {
-  let compassBase = null, clockBase = null;
+  let compassBase = null, clockBase = null, waybackBase = null;
   let angle = 0, delta = 0, lastC = null, lastK = null, clockSpin = 0;
+  let wAngle = 0, wDelta = 0, lastW = null;
   function bases() {
     if (compassBase) return;
     // compass: iron rim, pale face, small cardinal ticks
@@ -21,6 +22,21 @@ const DynamicItems = (() => {
       else if (d >= 5.7 && d < 6.6) clockBase.set(x, y, [82, 62, 6]);
     }
     for (const [x, y] of [[7, 3], [8, 3], [12, 7], [12, 8], [7, 12], [8, 12], [3, 7], [3, 8]]) compassBase.set(x, y, [150, 140, 120]);
+    // the wayback compass: a dark rim of sifter scale round a pale violet face
+    waybackBase = new TexGen.Img();
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const d = Math.hypot(x - 7.5, y - 7.5);
+      if (d < 4.6) waybackBase.set(x, y, [206, 200, 228]);
+      else if (d < 5.7) waybackBase.set(x, y, (x + y) % 3 === 0 ? [154, 148, 174] : [122, 116, 140]);
+      else if (d < 6.6) waybackBase.set(x, y, [42, 38, 50]);
+    }
+  }
+  function drawWayback(img, a) {
+    img.d.set(waybackBase.d);
+    const s = Math.sin(a), c = Math.cos(a);
+    for (let k = 0; k <= 12; k++) { const t = k / 12 * 3.2; img.set(Math.round(7.5 - s * t), Math.round(7.5 + c * t), [70, 66, 84]); }
+    for (let k = 0; k <= 16; k++) { const t = k / 16 * 4.2; img.set(Math.round(7.5 + s * t), Math.round(7.5 - c * t), k > 13 ? [200, 255, 250] : [63, 224, 214]); }
+    img.set(7, 7, [40, 36, 48]); img.set(8, 8, [40, 36, 48]);
   }
   function drawCompass(img, a) {
     img.d.set(compassBase.d);
@@ -75,6 +91,19 @@ const DynamicItems = (() => {
       drawCompass(img, cq / 64 * Math.PI * 2);
       atlas.upload(atlas.layer('compass'), img);
       invalidate(game, ITEM_IDS.compass);
+    }
+    // wayback compass: towards where you last fell, if it was in this world
+    const ld = p.lastDeath;
+    const wt = (!ld || ld.dim !== w.dim) ? wAngle + (Math.random() - 0.5) * 6 : ((ld.x + 0.5 - p.x) ** 2 + (ld.z + 0.5 - p.z) ** 2 < 0.5 ? wAngle + 0.3 : Math.atan2((ld.x + 0.5 - p.x) * rx + (ld.z + 0.5 - p.z) * rz, (ld.x + 0.5 - p.x) * fx + (ld.z + 0.5 - p.z) * fz));
+    let wd = clamp(wrapRadians(wt - wAngle), -1, 1);
+    wDelta += wd * 0.1; wDelta *= 0.8; wAngle = wrapRadians(wAngle + wDelta);
+    const wq = Math.round(wAngle / (Math.PI * 2) * 64);
+    if (wq !== lastW && TexGen.T.wayback_compass) {
+      lastW = wq;
+      const img = TexGen.T.wayback_compass;
+      drawWayback(img, wq / 64 * Math.PI * 2);
+      atlas.upload(atlas.layer('wayback_compass'), img);
+      invalidate(game, ITEM_IDS.wayback_compass);
     }
     // clock: dial follows the sun
     if (w.dim) { clockSpin = (clockSpin + (Math.random() - 0.3) * 0.08 + 1) % 1; }

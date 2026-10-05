@@ -372,6 +372,17 @@ class Game {
       info.travel = { dim, isles: true };
       const a = Isles.ARRIVE;
       pd.x = a[0] + 0.5; pd.y = a[1] + 1; pd.z = a[2] + 0.5;
+    } else if (dim === DIM_SIFT) {
+      // through a city gate: remember the way back (a couple of steps out of the gate)
+      const st = Sift.state(info);
+      st.back = [p.x + Math.sin(p.yaw) * 2.5, p.y, p.z + Math.cos(p.yaw) * 2.5];
+      info.travel = { dim, sift: true };
+      const g = WG.makeGenerator(w.seed, { dim: DIM_SIFT, type: 'default', structures: true });
+      pd.x = 0.5; pd.y = g.arrivalY(); pd.z = 3.5;
+    } else if (opts.fromSift) {
+      const back = Sift.state(info).back || this.homeSpot();
+      info.travel = { fromSift: true };
+      pd.x = back[0]; pd.y = back[1]; pd.z = back[2];
     } else {
       const [tx, tz] = Portals.target(w.dim, p.x, p.z);
       const link = Portals.nearest(info, dim, tx, tz, dim === 0 ? 128 : 16);
@@ -379,7 +390,7 @@ class Game {
       pd.x = link ? link[1] + 0.5 : tx; pd.y = link ? link[2] : p.y; pd.z = link ? link[3] + 0.5 : tz;
     }
     const title = opts.respawn ? 'Respawning' : dim === DIM_ISLES ? 'Entering the Far Isles' : w.dim === DIM_ISLES ? 'Leaving the Far Isles'
-      : dim === 1 ? 'Entering the Underworld' : 'Leaving the Underworld';
+      : dim === DIM_SIFT ? 'Entering the Sift' : w.dim === DIM_SIFT ? 'Leaving the Sift' : dim === 1 ? 'Entering the Underworld' : 'Leaving the Underworld';
     const ls = new LoadingScreen(this, title);
     ls.sub = 'Building terrain';
     this.openScreen(ls);
@@ -391,6 +402,23 @@ class Game {
   arrive(t) {
     const w = this.world, p = this.player;
     if (t.respawn) { this.respawn(true); return; }
+    if (t.sift || t.fromSift) {
+      if (t.sift) {
+        const a = Sift.arrival(w);
+        p.setPos(a[0], a[1], a[2]); p.yaw = p.pyaw = Math.PI; p.pitch = 0;
+        const st = Sift.state(w.info); st.visits = (st.visits || 0) + 1;
+        const n = Sift.fillChest(this);
+        if (st.visits === 1) this.hud.message('§7Grey sand, falling for ever. Things lost in your world sift down here, in time.');
+        if (n) this.hud.message('§eThe lost-and-found by the gate holds ' + n + ' thing' + (n > 1 ? 's' : '') + ' that went astray.');
+        this.achieve('sift');
+      }
+      p.vx = p.vy = p.vz = 0; p.fallDistance = 0;
+      p.portalLock = true; p.portalTime = 0;
+      this.portalFx = 1;
+      this.ambienceTimer = 200 + Math.floor(Math.random() * 300);
+      this.audio.play('sift_gate_open', 1.2, 1.1);
+      return;
+    }
     if (t.home || t.isles) {
       if (t.home) this.placeHome(true);
       else { const a = Isles.platform(w); p.setPos(a[0], a[1], a[2]); p.yaw = p.pyaw = Math.PI / 2; p.pitch = 0; this.achieve('isles'); }
@@ -426,8 +454,8 @@ class Game {
     // a city gate, once woken, opens on the Sift
     if (inGate && !p.portalLock) {
       p.portalLock = true;
-      if (typeof Sift !== 'undefined') this.travel(DIM_SIFT);
-      else this.hud.showAction('§7The grey light is cold, and will not take you. Not yet.');
+      if (w.dim === DIM_SIFT) this.travel(0, { fromSift: true });
+      else if (!w.dim) this.travel(DIM_SIFT);
       return;
     }
     // a rift takes you at once: out to the Far Isles, or home through the Star Well
@@ -720,6 +748,7 @@ class Game {
     this.tickWaterways();
     if (w.time % 40 === 9) {
       if (!w.dim) { this.checkVillages(); this.checkVaults(); this.checkCities(); } else if (w.dim === 1) this.checkFortress();
+      else if (w.dim === DIM_SIFT) this.checkRelics();
       // until the Starwyrm guards it, the Star Well stands open as the way home
       else if (w.dim === 2 && typeof Wyrm === 'undefined') Isles.setWell(w, true);
     }
@@ -1041,6 +1070,8 @@ class Game {
     a.loop('under_drone', w.dim === 1 ? 0.3 * this.settings.sound : 0);
     // the Far Isles: a cold breath of air and, now and then, the stars ringing
     a.loop('isles_air', w.dim === 2 ? 0.32 * this.settings.sound : 0);
+    // the Sift: wind over the dunes, and now and then a bell, very far away
+    a.loop('sift_wind', w.dim === DIM_SIFT ? 0.4 * this.settings.sound : 0);
     // the deep caves have air of their own
     if (w.time % 10 === 0) { const cb = w.dim ? -1 : w.biomeAt3(bx, by, bz); this.caveAir = cb === HUSH_BIOME ? 1 : cb === MOSSGLOW_BIOME ? 2 : 0; }
     this.caveAirV = this.caveAirV || [0, 0];
@@ -1053,6 +1084,12 @@ class Game {
         const ang = Math.random() * TAU;
         a.play('under_moan', 0.9, 0.7 + Math.random() * 0.4, p.x + Math.sin(ang) * 12, p.y + 4, p.z + Math.cos(ang) * 12);
         this.ambienceTimer = 600 + Math.floor(Math.random() * 1400);
+      }
+    } else if (w.dim === DIM_SIFT) {
+      if (--this.ambienceTimer <= 0) {
+        const ang = Math.random() * TAU;
+        a.play('sift_bell', 0.5, 0.7 + Math.random() * 0.3, p.x + Math.sin(ang) * 14, p.y + 4, p.z + Math.cos(ang) * 14);
+        this.ambienceTimer = 700 + Math.floor(Math.random() * 1500);
       }
     } else if (w.dim === 2) {
       if (--this.ambienceTimer <= 0) {
@@ -1154,7 +1191,8 @@ class Game {
     const d = BLOCKS[id];
     if (!d || BT.fluid[id]) return;
     this.audio.playBlock(d.sound, 'step', p.x, p.y, p.z);
-    if (id !== B.WOOL && id !== B.CARPET) this.noise(p.x, p.y, p.z, landing ? 'land' : 'step', p);
+    const boots = p.inventory.armor.items[3];
+    if (id !== B.WOOL && id !== B.CARPET && !(boots && ITEMS[boots.id] && ITEMS[boots.id].silent)) this.noise(p.x, p.y, p.z, landing ? 'land' : 'step', p);
     if (landing) this.audio.playBlock(d.sound, 'step', p.x, p.y, p.z);
   }
   onBiomeEnter(b) {
@@ -1182,6 +1220,7 @@ class Game {
       brimstone_depths: [B.BRIMSTONE, 0], bone_shoals: [B.BONESAND, 0], cinder_hollows: [B.BASALT, 0], glimmering_grotto: [B.SUNSTONE, 0],
       great_isle: [B.STARSTONE, 0], starlit_gulf: [B.OBSIDIAN, 0], drift_isles: [B.STARSTONE_BRICKS, 0],
       the_hush: [B.HUSHMOSS, 0], mossglow_caves: [B.GLOW_VINE_BERRIES, 0],
+      grey_dunes: [B.SIFT_SAND, 0], relic_fields: [B.SILTSTONE_BRICKS, 2], glass_wastes: [B.SIFT_GLASS, 0], silent_shelves: [B.SILTSTONE, 0], the_hollows: [B.SILTSTONE_BRICKS, 3],
       grand_peaks: [B.SNOW, 0], highlands: [B.TALL_GRASS, 1], spire_woods: [B.MOSSY_COBBLESTONE, 0], tablelands: [B.STONE, 0], glacier: [B.PACKED_ICE, 0],
     };
     const e = map[key] || [B.GRASS, 0];
@@ -1207,6 +1246,7 @@ class Game {
     if (p.riding) p.riding.dismount();
     this.deathMessage = this.deathText(src);
     this.hud.message(this.deathMessage);
+    p.lastDeath = { dim: w.dim, x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) };
     if (p.sleeping) this.wakeUp();
     if (!w.gameRules.keepInventory) {
       for (const s of p.inventory.dropAll()) {
@@ -1637,6 +1677,20 @@ class Game {
       return;
     }
   }
+  // stumbling on one of the lost things half-buried in the Sift
+  checkRelics() {
+    const p = this.player, w = this.world;
+    const L = w.localGen.nearestRelic && w.localGen.nearestRelic(p.x, p.z);
+    if (!L || (L.x - p.x) ** 2 + (L.z - p.z) ** 2 > 12 * 12) return;
+    const st = Sift.state(w.info), key = L.x + ',' + L.z;
+    st.relics = st.relics || [];
+    if (st.relics.includes(key)) return;
+    st.relics.push(key);
+    const name = { house: 'A sunken cottage', tower: 'A fallen tower', ship: 'A stranded ship', statue: 'A buried colossus', arch: 'A door to nowhere', bell: 'The sunken bell', cart: 'A runaway cart' }[L.kind] || 'Something lost';
+    this.hud.toast('Relic found', name, new ItemStack(B.SILTSTONE_BRICKS, 1, 2), '#d8d0f0');
+    this.audio.play('discover', 0.7, 0.75);
+    this.achieve('relic');
+  }
   // coming down into a forgotten city
   checkCities() {
     const p = this.player, w = this.world;
@@ -1854,7 +1908,8 @@ class Game {
   }
   drawWeather(r, partial) {
     const w = this.world, cam = this.camera;
-    const rain = w.prevRainStrength + (w.rainStrength - w.prevRainStrength) * partial;
+    const sift = w.dim === 3;
+    const rain = sift ? 0.3 : w.prevRainStrength + (w.rainStrength - w.prevRainStrength) * partial;
     if (rain <= 0.01) return;
     const gl = r.gl, b = r.batch, er = this.entityRenderer;
     b.reset();
@@ -1866,14 +1921,14 @@ class Game {
       const x = cx + dx, z = cz + dz;
       if (!w.isLoaded(x, z)) continue;
       const bid = w.biomeAt(x, z), bi = BIOMES[bid];
-      if (!bi || bi.rain <= 0) continue;
+      if (!bi || (bi.rain <= 0 && !sift)) continue;
       const top = w.heightAt(x, z);
       const y0 = Math.max(top, cy - R), y1 = Math.max(top, cy + R);
       if (y1 <= y0) continue;
       const ddx = x + 0.5 - cam.x, ddz = z + 0.5 - cam.z, dist2 = ddx * ddx + ddz * ddz;
       const alpha = ((1 - dist2 / (R * R)) * 0.5 + 0.5) * rain;
       if (alpha <= 0.02) continue;
-      const snow = w.localGen.tempAt(bid, top) < 0.15;
+      const snow = sift || w.localGen.tempAt(bid, top) < 0.15;
       const dl = Math.sqrt(dist2) || 1;
       const ox = -ddz / dl * 0.5, oz = ddx / dl * 0.5;
       const px = x + 0.5 - cam.x, pz = z + 0.5 - cam.z, yb = y0 - cam.y, yt = y1 - cam.y;
@@ -1881,7 +1936,7 @@ class Game {
       // the 16px weather tiles repeat 4x across each column for thin streaks / small flakes
       let v0, v1, u0 = 0, u1 = 4;
       if (snow) {
-        const f = (t + rnd) / 512 * 6;
+        const f = (t + rnd) / 512 * (sift ? 2.2 : 6);
         v0 = y1 * 2 - f * 4; v1 = y0 * 2 - f * 4;
         const drift = Math.sin((t + rnd * 7) * 0.01) * 1.5 + rnd * 0.1;
         u0 += drift; u1 += drift;
@@ -1891,7 +1946,7 @@ class Game {
         u0 += rnd * 0.37; u1 += rnd * 0.37;
       }
       const l = w.getLightRaw(x, Math.max(top, cy), z);
-      const col = snow ? [255, 255, 255, Math.round(alpha * 255)] : [255, 255, 255, Math.round(alpha * 210)];
+      const col = sift ? [196, 192, 214, Math.round(alpha * 200)] : snow ? [255, 255, 255, Math.round(alpha * 255)] : [255, 255, 255, Math.round(alpha * 210)];
       er.quadOut(b, [[px - ox, yb, pz - oz], [px + ox, yb, pz + oz], [px + ox, yt, pz + oz], [px - ox, yt, pz - oz]], [[u0, v1], [u1, v1], [u1, v0], [u0, v0]], snow ? snowL : rainL, col, (l >> 4) / 15, (l & 15) / 15);
     }
     if (!b.n) return;

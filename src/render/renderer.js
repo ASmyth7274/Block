@@ -219,6 +219,20 @@ class Renderer {
       this.celestial = ((world.time + partial) % 192000) / 192000;
       return;
     }
+    if (world.dim === 3) {
+      // the Sift: a pale sky without a sun, its haze shifting from dune to hollow
+      const b = BIOMES[world.biomeAt(Math.floor(camera.x), Math.floor(camera.z))];
+      const want = (b && b.fog) || [0.44, 0.42, 0.49];
+      const now = performance.now(), dt = Math.min(1, ((now - (this.fogT || now)) / 1000));
+      this.fogT = now;
+      if (!this.uFog || this.uFogWorld !== world) { this.uFog = want.slice(); this.uFogWorld = world; }
+      for (let i = 0; i < 3; i++) this.uFog[i] += (want[i] - this.uFog[i]) * Math.min(1, dt * 1.2);
+      this.fogColor = this.uFog.slice();
+      this.skyColor = [this.uFog[0] * 0.55, this.uFog[1] * 0.53, this.uFog[2] * 0.66];
+      this.sunrise = null; this.sunDir = [0.35, 0.32, -0.88]; this.dayFactor = 0.6; this.rain = 0;
+      this.celestial = 0; this.nightK = 0; this.aurora = 0;
+      return;
+    }
     if (world.dim) {
       // no sky below: the air takes the colour of the region's haze
       const b = BIOMES[world.biomeAt(Math.floor(camera.x), Math.floor(camera.z))];
@@ -287,9 +301,9 @@ class Renderer {
     return null;
   }
   updateLightmap(world, partial, extra) {
-    const under = world.dim === 1, isles = world.dim === 2;
-    const sunB = world.menu ? 1 : under ? 0 : isles ? 0.66 : world.sunBrightness(partial) * 0.95 + 0.05;
-    const BR = under || isles ? BRIGHTNESS_UNDER : BRIGHTNESS;
+    const under = world.dim === 1, isles = world.dim === 2, sift = world.dim === 3;
+    const sunB = world.menu ? 1 : under ? 0 : isles ? 0.66 : sift ? 0.62 : world.sunBrightness(partial) * 0.95 + 0.05;
+    const BR = under || isles || sift ? BRIGHTNESS_UNDER : BRIGHTNESS;
     this.flickerT += (Math.random() - Math.random()) * Math.random() * Math.random() * 0.1;
     this.flickerT *= 0.9;
     this.flicker = 1 + this.flickerT;
@@ -303,6 +317,7 @@ class Renderer {
       const blkL = BR[bl] * (this.flicker * 0.1 + 1.4);
       let skyR = skyL * (sunB * 0.65 + 0.35), skyG = skyR, skyB = skyL;
       if (isles) { skyR = skyL * 0.9; skyG = skyL * 0.82; skyB = skyL * 1.04; }   // a cold violet twilight
+      else if (sift) { skyR = skyL * 0.93; skyG = skyL * 0.91; skyB = skyL * 1.0; }   // grey, with a little lavender
       const bG = blkL * ((blkL * 0.6 + 0.4) * 0.6 + 0.4), bB = blkL * (blkL * blkL * 0.6 + 0.4);
       let r = skyR + blkL, g = skyG + bG, b = skyB + bB;
       r = r * 0.96 + 0.03; g = g * 0.96 + 0.03; b = b * 0.96 + 0.03;
@@ -453,6 +468,7 @@ class Renderer {
     let fogStart = rd * 0.6, fogEnd = rd;
     if (world.dim === 1) { fogStart = rd * 0.08; fogEnd = Math.min(rd, 192) * 0.62; }   // thick, hot haze
     else if (world.dim === 2) { fogStart = rd * 0.25; fogEnd = rd * 0.92; }             // a thin starlit mist
+    else if (world.dim === 3) { fogStart = rd * 0.12; fogEnd = Math.min(rd, 224) * 0.8; }  // the grey haze of the Sift
     let fogColor = this.fogColor;
     const inFluid = hooks && hooks.inFluid;
     if (inFluid === 'water') {
@@ -489,8 +505,10 @@ class Renderer {
       // the dark "void" below the horizon only shows when you are below sea level
       const vk = clamp((SEA_LEVEL + 1 - cam.y) / 16, 0, 1);
       if (isles) gl.uniform3fv(ps.u.uVoid, [0.022, 0.014, 0.045]);
+      else if (world.dim === 3) gl.uniform3fv(ps.u.uVoid, [fogColor[0] * 0.6, fogColor[1] * 0.58, fogColor[2] * 0.66]);
       else gl.uniform3fv(ps.u.uVoid, [lerp(fogColor[0], this.skyColor[0] * 0.2 + 0.04, vk), lerp(fogColor[1], this.skyColor[1] * 0.2 + 0.04, vk), lerp(fogColor[2], this.skyColor[2] * 0.6 + 0.1, vk)]);
       gl.uniform1f(ps.u.uIsles, isles ? 1 : 0);
+      gl.uniform1f(ps.u.uSift, world.dim === 3 ? 1 : 0);
       const ca = Math.cos(this.celestial * TAU), sa = Math.sin(this.celestial * TAU);
       gl.uniformMatrix3fv(ps.u.uCel, false, [ca, -sa, 0, sa, ca, 0, 0, 0, 1]);
       gl.uniform1f(ps.u.uNight, isles || world.menu ? 0 : this.nightK);
@@ -596,6 +614,7 @@ class Renderer {
 
   drawCelestial(world, partial) {
     const gl = this.gl;
+    if (world.dim === 3) return;   // the Sift has no sun, moon or stars: only its glow, in the sky shader
     const a = this.celestial;
     const rainF = 1 - this.rain;
     const m = Mat4.create();

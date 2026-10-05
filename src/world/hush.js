@@ -21,6 +21,8 @@ const Hush = (() => {
   // which loaded chunks hold sensors or shriekers, and how many Listeners are about:
   // refreshed every couple of seconds so wandering creatures can skip the work
   let hot = new Set(), listeners = 0;
+  // the creatures that hunt by ear: the Listener, and the sifters under the sand of the Sift
+  const HEARS = { listener: true, sifter: true };
   const ckey = (cx, cz) => (cx + 32768) * 65536 + (cz + 32768);
   function scan(w) {
     hot = new Set(); listeners = 0;
@@ -28,12 +30,12 @@ const Hush = (() => {
       if (!c.tiles.size) continue;
       for (const te of c.tiles.values()) if (te.type === 'sensor' || te.type === 'shrieker') { hot.add(ckey(c.cx, c.cz)); break; }
     }
-    for (const e of w.entities) if (e.type === 'listener' && !e.removed) listeners++;
+    for (const e of w.entities) if (HEARS[e.type] && !e.removed) listeners++;
   }
   // something made a sound at (x,y,z); src is whoever made it (a player, a creature, or null)
   function vibrate(game, x, y, z, kind, src) {
     const w = game.world;
-    if (!w || w.menu || w.dim || !game.player) return;
+    if (!w || w.menu || !game.player) return;
     if (src && src.type === 'player' && (src.gameMode === 'spectator' || src.dead)) return;
     const loud = LOUDNESS[kind] || 8;
     const cx = Math.floor(x) >> 4, cz = Math.floor(z) >> 4;
@@ -48,11 +50,11 @@ const Hush = (() => {
         else if (src && src.type === 'player') shriek(game, te, src);
       }
     }
-    if (listeners) for (const e of w.entities) if (e.type === 'listener' && e !== src && !e.dead && !e.removed && e.distanceSq(x, y, z) < (loud + 10) ** 2) e.hear(game, x, y, z, loud, src);
+    if (listeners) for (const e of w.entities) if (HEARS[e.type] && e !== src && !e.dead && !e.removed && e.distanceSq(x, y, z) < (loud + 10) ** 2) e.hear(game, x, y, z, loud, src);
   }
   // creatures' footsteps: only worth listening for near sensors or a Listener
   function step(game, e) {
-    if ((!listeners && !hot.size) || !e.onGround || e.type === 'listener') return;
+    if ((!listeners && !hot.size) || !e.onGround || HEARS[e.type]) return;
     const dx = e.x - e.px, dz = e.z - e.pz;
     if (dx === 0 && dz === 0) return;
     e.stepAcc = (e.stepAcc || 0) + Math.sqrt(dx * dx + dz * dz);
@@ -161,7 +163,7 @@ const Hush = (() => {
   // each game tick: the sensors' glow fades, warnings fade, the darkness pulses
   function tick(game) {
     const w = game.world;
-    if (!w || w.dim) return;
+    if (!w || w.menu) return;
     if (w.time % 40 === 3) scan(w);
     const st = w.info.hush;
     if (st && st.level > 0 && w.time - st.t > 12000) { st.level--; st.t = w.time; }

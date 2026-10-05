@@ -123,6 +123,31 @@ const MODELS = (() => {
       leg2: { pivot: [1.5, 8, -4], boxes: [bx([-1, -8, -1], [2, 8, 2], [0, 18])] },
       leg3: { pivot: [-1.5, 8, -4], boxes: [bx([-1, -8, -1], [2, 8, 2], [0, 18], { mirror: true })] },
     },
+    // a gleaner: low and quick, all ears, with a sack for the things it finds
+    gleaner: {
+      body: { pivot: [0, 6, 0], boxes: [bx([-3, 0, -4], [6, 5, 9], [0, 0])] },
+      head: { pivot: [0, 9, -4], boxes: [bx([-3, -2, -5], [6, 5, 5], [30, 0])] },
+      earR: { pivot: [2, 11, -6], rot0: [0.15, 0, -0.45], boxes: [bx([0, 0, -1], [1, 5, 3], [52, 0])], follow: 'head' },
+      earL: { pivot: [-2, 11, -6], rot0: [0.15, 0, 0.45], boxes: [bx([-1, 0, -1], [1, 5, 3], [52, 0], { mirror: true })], follow: 'head' },
+      leg0: { pivot: [2, 6, 3], boxes: [bx([-1, -6, -1], [2, 6, 2], [0, 14])] },
+      leg1: { pivot: [-2, 6, 3], boxes: [bx([-1, -6, -1], [2, 6, 2], [0, 14], { mirror: true })] },
+      leg2: { pivot: [2, 6, -2], boxes: [bx([-1, -6, -1], [2, 6, 2], [0, 14])] },
+      leg3: { pivot: [-2, 6, -2], boxes: [bx([-1, -6, -1], [2, 6, 2], [0, 14], { mirror: true })] },
+      tail: { pivot: [0, 9, 5], rot0: [-0.7, 0, 0], boxes: [bx([-1.5, -1, 0], [3, 3, 7], [8, 14])] },
+      sack: { pivot: [0, 11, 1], boxes: [bx([-2.5, 0, -2], [5, 4, 5], [28, 14])] },
+    },
+    // a sifter: a long, finned body made for swimming through sand
+    sifter: {
+      head: { pivot: [0, 4, -6], boxes: [bx([-3, -2.5, -6], [6, 5, 6], [0, 0])] },
+      jaw: { pivot: [0, 2, -6], boxes: [bx([-2.5, -1.5, -5], [5, 2, 5], [24, 0])] },
+      s1: { pivot: [0, 4, -6], boxes: [bx([-2.5, -2.5, 0], [5, 5, 6], [0, 11])] },
+      s2: { pivot: [0, 4, 0], boxes: [bx([-2, -2, 0], [4, 4, 6], [22, 11])] },
+      s3: { pivot: [0, 4, 6], boxes: [bx([-1.5, -1.5, 0], [3, 3, 6], [0, 22])] },
+      tailfin: { pivot: [0, 4, 12], boxes: [bx([-0.5, -3, 0], [1, 6, 3], [18, 22])] },
+      fin: { pivot: [0, 6.5, -4], boxes: [bx([-1, 0, -1], [2, 4, 6], [44, 0]), bx([-1, 4, 1.5], [2, 3, 3], [44, 20])] },
+      finR: { pivot: [2.5, 2, -3], boxes: [bx([0, -0.5, -1], [3, 1, 3], [44, 13])] },
+      finL: { pivot: [-2.5, 2, -3], boxes: [bx([-3, -0.5, -1], [3, 1, 3], [44, 13], { mirror: true })] },
+    },
     // a squid is built around its middle so it can tumble freely
     squid: (() => {
       const m = {

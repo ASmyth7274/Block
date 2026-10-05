@@ -156,6 +156,7 @@ class MusicEngine {
     const p = g.player, w = g.world;
     if (this.forceMood) return this.forceMood;
     if (w.dim === 2) return 'isles';
+    if (w.dim === 3) return 'sift';
     if (w.dim) return 'underworld';
     if (p && p.creative) return Math.random() < 0.5 ? 'creative' : 'day';
     if (p && p.y < 72) {
@@ -171,7 +172,7 @@ class MusicEngine {
     const R = Math.random, pick = (a) => a[Math.floor(R() * a.length)];
     const MODES = { ionian: [0, 2, 4, 5, 7, 9, 11], lydian: [0, 2, 4, 6, 7, 9, 11], mixolydian: [0, 2, 4, 5, 7, 9, 10], dorian: [0, 2, 3, 5, 7, 9, 10], aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10] };
     // the deep caves borrow from the others: the Hush is sparser and lower than any cave, mossglow gentler
-    if (mood === 'hush' || mood === 'mossglow') return this.composeCave(mood);
+    if (mood === 'hush' || mood === 'mossglow' || mood === 'sift') return this.composeCave(mood);
     const under = mood === 'underworld', isles = mood === 'isles', wyrm = mood === 'wyrm', ending = mood === 'ending';
     const modeName = under ? pick(['phrygian', 'aeolian', 'phrygian']) : mood === 'night' ? pick(['dorian', 'aeolian', 'ionian', 'lydian']) : mood === 'underground' ? pick(['aeolian', 'dorian', 'aeolian'])
       : isles ? pick(['lydian', 'dorian', 'lydian', 'ionian']) : wyrm ? pick(['aeolian', 'phrygian', 'aeolian']) : ending ? pick(['ionian', 'lydian'])
@@ -265,6 +266,20 @@ class MusicEngine {
         t += bar;
       }
       return { events: ev.sort((a, b) => a.t - b.t), length: t + bar * 2, mood, mode: 'locrian', bpm: Math.round(bpm) };
+    }
+    if (mood === 'sift') {
+      // the Sift: a slow music-box tune, falling a step at a time, each phrase echoing back fainter
+      const scale = pick([[0, 2, 3, 5, 7, 9, 10], [0, 2, 4, 7, 9, 11, 12]]), tonic = 60 + Math.floor(R() * 5), bpm = 44 + R() * 8, beat = 60 / bpm;
+      const deg = (d) => tonic + scale[((d % 7) + 7) % 7] + 12 * Math.floor(d / 7);
+      for (let ph = 0; ph < 5; ph++) {
+        const top = 7 + Math.floor(R() * 4), len = 4 + Math.floor(R() * 3);
+        for (let k = 0; k < len; k++) for (let echo = 0; echo < 2; echo++) add(t + k * beat + echo * beat * 0.75, deg(top - k) + (echo ? 12 : 0), (0.36 - k * 0.03) * (echo ? 0.35 : 1), beat * 2);
+        add(t, deg(0) - 12, 0.26, beat * len * 1.2);
+        if (R() < 0.6) add(t + beat * len * 0.5, deg(4) - 12, 0.2, beat * len);
+        t += beat * (len + 3 + Math.floor(R() * 3));
+      }
+      add(t, deg(0) - 12, 0.28, beat * 6); add(t + 0.15, deg(2), 0.2, beat * 6); add(t + 0.3, deg(4), 0.18, beat * 6);
+      return { events: ev.sort((a, b) => a.t - b.t), length: t + beat * 8, mood, mode: 'sift', bpm: Math.round(bpm) };
     }
     const scale = pick([[0, 2, 4, 6, 7, 9, 11], [0, 2, 3, 5, 7, 9, 10]]), tonic = 55 + Math.floor(R() * 6), bpm = 50 + R() * 8, beat = 60 / bpm, bar = beat * 4;
     const deg = (d) => tonic + scale[((d % 7) + 7) % 7] + 12 * Math.floor(d / 7);

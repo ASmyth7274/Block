@@ -2052,6 +2052,9 @@ function WorldGenFactory(Noise, TAB) {
           [I.iron_sword, 1, 1, 5], [I.iron_chestplate, 1, 1, 5], [I.iron_helmet, 1, 1, 5], [I.iron_leggings, 1, 1, 5], [I.iron_boots, 1, 1, 5], [I.seeker_eye, 1, 1, 2], [I.wisp_essence, 1, 1, 3], [I.jade, 1, 3, 4]],
         city: [[I.hush_shard, 1, 3, 10], [I.bone, 2, 6, 10], [I.coal, 3, 8, 8], [I.iron_ingot, 1, 4, 8], [I.gold_ingot, 1, 3, 5], [I.diamond, 1, 2, 4], [I.golden_apple, 1, 1, 3],
           [I.iron_leggings, 1, 1, 3], [I.diamond_leggings, 1, 1, 1], [I.lumite_shard, 2, 5, 6], [I.glowberry, 2, 6, 8], [B.PALE_LANTERN, 1, 3, 4], [I.book, 1, 3, 6], [I.compass, 1, 1, 2], [I.echo_heart, 1, 1, 1]],
+        sift: [[I.lost_letter, 1, 1, 14], [I.gold_ingot, 1, 4, 8], [I.iron_ingot, 1, 5, 8], [I.diamond, 1, 2, 3], [I.compass, 1, 1, 4], [I.clock, 1, 1, 4], [I.book, 1, 3, 6],
+          [I.golden_apple, 1, 1, 2], [I.jade, 1, 3, 5], [I.bread, 1, 3, 5], [I.string, 2, 6, 5], [I.iron_sword, 1, 1, 3], [I.bow, 1, 1, 3], [I.arrow, 3, 9, 4], [I.wayback_compass, 1, 1, 2],
+          [I.message_bottle, 1, 1, 3], [I.seeker_eye, 1, 1, 1], [I.gold_nugget, 3, 9, 6], [I.sift_scale, 1, 3, 4], [I.map, 1, 1, 2], [I.cobalt_ingot, 1, 3, 4], [B.PALE_LANTERN, 1, 2, 3], [I.wisp_essence, 1, 2, 3]],
         city_keep: [[I.hush_shard, 2, 5, 10], [I.diamond, 1, 3, 6], [I.golden_apple, 1, 2, 4], [I.diamond_leggings, 1, 1, 2], [I.starmetal_ingot, 1, 1, 1], [I.gold_ingot, 2, 5, 6]],
         vault_library: [[I.book, 1, 3, 20], [I.paper, 2, 7, 20], [I.compass, 1, 1, 5], [I.wisp_essence, 1, 2, 4], [I.jade, 1, 2, 4], [I.dye, 2, 6, 6, 11], [I.glass_bottle, 1, 3, 4], [I.seeker_eye, 1, 1, 1]],
         fortress: [[I.gold_ingot, 1, 3, 15], [I.iron_ingot, 1, 5, 6], [I.diamond, 1, 3, 5], [I.gold_sword, 1, 1, 5], [I.gold_chestplate, 1, 1, 5], [I.gold_pickaxe, 1, 1, 3], [I.flint_and_steel, 1, 1, 5],
@@ -2072,6 +2075,7 @@ function WorldGenFactory(Noise, TAB) {
         else if (pick[0] === I.dye) dmg = rng.nextInt(16);
         if (pick[0] === B.WOOL) dmg = rng.nextInt(16);
         if (pick[0] === B.SAPLING) dmg = rng.nextInt(7);
+        if (pick[0] === I.lost_letter) dmg = rng.nextInt(64);
         items.push({ slot: rng.nextInt(27), id: pick[0], c: count, d: dmg });
       }
       return items;
@@ -3119,9 +3123,333 @@ function WorldGenFactory(Noise, TAB) {
       set(1, y0 + 3, 0, B.TORCH, 1); set(-1, y0 + 3, 0, B.TORCH, 2); set(0, y0 + 3, 1, B.TORCH, 3); set(0, y0 + 3, -1, B.TORCH, 4);
     }
   }
+
+  // ------------------------------------------------------------------ the Sift
+  // Where lost things go. Grey sand under a grey sky, sifting down for ever: long
+  // dunes rolling away from the gate, stepped shelves of siltstone, deep hollows
+  // where the sand pours into the dark, fields of pale glass, and everywhere,
+  // half-buried, the things the world has lost - houses, towers, ships, statues,
+  // bells - with whatever was left in them.
+  const sbiome = (id, key, name, fog, o) => biome(id, key, name, Object.assign({
+    dim: 3, temp: 0.5, rain: 0, depth: 0, top: B.SIFT_SAND, filler: B.SIFT_SAND, under: B.SILTSTONE, grass: '#9a96a6', foliage: '#9a96a6', water: '#a8a4c0',
+    tallGrass: 0, flowers: 0, cane: 0, pumpkins: false, animals: [], structures: [], fog,
+  }, o));
+  BI.S_DUNES = sbiome(47, 'grey_dunes', 'The Grey Dunes', [0.44, 0.42, 0.49]);
+  BI.S_RELICS = sbiome(48, 'relic_fields', 'The Relic Fields', [0.42, 0.4, 0.45]);
+  BI.S_GLASS = sbiome(49, 'glass_wastes', 'The Glass Wastes', [0.46, 0.44, 0.54]);
+  BI.S_SHELVES = sbiome(50, 'silent_shelves', 'The Silent Shelves', [0.4, 0.39, 0.45]);
+  BI.S_HOLLOWS = sbiome(51, 'the_hollows', 'The Hollows', [0.32, 0.31, 0.37]);
+  const SIFT = { CHEST: [3, 1, 2], RELIC_CELL: 40 };
+
+  class SiftGenerator extends Generator {
+    constructor(seed, opts) {
+      super(seed, opts);
+      const r = new Random(seedHash(this.seed, 3, 9191));
+      this.sA = new Octaves(r, 3); this.sB = new Octaves(r, 3); this.sDune = new Octaves(r, 3); this.sWarp = new Octaves(r, 2);
+      this.sShelf = new Octaves(r, 3); this.sDetail = new Octaves(r, 2); this.sCave = new Octaves(r, 3); this.sCave2 = new Octaves(r, 2);
+      this.hollowCache = new Map(); this.relicCache = new Map();
+    }
+    villageAt() { return null; }
+    mineshaftAt() { return null; }
+    findSpawn() { return { x: 0, z: 3 }; }
+    tempAt() { return 0.5; }
+    regions(x, z) { return [this.sA.noise2(x / 420, z / 420), this.sB.noise2(x / 300 + 7.7, z / 300 - 3.1)]; }
+    biomeAt(x, z) {
+      if (x * x + z * z < 56 * 56) return BI.S_DUNES.id;
+      const [a, b] = this.regions(x, z);
+      if (a > 0.3) return BI.S_SHELVES.id;
+      if (a < -0.3) return BI.S_HOLLOWS.id;
+      if (b > 0.24) return BI.S_GLASS.id;
+      if (b < -0.18) return BI.S_RELICS.id;
+      return BI.S_DUNES.id;
+    }
+    // long transverse dunes: a gentle slope up into the wind, a steep slip face down
+    dune(x, z) {
+      const w = this.sWarp.noise2(x / 90, z / 90) * 30 + this.sWarp.noise2(z / 37 + 5.3, x / 37) * 6;
+      const lam = 34 + this.sDetail.noise2(x / 210, z / 210) * 10;
+      const u = (x + w) / lam, s = u - Math.floor(u);
+      const prof = s < 0.78 ? s / 0.78 : (1 - s) / 0.22;
+      return Math.pow(prof, 1.4) * (0.55 + 0.45 * this.sDune.noise2(x / 140, z / 140));
+    }
+    // a hollow somewhere in a 64-block cell (only where the hollows run)
+    hollowAt(i, j) {
+      const key = i + ',' + j;
+      if (this.hollowCache.has(key)) return this.hollowCache.get(key);
+      let H0 = null;
+      const rng = new Random(seedHash(this.seed, i, j, 0x5011));
+      const x = i * 64 + 16 + rng.nextInt(32), z = j * 64 + 16 + rng.nextInt(32);
+      if (this.regions(x, z)[0] < -0.26 && x * x + z * z > 120 * 120 && rng.nextFloat() < 0.75) H0 = { x, z, R: 9 + rng.nextInt(9), D: 26 + rng.nextInt(18) };
+      if (this.hollowCache.size > 4000) this.hollowCache.clear();
+      this.hollowCache.set(key, H0);
+      return H0;
+    }
+    hollowDepth(x, z) {
+      const i0 = Math.floor(x / 64), j0 = Math.floor(z / 64);
+      let best = 0;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const h = this.hollowAt(i0 + di, j0 + dj);
+        if (!h) continue;
+        const d = Math.hypot(x - h.x, z - h.z) / h.R;
+        if (d < 1.35) best = Math.max(best, d < 1 ? h.D * (1 - Math.pow(d, 5)) : (1.35 - d) * 6);
+      }
+      return best;
+    }
+    // the shape of the land at a column: surface height and how deep the loose sand lies
+    shape(x, z) {
+      const [a, b] = this.regions(x, z);
+      const calm = smooth(26, 90, Math.hypot(x, z));
+      let h = 60 + this.sDetail.noise2(x / 70, z / 70) * 3 * calm;
+      const glass = smooth(0.14, 0.3, b), relic = smooth(-0.1, -0.24, b);
+      const dn = this.dune(x, z);
+      h += dn * 13 * (1 - glass * 0.85) * (1 - relic * 0.55) * calm;
+      let sand = 3 + Math.floor(dn * 5 * (1 - glass));
+      const shelf = smooth(0.2, 0.36, a) * calm;
+      if (shelf > 0.01) {
+        const raw = 60 + (16 + this.sShelf.noise2(x / 90, z / 90) * 16) * shelf;
+        const t = Math.floor(raw / 6) * 6;
+        if (t > h) { h = t; sand = 1; }
+      }
+      if (a < -0.2) { const hd = this.hollowDepth(x, z); if (hd > 0) { h -= hd; sand = hd > 6 ? 2 : sand; } }
+      return { h: Math.floor(h), sand, glass, relic, a, b };
+    }
+    arrivalY() { return this.shape(0, 0).h + 1; }
+    generate(cx, cz) {
+      const blocks = new Uint8Array(16 * 16 * H), meta = new Uint8Array(16 * 16 * H), biomes = new Uint8Array(256);
+      const out = { cx, cz, blocks, meta, biomes, entities: [], tiles: [], ticks: [] };
+      const x0 = cx * 16, z0 = cz * 16;
+      const rng = new Random(seedHash(this.seed, cx, cz, 0x51F7));
+      const tops = new Int16Array(256);
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
+        const wx = x0 + x, wz = z0 + z;
+        biomes[z * 16 + x] = this.biomeAt(wx, wz);
+        const s = this.shape(wx, wz);
+        tops[z * 16 + x] = s.h;
+        blocks[IDX(x, 0, z)] = B.BEDROCK;
+        if (rng.nextInt(2)) blocks[IDX(x, 1, z)] = B.BEDROCK;
+        for (let y = blocks[IDX(x, 1, z)] ? 2 : 1; y <= s.h; y++) blocks[IDX(x, y, z)] = y > s.h - s.sand ? B.SIFT_SAND : B.SILTSTONE;
+        // a little sift glass grown through the siltstone of the wastes
+        if (s.glass > 0.5 && s.h > 4 && rng.nextInt(5) === 0) blocks[IDX(x, s.h - s.sand, z)] = B.SIFT_GLASS;
+      }
+      this.siftCaves(out, tops);
+      this.siftSurface(out, tops, rng);
+      if (this.structuresOn !== false) this.relics(out);
+      if (Math.abs(cx) <= 1 && Math.abs(cz) <= 1) this.farGate(out);
+      return out;
+    }
+    // the undersift: wide, low caverns under the sand
+    siftCaves(out, tops) {
+      const { blocks } = out, X0 = out.cx * 16, Z0 = out.cz * 16;
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
+        const wx = X0 + x, wz = Z0 + z, top = tops[z * 16 + x];
+        if (wx * wx + wz * wz < 40 * 40) continue;
+        for (let y = 8; y < Math.min(54, top - 7); y++) {
+          const n = this.sCave.noise3(wx / 48, y / 18, wz / 48) + this.sCave2.noise3(wx / 16, y / 9, wz / 16) * 0.3 - Math.abs(y - 28) / 60;
+          if (n > 0.42) { const i = IDX(x, y, z); if (blocks[i] === B.SILTSTONE) blocks[i] = 0; }
+        }
+      }
+    }
+    // dune grass, glass spires and fallen shards
+    siftSurface(out, tops, rng) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16;
+      for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
+        const y = tops[z * 16 + x], top = blocks[IDX(x, y, z)];
+        if (y < 2 || y >= H - 30) continue;
+        const bio = out.biomes[z * 16 + x];
+        if (top === B.SIFT_SAND && blocks[IDX(x, y + 1, z)] === 0 && rng.nextInt(bio === BI.S_RELICS.id ? 14 : 36) === 0) blocks[IDX(x, y + 1, z)] = B.DUNE_GRASS;
+      }
+      // spires of sift glass in the wastes, one per 11-block cell at most
+      for (let j = Math.floor(Z0 / 11) - 1; j <= Math.floor((Z0 + 15) / 11) + 1; j++) for (let i = Math.floor(X0 / 11) - 1; i <= Math.floor((X0 + 15) / 11) + 1; i++) {
+        const r = new Random(seedHash(this.seed, i, j, 0x6A55));
+        const sx = i * 11 + r.nextInt(11), sz = j * 11 + r.nextInt(11);
+        const s = this.shape(sx, sz);
+        if (s.glass < 0.4 || r.nextFloat() > 0.55 * s.glass) continue;
+        const hgt = 4 + r.nextInt(r.nextInt(3) === 0 ? 20 : 9), rad = hgt > 14 ? 1.6 : 0.9, lean = (r.nextFloat() - 0.5) * 0.25, leanZ = (r.nextFloat() - 0.5) * 0.25;
+        for (let y = -3; y < hgt; y++) {
+          const k = 1 - Math.max(0, y) / hgt, rr = rad * (0.4 + 0.6 * k) + 0.3;
+          const ccx = sx + lean * Math.max(0, y), ccz = sz + leanZ * Math.max(0, y);
+          for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) {
+            const wx = Math.floor(ccx) + dx, wz = Math.floor(ccz) + dz;
+            if (wx < X0 || wx >= X0 + 16 || wz < Z0 || wz >= Z0 + 16) continue;
+            if ((wx + 0.5 - ccx) ** 2 + (wz + 0.5 - ccz) ** 2 > rr * rr) continue;
+            const yy = s.h + 1 + y;
+            if (yy > 1 && yy < H - 1) { blocks[IDX(wx - X0, yy, wz - Z0)] = B.SIFT_GLASS; meta[IDX(wx - X0, yy, wz - Z0)] = 0; }
+          }
+        }
+      }
+    }
+    // ---- relics: the lost things, half sunk in the sand ----
+    relicAt(i, j) {
+      const key = i + ',' + j;
+      if (this.relicCache.has(key)) return this.relicCache.get(key);
+      let L = null;
+      const C = SIFT.RELIC_CELL, rng = new Random(seedHash(this.seed, i, j, 0x2E11C));
+      const x = i * C + 8 + rng.nextInt(C - 16), z = j * C + 8 + rng.nextInt(C - 16);
+      if (x * x + z * z > 60 * 60) {
+        const bio = this.biomeAt(x, z);
+        const chance = bio === BI.S_RELICS.id ? 0.8 : bio === BI.S_GLASS.id ? 0.22 : bio === BI.S_DUNES.id ? 0.24 : 0.12;
+        if (rng.nextFloat() < chance) {
+          const kinds = ['house', 'house', 'tower', 'ship', 'statue', 'arch', 'bell', 'cart'];
+          const kind = kinds[rng.nextInt(kinds.length)];
+          L = { kind, x, z, rot: rng.nextInt(4), y: this.shape(x, z).h, seed: rng.nextInt(0x7fffffff), wood: rng.nextInt(3), sink: 1 + rng.nextInt(3) };
+        }
+      }
+      if (this.relicCache.size > 4000) this.relicCache.clear();
+      this.relicCache.set(key, L);
+      return L;
+    }
+    nearestRelic(x, z) {
+      let best = null, bd = Infinity;
+      const C = SIFT.RELIC_CELL, i0 = Math.floor(x / C), j0 = Math.floor(z / C);
+      for (let j = j0 - 1; j <= j0 + 1; j++) for (let i = i0 - 1; i <= i0 + 1; i++) { const L = this.relicAt(i, j); if (!L) continue; const d = (L.x - x) ** 2 + (L.z - z) ** 2; if (d < bd) { bd = d; best = L; } }
+      return best;
+    }
+    relics(out) {
+      const X0 = out.cx * 16, Z0 = out.cz * 16, C = SIFT.RELIC_CELL;
+      for (let j = Math.floor((Z0 - 16) / C); j <= Math.floor((Z0 + 31) / C); j++) for (let i = Math.floor((X0 - 16) / C); i <= Math.floor((X0 + 31) / C); i++) {
+        const L = this.relicAt(i, j);
+        if (!L || L.x + 16 < X0 || L.x - 16 > X0 + 15 || L.z + 16 < Z0 || L.z - 16 > Z0 + 15) continue;
+        this.buildRelic(out, L);
+      }
+    }
+    buildRelic(out, L) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16;
+      const rng = new Random(L.seed);
+      const R = L.rot, cs = [[1, 0], [0, 1], [-1, 0], [0, -1]][R];
+      // local (u along, v across, y up) -> world
+      const W = (u, v) => [L.x + u * cs[0] - v * cs[1], L.z + u * cs[1] + v * cs[0]];
+      const inC = (x, z) => x >= X0 && x < X0 + 16 && z >= Z0 && z < Z0 + 16;
+      const set = (u, v, y, id, m) => { const [x, z] = W(u, v); if (!inC(x, z) || y < 2 || y >= H - 1) return; const i = IDX(x - X0, y, z - Z0); blocks[i] = id; meta[i] = m || 0; };
+      const get = (u, v, y) => { const [x, z] = W(u, v); return !inC(x, z) || y < 0 || y >= H ? -1 : blocks[IDX(x - X0, y, z - Z0)]; };
+      // broken: some blocks are simply gone, worn away (but never from below the sand line)
+      const worn = (u, v, y, p) => ((Math.imul(u * 73 + 1000, 9301) ^ Math.imul(v * 31 + 1000, 4973) ^ Math.imul(y, 1597) ^ L.seed) >>> 0) % 100 < p;
+      const chest = (u, v, y, table) => {
+        const [x, z] = W(u, v);
+        if (!inC(x, z)) return;
+        set(u, v, y, B.CHEST, [2, 3, 1, 0][R]);
+        out.tiles.push({ type: 'chest', x, y, z, items: this.loot(rng, table) });
+      };
+      const sand = (u, v, y) => { if (y <= L.y - 1 && get(u, v, y) === 0) set(u, v, y, B.SIFT_SAND); };
+      const PL = [0, 1, 2][L.wood], base = L.y - L.sink;
+      switch (L.kind) {
+        case 'house': {
+          // a cottage sunk to its sills: cobbled footing, plank walls, a pitched roof
+          for (let u = -3; u <= 3; u++) for (let v = -3; v <= 3; v++) {
+            const edge = Math.abs(u) === 3 || Math.abs(v) === 3, corner = Math.abs(u) === 3 && Math.abs(v) === 3;
+            set(u, v, base - 1, B.COBBLESTONE);
+            for (let y = base; y < base + 4; y++) {
+              if (!edge) { if (y <= L.y - 1) set(u, v, y, B.SIFT_SAND); else set(u, v, y, 0); continue; }
+              if (y > L.y && worn(u, v, y, 18)) { set(u, v, y, 0); continue; }
+              if (corner) set(u, v, y, B.LOG, PL);
+              else if (y === base + 2 && (u === 0 || v === 0) && Math.abs(u) + Math.abs(v) === 3 && !(u === 3 && v === 0)) set(u, v, y, B.GLASS_PANE);
+              else if (u === 3 && v === 0 && y < base + 3) set(u, v, y, 0);
+              else set(u, v, y, B.PLANKS, PL);
+            }
+          }
+          for (let k = 0; k <= 3; k++) for (let v = -4; v <= 4; v++) {
+            if (worn(k, v, 9, 12)) continue;
+            set(k - 4 + 0, v, base + 4 + k, B.STAIRS, (R === 0 ? 3 : R === 1 ? 1 : R === 2 ? 2 : 0) | (PL << 3));
+            set(4 - k, v, base + 4 + k, B.STAIRS, (R === 0 ? 2 : R === 1 ? 0 : R === 2 ? 3 : 1) | (PL << 3));
+            if (k < 3 && Math.abs(v) === 3) for (let u = -3 + k + 1; u <= 3 - k - 1; u++) set(u, v, base + 4 + k, B.PLANKS, PL);
+          }
+          for (let v = -4; v <= 4; v++) if (!worn(0, v, 11, 15)) set(0, v, base + 7, B.SLAB, PL);
+          chest(-2, 2, Math.max(base, L.y), 'sift');
+          break;
+        }
+        case 'tower': {
+          // a round tower that fell long ago, lying on its side, half swallowed
+          const len = 13 + rng.nextInt(5);
+          for (let u = -6; u <= len - 6; u++) for (let v = -3; v <= 3; v++) for (let dy = -3; dy <= 3; dy++) {
+            const d = Math.hypot(v, dy);
+            if (d > 3.4) continue;
+            const y = L.y + dy - 1;
+            if (d > 2.4) { if (dy > 0 && worn(u, v, y, 14)) continue; set(u, v, y, B.STONE_BRICKS, rng.nextInt(5) === 0 ? 2 : rng.nextInt(4) === 0 ? 1 : 0); }
+            else if (y <= L.y - 2) set(u, v, y, B.SIFT_SAND); else set(u, v, y, 0);
+          }
+          // the crown of the tower, and the room at its top
+          for (let v = -4; v <= 4; v++) for (let dy = -4; dy <= 4; dy++) if (Math.hypot(v, dy) <= 4.4 && Math.hypot(v, dy) > 3.4 && (v + dy) % 2 === 0) set(len - 6, v, L.y + dy - 1, B.STONE_BRICKS, 3);
+          chest(len - 8, 0, L.y - 1, 'sift');
+          break;
+        }
+        case 'ship': {
+          // a ship's hull, bow raised out of the sand as if it were still sailing
+          const len = 15;
+          for (let u = -7; u <= len - 8; u++) {
+            const rise = Math.max(0, u - 2) >> 1, half = u < -5 ? 1 : u > len - 11 ? Math.max(0, len - 8 - u) : 2;
+            for (let v = -half - 1; v <= half + 1; v++) for (let dy = 0; dy <= 4; dy++) {
+              const y = base - 1 + dy + rise;
+              const shell = Math.abs(v) === half + 1 || dy === 0;
+              if (dy > 3 && Math.abs(v) <= half) continue;
+              if (shell) { if (y > L.y && worn(u, v, y, 10)) continue; set(u, v, y, B.PLANKS, 1); }
+              else if (y <= L.y - 1) set(u, v, y, B.SIFT_SAND); else set(u, v, y, 0);
+            }
+          }
+          for (let y = base; y < base + 11; y++) set(0, 0, y, B.FENCE, 1);
+          for (let y = base + 5; y < base + 10; y++) for (let v = -2; v <= 2; v++) if (!worn(1, v, y, 30)) set(1, v, y, B.WOOL, 0);
+          chest(-3, 0, base, 'sift');
+          break;
+        }
+        case 'statue': {
+          // a great stone head, sunk to the chin, staring at nothing
+          for (let u = -3; u <= 3; u++) for (let v = -3; v <= 3; v++) for (let dy = 0; dy < 8; dy++) {
+            const y = L.y - 2 + dy;
+            if (dy === 7 && (Math.abs(u) === 3 || Math.abs(v) === 3)) continue;
+            set(u, v, y, B.STONE_BRICKS, worn(u, v, y, 20) ? 2 : 0);
+          }
+          for (const v of [-2, -1, 1, 2]) set(4, v, L.y + 3, B.SIFT_GLASS);
+          for (const v of [-1, 0, 1]) set(4, v, L.y + 1, B.STONE_BRICKS, 3);
+          set(4, 0, L.y + 2, B.STONE_BRICKS, 3);
+          for (let u = -2; u <= 2; u++) for (let v = -2; v <= 2; v++) for (let dy = 1; dy < 6; dy++) set(u, v, L.y - 2 + dy, 0);
+          chest(0, 0, L.y - 1, 'sift');
+          break;
+        }
+        case 'arch': {
+          // a doorway with nothing on either side of it
+          for (const v of [-3, 3]) for (let y = base; y < L.y + 6; y++) { set(0, v, y, B.STONE_BRICKS, y % 4 === 0 ? 3 : 0); set(0, v + (v > 0 ? 1 : -1), y, B.STONE_BRICKS, 0); }
+          for (let v = -4; v <= 4; v++) set(0, v, L.y + 6, B.STONE_BRICKS, 3);
+          set(0, 0, L.y + 5, B.PALE_LANTERN, 1);
+          break;
+        }
+        case 'bell': {
+          // a bell of gold in a frame of black beams, sunk to its lip
+          for (const v of [-3, 3]) for (let y = base; y < L.y + 7; y++) set(0, v, y, B.LOG, 1);
+          for (let v = -3; v <= 3; v++) set(0, v, L.y + 7, B.LOG, 1 | ((R % 2 === 0 ? 2 : 1) << 3));
+          set(0, 0, L.y + 6, B.FENCE, 1);
+          for (let u = -1; u <= 1; u++) for (let v = -1; v <= 1; v++) { set(u, v, L.y + 5, B.GOLD_BLOCK); for (let y = L.y + 2; y < L.y + 5; y++) if (Math.abs(u) + Math.abs(v) > 0) set(u, v, y, B.GOLD_BLOCK); }
+          for (let u = -2; u <= 2; u++) for (let v = -2; v <= 2; v++) if (Math.max(Math.abs(u), Math.abs(v)) === 2) set(u, v, L.y + 1, B.GOLD_BLOCK);
+          break;
+        }
+        case 'cart': {
+          // a length of track running down into the sand, a loaded cart at its end
+          for (let u = -5; u <= 5; u++) { const y = L.y + 1 - (u < 0 ? 0 : Math.floor(u / 2)); set(u, 0, y - 1, B.PLANKS, 1); if (!worn(u, 0, y, 25)) set(u, 0, y, B.RAIL, 0); }
+          const [cxw, czw] = W(-4, 0);
+          if (inC(cxw, czw)) out.entities.push({ type: 'minecart', x: cxw + 0.5, y: L.y + 1.0625, z: czw + 0.5, kind: 1, items: this.loot(rng, 'sift') });
+          break;
+        }
+      }
+    }
+    // the Far Gate: where the city gates open onto the Sift, on a plinth by a lost-and-found chest
+    farGate(out) {
+      const { blocks, meta } = out, X0 = out.cx * 16, Z0 = out.cz * 16;
+      const y0 = this.arrivalY() - 1;
+      const set = (x, y, z, id, m) => { if (x < X0 || x >= X0 + 16 || z < Z0 || z >= Z0 + 16 || y < 1 || y >= H - 1) return; const i = IDX(x - X0, y, z - Z0); blocks[i] = id; meta[i] = m || 0; };
+      for (let x = -6; x <= 6; x++) for (let z = -4; z <= 5; z++) {
+        const edge = Math.abs(x) === 6 || z === -4 || z === 5;
+        for (let y = y0 - 3; y <= y0; y++) set(x, y, z, B.SILTSTONE_BRICKS, y === y0 ? (edge ? 0 : 1) : 0);
+        for (let y = y0 + 1; y <= y0 + 9; y++) set(x, y, z, 0);
+      }
+      for (let x = -3; x <= 3; x++) for (let y = y0 + 1; y <= y0 + 7; y++) {
+        const ring = Math.abs(x) === 3 || y === y0 + 7;
+        set(x, y, 0, ring ? B.REINFORCED_DEEPSTONE : B.SIFT_GATE, 0);
+      }
+      set(0, y0 + 8, 0, B.SILTSTONE_BRICKS, 2);
+      for (const [x, z] of [[-6, -4], [6, -4], [-6, 5], [6, 5]]) { set(x, y0 + 1, z, B.SILTSTONE_BRICKS, 0); set(x, y0 + 2, z, B.PALE_LANTERN, 0); }
+      const [cx, , cz] = SIFT.CHEST;
+      if (cx >= X0 && cx < X0 + 16 && cz >= Z0 && cz < Z0 + 16) { set(cx, y0 + 1, cz, B.CHEST, 2); out.tiles.push({ type: 'chest', x: cx, y: y0 + 1, z: cz, items: [] }); }
+    }
+  }
   function makeGenerator(seed, opts) {
     const dim = opts && opts.dim;
-    return dim === 1 ? new UnderGenerator(seed, opts) : dim === 2 ? new IslesGenerator(seed, opts) : new Generator(seed, opts);
+    return dim === 1 ? new UnderGenerator(seed, opts) : dim === 2 ? new IslesGenerator(seed, opts) : dim === 3 ? new SiftGenerator(seed, opts) : new Generator(seed, opts);
   }
 
   // Writer that clips feature writes to one chunk.
@@ -3144,5 +3472,5 @@ function WorldGenFactory(Noise, TAB) {
     setIf(x, y, z, id, m, ifId) { if (this.get(x, y, z) === ifId) this.set(x, y, z, id, m, 0); }
   }
 
-  return { BIOMES, BI, Generator, UnderGenerator, IslesGenerator, makeGenerator, SEA, H, LAVA_SEA, ISLES };
+  return { BIOMES, BI, Generator, UnderGenerator, IslesGenerator, SiftGenerator, makeGenerator, SEA, H, LAVA_SEA, ISLES, SIFT };
 }

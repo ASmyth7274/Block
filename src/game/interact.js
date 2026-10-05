@@ -298,6 +298,7 @@ class Interaction {
     if (held.id === I.prospector_rod) { g.useProspectorRod(); return; }
     if (held.id === I.wayfinder) { g.useWayfinder(); return; }
     if (held.id === I.echo_fork) { this.noRepeat = true; this.strikeFork(); return; }
+    if (held.id === I.lost_letter) { this.noRepeat = true; g.openScreen(new LetterScreen(g, held.dmg)); g.audio.play('page', 0.6, 1); g.achieve('letter'); return; }
     if (held.id === I.journal) { g.openJournal(); return; }
     if (held.id === I.map) { g.openMap(); return; }
     if (held.id === I.wisp_essence) { if (g.releaseWisp()) { if (!p.creative) p.inventory.decrementHeld(1); p.swing(); } return; }

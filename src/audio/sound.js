@@ -588,6 +588,35 @@ const SOUND_DEFS = (() => {
       return s * sw + hp.p(noise()) * 0.25 * sw * (0.5 + 0.5 * Math.sin(t * 7));
     });
   };
+  // the gleaner chitters; the sifter hisses like pouring sand, and bursts out of it
+  S.gleaner_say = () => { const ck = []; for (let i = 0; i < 6; i++) ck.push([i * 0.05 + rnd() * 0.02, 1800 + rnd() * 1400, 0.4, 0.012]); return render(0.4, (t) => ring(ck, t)); };
+  S.gleaner_hurt = () => render(0.25, (t) => Math.sin(2 * Math.PI * (1400 - t * 2400) * t) * env(t, 0.004, 0.06));
+  S.gleaner_death = () => render(0.6, (t) => Math.sin(2 * Math.PI * (1100 - t * 1300) * t) * env(t, 0.01, 0.2));
+  S.sifter_say = () => { const bp = new Biquad('bp', 2500, 1.5); return render(1.2, (t) => bp.p(noise()) * Math.sin(Math.PI * t / 1.2) * (0.6 + 0.4 * Math.sin(t * 30))); };
+  S.sifter_hurt = () => { const lp = new Biquad('lp', 900, 0.8); return render(0.4, (t) => lp.p(noise()) * 2 * env(t, 0.005, 0.08) + Math.sin(2 * Math.PI * 180 * t) * env(t, 0.005, 0.1) * 0.5); };
+  S.sifter_death = () => { const bp = new Biquad('bp', 1500, 1); return render(1.4, (t) => bp.p(noise()) * env(t, 0.02, 0.4) + Math.sin(2 * Math.PI * (160 - t * 60) * t) * env(t, 0.01, 0.5) * 0.5); };
+  S.sifter_lunge = () => { const hp = new Biquad('hp', 1200, 0.7), lp = new Biquad('lp', 300, 0.8); return render(0.7, (t) => hp.p(noise()) * env(t, 0.005, 0.18) + lp.p(noise()) * 3 * env(t, 0.003, 0.06) + (t > 0.25 && t < 0.27 ? Math.sin(2 * Math.PI * 900 * t) : 0)); };
+  S.sifter_dive = () => { const hp = new Biquad('hp', 1500, 0.7); return render(0.6, (t) => hp.p(noise()) * env(t, 0.03, 0.2)); };
+  // a sheet of paper unfolded
+  S.page = () => { const bp = new Biquad('bp', 3000, 0.9); let g = 0, gt = 0; return render(0.35, (t) => { if (t > gt) { g = rnd(); gt = t + 0.005 + rnd() * 0.02; } return bp.p(noise()) * g * Math.sin(Math.PI * t / 0.35); }); };
+  // the Sift: wind over the dunes, hissing with sand (looped), and the sunken bells
+  S.sift_wind = () => {
+    const bp = new Biquad('bp', 900, 1.2), hp = new Biquad('hp', 4000, 0.7);
+    return render(8, (t) => {
+      const w = Math.sin(Math.PI * 2 * t / 8), w2 = Math.sin(Math.PI * 2 * t / 4 + 2);
+      bp.set(500 + 300 * w, 1.4);
+      return bp.p(noise()) * (0.7 + 0.3 * w) + hp.p(noise()) * 0.12 * (0.6 + 0.4 * w2);
+    });
+  };
+  S.sift_bell = () => {
+    const f = 110 * (0.9 + rnd() * 0.2), parts = [[1, 0.6, 3.5], [2.0, 0.35, 2.4], [2.76, 0.25, 1.6], [5.4, 0.12, 0.8], [8.9, 0.06, 0.4]];
+    const dl = new Float32Array(Math.floor(DSP.SR * 0.31)); let di = 0;
+    return render(6, (t) => {
+      let s = 0; for (const [k, a, d] of parts) s += Math.sin(2 * Math.PI * f * k * t * (1 + k * 0.0004)) * a * Math.exp(-t / d) * (t < 0.004 ? t / 0.004 : 1);
+      const out = s + dl[di] * 0.45; dl[di] = out; di = (di + 1) % dl.length;
+      return out;
+    });
+  };
   // the Sift gate: grains pouring through grey light, and a low note beneath
   S.sift_hum = () => {
     const hp = new Biquad('hp', 3000, 0.7), bp = new Biquad('bp', 5000, 2);

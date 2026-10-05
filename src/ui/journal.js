@@ -54,6 +54,9 @@ const MILESTONES = [
   { id: 'city', name: 'Lost and Found', desc: 'Find a forgotten city deep in the Hush', icon: () => [B.DEEPSTONE_BRICKS, 2] },
   { id: 'gate', name: 'The Grey Door', desc: 'Wake a city gate with an Echo Heart', icon: () => [ITEM_IDS.echo_heart, 0] },
   { id: 'listener', name: 'Unheard Of', desc: 'Defeat the Listener', icon: () => [ITEM_IDS.hush_shard, 0] },
+  { id: 'sift', name: 'Where Lost Things Go', desc: 'Step through a city gate into the Sift', icon: () => [B.SIFT_SAND, 0] },
+  { id: 'relic', name: 'Finders Keepers', desc: 'Come upon a relic half-buried in the Sift', icon: () => [B.SILTSTONE_BRICKS, 2] },
+  { id: 'letter', name: 'Return to Sender', desc: 'Read a lost letter', icon: () => [ITEM_IDS.lost_letter, 0] },
 ];
 const BIOME_DESCRIPTIONS = {
   ocean: 'Endless water. Sunken ruins rest on the sea floor.', deep_ocean: 'The water grows dark and cold.', plains: 'Rolling grass, wildflowers and the occasional lonely oak.',
@@ -70,6 +73,11 @@ const BIOME_DESCRIPTIONS = {
   spire_woods: 'Thick woods among towering stone pillars, each crowned with its own little forest.',
   tablelands: 'Flat-topped mesas with sheer sides, stepping up out of the plains.',
   glacier: 'An old sheet of packed ice split by crevasses, bristling with spikes of ice.',
+  grey_dunes: 'The Sift. Long grey dunes under a sunless sky, the sand forever falling.',
+  relic_fields: 'The Sift. Flat sand littered with the lost: houses, ships, carts and towers, half sunk.',
+  glass_wastes: 'The Sift. A hardpan of siltstone where pale sift glass grows in spires.',
+  silent_shelves: 'The Sift. Great stepped shelves of siltstone rising out of the dunes. Nothing moves up there.',
+  the_hollows: 'The Sift. Deep round pits where the sand pours down into caverns below.',
   mossglow_caves: 'Deep under the woods, great caverns carpeted in moss, hung with glowing vines heavy with berries.',
   the_hush: 'Far below, the stone turns dark and the caves fall silent. Things here listen. Walk softly - and never wake the shriekers.',
   great_isle: 'Far Isles. Pale starstone ringed by obsidian spires, each crowned with a star crystal. Something vast circles overhead.',
